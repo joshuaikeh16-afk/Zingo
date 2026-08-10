@@ -51,7 +51,6 @@ class VideoProvider extends ChangeNotifier {
   // Sample data for demonstration
   void initializeFeed() {
     _state = _state.copyWith(
-      isLoading: true,
       videoFeed: [
         VideoItem(
           id: '1',
@@ -93,7 +92,6 @@ class VideoProvider extends ChangeNotifier {
           shareCount: 1205,
         ),
       ],
-      isLoading: false,
     );
     notifyListeners();
   }

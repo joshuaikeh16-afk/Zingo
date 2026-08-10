@@ -1,0 +1,57 @@
+App Prompt: Vertical Anime Short-Video Platform
+Role & Objective: Act as an expert full-stack mobile developer. Design and build the frontend interface and core state management for a vertical short-video streaming mobile application tailored specifically for anime clips, edits, and AMVs (Anime Music Videos), heavily inspired by TikTok's core UX.
+
+1. Core Architecture & Tech Stack
+Framework: Flutter (or React Native / Jetpack Compose—choose your preference)
+
+State Management: Provider / Riverpod / Bloc
+
+UI Style: Modern, immersive, dark-themed UI optimized for AMOLED screens (pure blacks, translucent overlays, neon/vibrant accent colors like violet or cyan).
+
+2. Key Features & Screens
+A. Main Feed (The Vertical Player)
+Fullscreen PageView / Snap Scroll: Vertical scrolling where each swipe snaps smoothly to the next video item.
+
+Video Player Component:
+
+Auto-plays the active video and pauses off-screen videos to save resources.
+
+Seamless looping playback.
+
+Tap to toggle play/pause with a brief animation overlay.
+
+Content Metadata Overlay (Bottom Left):
+
+Uploader profile picture and username.
+
+Caption with hashtags (e.g., #OnePiece #Gear5 #Edit).
+
+Audio Track Tag: Animated spinning disc or music note icon showing the background track/anime opening theme name.
+
+Engagement Sidebar (Bottom Right):
+
+Like Button: Heart icon with counter animation that fills red on tap.
+
+Comments Button: Opens a bottom sheet drawer displaying threaded user comments.
+
+Bookmark/Save Button: Adds the clip to the user's offline watch/download queue.
+
+Share Button: Native share sheet trigger.
+
+B. Bottom Navigation Bar
+Clean, floating or translucent bottom bar with 4 main tabs:
+
+Home (Main vertical feed with "Following" and "For You" toggle at the top).
+
+Discover / Search (Explore trending anime hashtags, characters, and audio tracks).
+
+Upload / Create (Interface to select local video clips, trim, and add metadata).
+
+Profile (User dashboard showing uploaded clips, liked videos, and downloaded offline items).
+
+3. Technical Requirements & Performance Rules
+Pre-loading Logic: Implement buffer management to pre-load the next video in the queue to eliminate playback lag during swipes.
+
+State Preservation: Ensure scroll position and video playback states do not reset unexpectedly when navigating between tabs.
+
+Responsive Scaling: Ensure media scales correctly (BoxFit.cover) across various smartphone screen aspect ratios without layout overflow errors.

@@ -1,0 +1,42 @@
+```
+# Dependencies
+.dart_tool/
+.packages
+pubspec.lock
+
+# Build
+build/
+*.apk
+*.aab
+*.app
+*.exe
+*.dll
+*.so
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+**/logs
+
+# Coverage
+coverage/
+
+# VS Code
+.vscode/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Flutter specific
+**/ios/.generated/
+**/macos/.generated/
+**/windows/.generated/
+**/linux/.generated/
+```

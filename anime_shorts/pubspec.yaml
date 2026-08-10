@@ -1,0 +1,39 @@
+name: anime_shorts
+description: A vertical short-video streaming mobile application for anime clips, edits, and AMVs.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Video Player
+  video_player: ^2.8.1
+  
+  # UI Components
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  
+  # Utilities
+  share_plus: ^7.2.1
+  path_provider: ^2.1.1
+  
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/videos/

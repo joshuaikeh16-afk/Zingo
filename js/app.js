@@ -136,30 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Message Sending Demo
-  const sendBtn = document.getElementById('message-send-btn');
-  const threadContainer = document.getElementById('message-thread-container');
-  if (sendBtn && messageInput && threadContainer) {
-    const handleSend = () => {
-      const text = messageInput.value.trim();
-      if (!text) return;
-
-      const bubble = document.createElement('div');
-      bubble.className = 'message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-3 text-sm max-w-[80%] shadow-md ml-auto';
-      bubble.setAttribute('data-message-id', 'msg-' + Date.now());
-      bubble.setAttribute('data-message-type', 'text');
-      bubble.textContent = text;
-
-      threadContainer.appendChild(bubble);
-      messageInput.value = '';
-      threadContainer.scrollTop = threadContainer.scrollHeight;
-    };
-
-    sendBtn.addEventListener('click', handleSend);
-    messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') handleSend();
-    });
-  }
+  // Real message sending is handled by inbox.js, not here -- see that
+  // file for the actual Supabase-backed send logic.
 
   // SOTD recipient select toggle
   const friendOptions = document.querySelectorAll('.friend-option');

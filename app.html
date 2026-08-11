@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kaidra Web — App Shell</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  </head>
+  <body class="bg-[#0b0c10] text-slate-100 min-h-screen flex flex-col justify-between selection:bg-rose-500 selection:text-white pb-20">
+    
+    <!-- Ambient Background Glows -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md h-96 glow-ambient-violet pointer-events-none opacity-40"></div>
+
+    <!-- Main Header -->
+    <header class="w-full max-w-md mx-auto px-4 py-3 flex items-center justify-between sticky top-0 bg-[#0b0c10]/90 backdrop-blur-md z-30 border-b border-slate-800/60">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-rose-500 p-0.5 shadow-md shadow-violet-500/20">
+          <div class="w-full h-full bg-[#0b0c10] rounded-[6px] flex items-center justify-center">
+            <span class="font-heading font-bold text-transparent bg-clip-text bg-gradient-to-tr from-violet-400 to-rose-400 text-sm">K</span>
+          </div>
+        </div>
+        <span class="font-heading font-bold text-lg tracking-tight text-white">Kaidra</span>
+      </div>
+
+      <!-- Header actions: Discover search toggle & links -->
+      <div class="flex items-center gap-2">
+        <button
+          id="header-discover-btn"
+          type="button"
+          class="px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
+        >
+          <svg class="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <span>Discover</span>
+        </button>
+        <a href="/auth.html" class="p-1.5 text-slate-400 hover:text-slate-200 transition-colors" title="Switch Account">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <!-- Main View Container -->
+    <main id="view-container" class="w-full max-w-md mx-auto flex-1 px-4 py-3 relative">
+
+      <!-- PAGE 4: HOME FEED (YouTube Sourced Feed) -->
+      <section id="view-home" class="space-y-4">
+        <!-- Feed Title -->
+        <div class="flex items-center justify-between">
+          <h2 class="font-heading font-bold text-lg text-white">Recommended Feed</h2>
+          <span class="text-[11px] text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800">YouTube Sync</span>
+        </div>
+
+        <!-- Video Feed Container -->
+        <div id="video-feed-container" class="space-y-4">
+          
+          <!-- Video Card 1 -->
+          <article class="video-card glass-panel rounded-2xl overflow-hidden border border-slate-800/80 shadow-lg">
+            <div class="video-player-embed relative aspect-video bg-slate-900 overflow-hidden group">
+              <iframe
+                class="w-full h-full"
+                src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                title="Anime Music Video Showcase"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+              ></iframe>
+            </div>
+            <div class="p-3.5 space-y-2">
+              <h3 class="video-title text-sm font-semibold text-white line-clamp-2">
+                Chainsaw Man — Official Season 2 Teaser Trailer &amp; OST
+              </h3>
+              <p class="video-channel text-xs text-slate-400 font-medium">
+                MAPPA Channel • 1.2M views
+              </p>
+              <!-- Action Row: Like, Bookmark, Share (No Comment button per spec) -->
+              <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                <button
+                  type="button"
+                  class="like-btn text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  data-video-id="yt-101"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-4.318-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                  <span>14.2K</span>
+                </button>
+                <button
+                  type="button"
+                  class="bookmark-btn text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  data-video-id="yt-101"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                  <span>Save</span>
+                </button>
+                <button
+                  type="button"
+                  class="share-btn text-slate-400 hover:text-violet-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  data-video-id="yt-101"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                  <span>Share</span>
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Video Card 2 -->
+          <article class="video-card glass-panel rounded-2xl overflow-hidden border border-slate-800/80 shadow-lg">
+            <div class="video-player-embed relative aspect-video bg-slate-900 overflow-hidden">
+              <iframe
+                class="w-full h-full"
+                src="https://www.youtube.com/embed/LqI_35m9M8M"
+                title="Anime OP/ED Top Hits 2026"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+              ></iframe>
+            </div>
+            <div class="p-3.5 space-y-2">
+              <h3 class="video-title text-sm font-semibold text-white line-clamp-2">
+                Top 10 Most Iconic Anime Soundtracks of 2026
+              </h3>
+              <p class="video-channel text-xs text-slate-400 font-medium">
+                Anibeats Official • 840K views
+              </p>
+              <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                <button
+                  type="button"
+                  class="like-btn text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  data-video-id="yt-102"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-4.318-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                  <span>8.9K</span>
+                </button>
+                <button
+                  type="button"
+                  class="bookmark-btn text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  data-video-id="yt-102"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                  <span>Save</span>
+                </button>
+                <button
+                  type="button"
+                  class="share-btn text-slate-400 hover:text-violet-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  data-video-id="yt-102"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                  <span>Share</span>
+                </button>
+              </div>
+            </div>
+          </article>
+
+        </div>
+
+        <!-- Feed Loading & Infinite Scroll Trigger -->
+        <div id="feed-loading" class="hidden text-center py-4 text-xs text-slate-400 animate-pulse">
+          <span>Loading more videos...</span>
+        </div>
+        <div id="feed-load-more-trigger" class="h-8 w-full"></div>
+      </section>
+
+      <!-- PAGE 5: FRIENDS TAB (24hr mutual-friend statuses & SOTD) -->
+      <section id="view-friends" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-heading font-bold text-lg text-white">Mutual Statuses (24h)</h2>
+          <span class="text-[11px] text-violet-400 bg-violet-950/60 px-2.5 py-1 rounded-full border border-violet-800/40">3 Active</span>
+        </div>
+
+        <!-- Friends Status Container -->
+        <div id="friends-status-container" class="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center gap-4 overflow-x-auto no-scrollbar">
+          
+          <!-- Friend Status Avatar 1 (with SOTD indicator) -->
+          <button type="button" class="friend-status-avatar relative flex-shrink-0 text-center cursor-pointer group" data-user-id="user-ren">
+            <div class="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-violet-500 via-rose-500 to-amber-400 shadow-md">
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80" alt="Ren" class="w-full h-full rounded-full object-cover" />
+            </div>
+            <!-- SOTD indicator badge inside avatar -->
+            <span class="sotd-indicator absolute bottom-4 right-0 w-5 h-5 rounded-full bg-violet-600 border border-slate-900 text-[10px] text-white flex items-center justify-center shadow-md">🎵</span>
+            <span class="block text-[11px] font-medium text-slate-300 mt-1 truncate max-w-[60px]">Ren</span>
+          </button>
+
+          <!-- Friend Status Avatar 2 -->
+          <button type="button" class="friend-status-avatar relative flex-shrink-0 text-center cursor-pointer group" data-user-id="user-kai">
+            <div class="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-indigo-500 to-cyan-400 shadow-md">
+              <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80" alt="Kai" class="w-full h-full rounded-full object-cover" />
+            </div>
+            <!-- SOTD indicator badge inside avatar -->
+            <span class="sotd-indicator absolute bottom-4 right-0 w-5 h-5 rounded-full bg-violet-600 border border-slate-900 text-[10px] text-white flex items-center justify-center shadow-md">🎵</span>
+            <span class="block text-[11px] font-medium text-slate-300 mt-1 truncate max-w-[60px]">Kai</span>
+          </button>
+
+          <!-- Friend Status Avatar 3 -->
+          <button type="button" class="friend-status-avatar relative flex-shrink-0 text-center cursor-pointer group" data-user-id="user-hana">
+            <div class="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-rose-500 to-amber-500 shadow-md">
+              <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80" alt="Hana" class="w-full h-full rounded-full object-cover" />
+            </div>
+            <span class="sotd-indicator hidden absolute bottom-4 right-0 w-5 h-5 rounded-full bg-violet-600 border border-slate-900 text-[10px] text-white flex items-center justify-center">🎵</span>
+            <span class="block text-[11px] font-medium text-slate-300 mt-1 truncate max-w-[60px]">Hana</span>
+          </button>
+
+        </div>
+
+        <!-- Friend Feed Feed Timeline -->
+        <div class="space-y-3 pt-2">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recent Activity</h3>
+          <div class="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
+            <div class="flex items-center gap-3">
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Ren" class="w-10 h-10 rounded-full object-cover border border-violet-500/50" />
+              <div class="flex-1">
+                <p class="text-xs font-semibold text-white">Ren shared Song of the Day</p>
+                <p class="text-[11px] text-violet-300">YOASOBI — Idol (Official Theme)</p>
+              </div>
+              <span class="text-[10px] text-slate-500">2h ago</span>
+            </div>
+            <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-violet-600/30 text-violet-400 flex items-center justify-center text-sm">🎧</div>
+              <div class="flex-1 text-xs">
+                <span class="text-slate-300">Tap avatar above to open status viewer &amp; send private reply</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 6: INBOX (Conversation list + Thread view) -->
+      <section id="view-inbox" class="hidden space-y-4">
+        
+        <!-- Conversation List -->
+        <div id="conversation-list" class="space-y-2">
+          <h2 class="font-heading font-bold text-lg text-white mb-2">Direct Messages</h2>
+
+          <!-- Conversation Row 1 -->
+          <div
+            class="conversation-row glass-panel p-3.5 rounded-2xl border border-slate-800 hover:border-violet-500/40 transition-all cursor-pointer flex items-center gap-3.5"
+            data-conversation-id="conv-ren-1"
+          >
+            <div class="relative">
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80" alt="Ren" class="conversation-avatar w-12 h-12 rounded-full object-cover border border-slate-700" />
+              <span class="sotd-indicator absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-violet-600 text-[9px] text-white flex items-center justify-center border border-slate-900">🎵</span>
+              <span class="streak-badge absolute -top-1 -left-1 px-1 py-0.2 bg-amber-500 text-[9px] font-bold text-slate-950 rounded-full flex items-center gap-0.5 shadow-sm">🔥 7</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <h4 class="conversation-username text-sm font-semibold text-white truncate">Ren (Aoi)</h4>
+                <span class="text-[10px] text-slate-500">10m ago</span>
+              </div>
+              <p class="conversation-preview text-xs text-slate-400 truncate mt-0.5">
+                Loved the Song of the Day track you sent!
+              </p>
+            </div>
+            <span class="conversation-unread-badge bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">2</span>
+          </div>
+
+          <!-- Conversation Row 2 -->
+          <div
+            class="conversation-row glass-panel p-3.5 rounded-2xl border border-slate-800 hover:border-violet-500/40 transition-all cursor-pointer flex items-center gap-3.5 opacity-90"
+            data-conversation-id="conv-kai-2"
+          >
+            <div class="relative">
+              <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80" alt="Kai" class="conversation-avatar w-12 h-12 rounded-full object-cover border border-slate-700" />
+              <span class="streak-badge absolute -top-1 -left-1 px-1 py-0.2 bg-amber-500 text-[9px] font-bold text-slate-950 rounded-full flex items-center gap-0.5 shadow-sm">🔥 3</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <h4 class="conversation-username text-sm font-semibold text-white truncate">Kai Kuro</h4>
+                <span class="text-[10px] text-slate-500">1h ago</span>
+              </div>
+              <p class="conversation-preview text-xs text-slate-400 truncate mt-0.5">
+                Check out this new Demon Slayer clip!
+              </p>
+            </div>
+            <span class="conversation-unread-badge hidden bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+          </div>
+        </div>
+
+        <!-- Thread View Box -->
+        <div class="glass-panel rounded-2xl border border-slate-800 flex flex-col h-[420px] overflow-hidden shadow-xl">
+          <!-- Thread Header -->
+          <div class="p-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-violet-600/30 flex items-center justify-center text-xs font-bold text-violet-300">
+                R
+              </div>
+              <div>
+                <h4 class="text-xs font-semibold text-white">Ren (Active Chat)</h4>
+                <span class="text-[10px] text-emerald-400 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online
+                </span>
+              </div>
+            </div>
+            <div class="text-xs text-amber-400 font-semibold flex items-center gap-1">
+              <span>🔥 7 Day Streak</span>
+            </div>
+          </div>
+
+          <!-- Message Thread Container -->
+          <div id="message-thread-container" class="flex-1 p-3 overflow-y-auto space-y-3 flex flex-col bg-[#0b0c10]/60">
+            
+            <!-- Message Bubble 1: Incoming text -->
+            <div
+              class="message-bubble self-start bg-slate-800/90 text-slate-200 rounded-2xl rounded-tl-xs p-3 text-xs max-w-[80%] space-y-1 relative"
+              data-message-id="msg-1"
+              data-message-type="text"
+            >
+              <p>Hey! Did you check out the new SOTD playlist?</p>
+              <span class="message-reaction-badge inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-900/90 rounded-full text-[10px] text-amber-300 border border-slate-700 mt-1">
+                🔥 2
+              </span>
+            </div>
+
+            <!-- Message Bubble 2: Forwarded SOTD -->
+            <div
+              class="message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-3 text-xs max-w-[85%] space-y-2"
+              data-message-id="msg-2"
+              data-message-type="forwarded_sotd"
+            >
+              <div class="text-[10px] uppercase font-semibold text-violet-200 tracking-wider">🎵 Forwarded Song of the Day</div>
+              <div class="bg-black/30 p-2.5 rounded-xl border border-white/10 flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-lg bg-violet-500/30 flex items-center justify-center text-sm">🎧</div>
+                <div>
+                  <p class="font-bold text-white text-xs">Kick Back — Kenshi Yonezu</p>
+                  <p class="text-[10px] text-violet-200">Spotify Track</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Message Bubble 3: Sticker -->
+            <div
+              class="message-bubble self-start text-3xl p-1"
+              data-message-id="msg-3"
+              data-message-type="sticker"
+            >
+              <span>🔥</span>
+            </div>
+
+          </div>
+
+          <!-- Sticker Tray (Hidden by default) -->
+          <div id="sticker-tray" class="hidden p-3 bg-slate-900 border-t border-slate-800 grid grid-cols-6 gap-2 text-xl">
+            <button type="button" class="sticker-option hover:scale-125 transition-transform p-1">🔥</button>
+            <button type="button" class="sticker-option hover:scale-125 transition-transform p-1">⚡</button>
+            <button type="button" class="sticker-option hover:scale-125 transition-transform p-1">💖</button>
+            <button type="button" class="sticker-option hover:scale-125 transition-transform p-1">🎵</button>
+            <button type="button" class="sticker-option hover:scale-125 transition-transform p-1">✨</button>
+            <button type="button" class="sticker-option hover:scale-125 transition-transform p-1">🎉</button>
+          </div>
+
+          <!-- Message Input Bar -->
+          <div class="p-2.5 bg-slate-900/90 border-t border-slate-800 flex items-center gap-2">
+            <button id="message-image-btn" type="button" class="p-2 text-slate-400 hover:text-slate-200 transition-colors" title="Send Image">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </button>
+            <button id="message-voice-btn" type="button" class="p-2 text-slate-400 hover:text-slate-200 transition-colors" title="Voice Note">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+            </button>
+            <button id="message-sticker-btn" type="button" class="p-2 text-slate-400 hover:text-slate-200 transition-colors" title="Stickers">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </button>
+
+            <input
+              type="text"
+              id="message-text-input"
+              placeholder="Send a private reply..."
+              class="flex-1 py-2 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+            />
+
+            <button
+              id="message-send-btn"
+              type="button"
+              class="p-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl shadow-md transition-colors cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 8: PROFILE -->
+      <section id="view-profile" class="hidden space-y-4">
+        
+        <!-- Profile Header Card -->
+        <div class="glass-panel p-5 rounded-3xl border border-slate-800 text-center relative space-y-4">
+          
+          <div class="relative w-20 h-20 mx-auto">
+            <img
+              id="profile-avatar"
+              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80"
+              alt="User Avatar"
+              class="w-full h-full rounded-full object-cover border-2 border-violet-500 shadow-xl"
+            />
+            <!-- Streak badge -->
+            <span id="streak-badge" class="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-md">
+              🔥 12
+            </span>
+          </div>
+
+          <div>
+            <h2 id="profile-username" class="font-heading font-bold text-xl text-white">@Aoi_AnimeFan</h2>
+            <p id="profile-bio" class="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+              Anime enthusiast, J-Pop collector, &amp; seasonal reviewer 🎧✨
+            </p>
+          </div>
+
+          <!-- Currently Watching Badge -->
+          <div id="currently-watching-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-950/80 border border-violet-800/60 text-violet-300 text-[11px] font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"></span>
+            <span>Watching: Solo Leveling S2</span>
+          </div>
+
+          <!-- Compatibility Score (for mutual friends) -->
+          <div id="compatibility-score" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 text-[11px] font-semibold ml-2">
+            <span>✨ 94% Taste Match</span>
+          </div>
+
+          <!-- Stats Row -->
+          <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/60 text-center">
+            <div>
+              <span id="stat-following" class="block font-bold text-base text-white">128</span>
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider">Following</span>
+            </div>
+            <div>
+              <span id="stat-followers" class="block font-bold text-base text-white">1.4K</span>
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider">Followers</span>
+            </div>
+            <div>
+              <span id="stat-likes" class="block font-bold text-base text-white">8.9K</span>
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider">Likes</span>
+            </div>
+          </div>
+
+          <!-- Follow Button (Shown when viewing someone else's profile) -->
+          <button
+            id="follow-btn"
+            type="button"
+            class="w-full py-2.5 px-4 bg-gradient-to-r from-violet-600 to-rose-500 hover:from-violet-500 hover:to-rose-400 text-white font-semibold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            Follow User
+          </button>
+        </div>
+
+        <!-- Posts Grid -->
+        <div class="space-y-2">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Statuses &amp; Posts</h3>
+          <div id="profile-posts-grid" class="grid grid-cols-3 gap-2">
+            <div class="aspect-square bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative group cursor-pointer">
+              <img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?w=300&auto=format&fit=crop&q=80" alt="Post 1" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <span class="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1.5 py-0.5 rounded text-white">🔥 42</span>
+            </div>
+            <div class="aspect-square bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative group cursor-pointer">
+              <img src="https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=300&auto=format&fit=crop&q=80" alt="Post 2" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <span class="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1.5 py-0.5 rounded text-white">🎵 SOTD</span>
+            </div>
+            <div class="aspect-square bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative group cursor-pointer">
+              <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=80" alt="Post 3" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <span class="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1.5 py-0.5 rounded text-white">❤️ 89</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 9: DISCOVER (Anime search / recommendations only) -->
+      <section id="view-discover" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-heading font-bold text-lg text-white">Discover Anime</h2>
+          <span class="text-[11px] text-slate-400">Seasonal Catalog</span>
+        </div>
+
+        <!-- Anime Search Input -->
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </div>
+          <input
+            type="text"
+            id="anime-search-input"
+            placeholder="Search anime titles, genres, studios..."
+            class="w-full pl-9 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+          />
+        </div>
+
+        <!-- Seasonal Countdown Widget -->
+        <div id="seasonal-countdown-widget" class="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-violet-400 uppercase tracking-wider">Upcoming Premieres</span>
+            <span class="text-[10px] text-slate-500">Spring 2026</span>
+          </div>
+
+          <div class="flex items-center gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+            <img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?w=100&auto=format&fit=crop&q=80" alt="Cover" class="w-12 h-16 rounded-lg object-cover" />
+            <div class="flex-1">
+              <h4 class="text-xs font-bold text-white">Fate/Strange Fake</h4>
+              <p class="text-[10px] text-slate-400">Studio A-1 Pictures</p>
+              <div class="mt-1 flex items-center gap-1.5 text-[10px] text-amber-400 font-semibold">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Premieres in 4 days</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anime Search Results -->
+        <div id="anime-search-results" class="grid grid-cols-2 gap-3">
+          <div class="glass-panel p-2.5 rounded-2xl border border-slate-800 space-y-2">
+            <img src="https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=300&auto=format&fit=crop&q=80" alt="Jujutsu Kaisen" class="w-full h-32 rounded-xl object-cover" />
+            <div>
+              <h4 class="text-xs font-bold text-white truncate">Jujutsu Kaisen</h4>
+              <p class="text-[10px] text-slate-400">Action • Supernatural</p>
+            </div>
+          </div>
+
+          <div class="glass-panel p-2.5 rounded-2xl border border-slate-800 space-y-2">
+            <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=80" alt="Demon Slayer" class="w-full h-32 rounded-xl object-cover" />
+            <div>
+              <h4 class="text-xs font-bold text-white truncate">Demon Slayer</h4>
+              <p class="text-[10px] text-slate-400">Action • Historical</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- PAGE 7: Compose Modal Overlay -->
+    <div id="compose-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-4">
+      <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <h3 class="font-heading font-bold text-base text-white">Create &amp; Share</h3>
+          <button id="compose-close-btn" type="button" class="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Initial Choice Buttons -->
+        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-2xl border border-slate-800 text-xs">
+          <button
+            id="compose-option-status"
+            type="button"
+            class="py-2.5 px-3 rounded-xl font-semibold bg-violet-600 text-white transition-all cursor-pointer"
+          >
+            Post a Status
+          </button>
+          <button
+            id="compose-option-sotd"
+            type="button"
+            class="py-2.5 px-3 rounded-xl font-semibold bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+          >
+            Send Song of Day
+          </button>
+        </div>
+
+        <!-- Status Sub-Flow -->
+        <div id="compose-status-flow" class="space-y-3">
+          <div>
+            <label for="status-media-input" class="block text-xs font-semibold text-slate-300 mb-1">
+              Upload Media (Optional)
+            </label>
+            <input
+              type="file"
+              id="status-media-input"
+              accept="image/*,video/*"
+              class="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-violet-950 file:text-violet-300 hover:file:bg-violet-900"
+            />
+          </div>
+
+          <div>
+            <label for="status-caption-input" class="block text-xs font-semibold text-slate-300 mb-1">
+              Caption / Thoughts
+            </label>
+            <textarea
+              id="status-caption-input"
+              rows="3"
+              placeholder="What are you watching or listening to?"
+              class="w-full p-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+            ></textarea>
+          </div>
+
+          <button
+            id="status-post-btn"
+            type="button"
+            class="w-full py-3 bg-gradient-to-r from-violet-600 to-rose-500 text-white font-semibold text-xs rounded-2xl shadow-lg transition-all cursor-pointer"
+          >
+            Publish 24h Status
+          </button>
+        </div>
+
+        <!-- SOTD Sub-Flow -->
+        <div id="compose-sotd-flow" class="hidden space-y-3">
+          <div>
+            <label for="sotd-search-input" class="block text-xs font-semibold text-slate-300 mb-1">
+              Search Spotify Tracks
+            </label>
+            <input
+              type="text"
+              id="sotd-search-input"
+              placeholder="Artist or song name..."
+              class="w-full p-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+            />
+          </div>
+
+          <!-- SOTD Search Results Container -->
+          <div id="sotd-search-results" class="space-y-2 max-h-36 overflow-y-auto">
+            <div class="sotd-track-result p-2 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between cursor-pointer hover:border-violet-500" data-spotify-track-id="track-spotify-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm">🎵</span>
+                <div>
+                  <p class="text-xs font-bold text-white">Idol</p>
+                  <p class="text-[10px] text-slate-400">YOASOBI</p>
+                </div>
+              </div>
+              <span class="text-[10px] text-violet-400">Select</span>
+            </div>
+          </div>
+
+          <!-- Recipient Picker -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Select Friends</label>
+            <div id="sotd-recipient-picker" class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+              <div class="friend-option flex-shrink-0 p-2 bg-slate-950 border border-slate-800 rounded-xl text-center cursor-pointer" data-user-id="user-ren">
+                <p class="text-xs font-semibold text-white">Ren</p>
+              </div>
+              <div class="friend-option flex-shrink-0 p-2 bg-slate-950 border border-slate-800 rounded-xl text-center cursor-pointer" data-user-id="user-kai">
+                <p class="text-xs font-semibold text-white">Kai</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            id="sotd-send-btn"
+            type="button"
+            class="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold text-xs rounded-2xl shadow-lg transition-all cursor-pointer"
+          >
+            Send Song of the Day
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Status Viewer Modal (Page 5) -->
+    <div id="status-viewer-modal" class="hidden fixed inset-0 bg-black z-50 flex flex-col justify-between p-4">
+      <!-- Status Top Bar -->
+      <div class="flex items-center justify-between pt-2">
+        <div class="flex items-center gap-2">
+          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80" alt="Ren" class="w-8 h-8 rounded-full object-cover border border-violet-400" />
+          <span class="text-xs font-bold text-white">Ren</span>
+          <span class="text-[10px] text-slate-400">• 2h ago</span>
+        </div>
+        <button id="status-close-btn" type="button" class="p-2 text-white hover:text-slate-300 cursor-pointer">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Status Media display area -->
+      <div class="status-media flex-1 my-4 bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 flex items-center justify-center relative">
+        <img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80" alt="Status Media" class="w-full h-full object-cover" />
+        <div class="absolute bottom-4 left-4 right-4 p-3 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-xs text-white">
+          <span>Watching Chainsaw Man S2 premiere! 🔥</span>
+        </div>
+      </div>
+
+      <!-- Status Viewer Reply & Quick React Bar -->
+      <div class="flex items-center gap-2 pb-2">
+        <input
+          type="text"
+          id="status-reply-input"
+          placeholder="Reply privately to Ren..."
+          class="flex-1 py-3 px-4 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+        />
+        <button id="status-quick-react-btn" type="button" class="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-base hover:scale-110 transition-transform">
+          🔥
+        </button>
+        <button id="status-reply-submit-btn" type="button" class="p-3 bg-violet-600 text-white rounded-2xl font-bold text-xs">
+          Send
+        </button>
+      </div>
+    </div>
+
+    <!-- PAGE 3: BOTTOM NAVIGATION BAR (5-tab structure) -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-[#0b0c10]/95 backdrop-blur-lg border-t border-slate-800/80 z-40">
+      <div class="w-full max-w-md mx-auto px-4 py-2 flex items-center justify-between">
+        
+        <!-- Tab 1: Home -->
+        <button
+          id="nav-home"
+          type="button"
+          class="active text-violet-400 hover:text-violet-300 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          <span class="text-[10px] font-medium">Home</span>
+        </button>
+
+        <!-- Tab 2: Friends -->
+        <button
+          id="nav-friends"
+          type="button"
+          class="text-slate-400 hover:text-violet-300 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <span class="text-[10px] font-medium">Friends</span>
+        </button>
+
+        <!-- Center [+] Button: Compose (styled distinctly with gradient ring per spec) -->
+        <button
+          id="nav-compose"
+          type="button"
+          class="p-0.5 rounded-full bg-gradient-to-tr from-violet-600 via-indigo-500 to-rose-500 shadow-lg shadow-violet-600/30 -mt-5 hover:scale-105 transition-transform cursor-pointer"
+          title="Compose Status / SOTD"
+        >
+          <div class="w-11 h-11 bg-slate-950 rounded-full flex items-center justify-center text-white">
+            <svg class="w-6 h-6 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          </div>
+        </button>
+
+        <!-- Tab 4: Inbox -->
+        <button
+          id="nav-inbox"
+          type="button"
+          class="text-slate-400 hover:text-violet-300 flex flex-col items-center gap-1 transition-colors cursor-pointer relative"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          <span class="text-[10px] font-medium">Inbox</span>
+          <span class="absolute top-0 right-1 w-2 h-2 rounded-full bg-violet-500"></span>
+        </button>
+
+        <!-- Tab 5: Profile -->
+        <button
+          id="nav-profile"
+          type="button"
+          class="text-slate-400 hover:text-violet-300 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          <span class="text-[10px] font-medium">Profile</span>
+        </button>
+
+      </div>
+    </nav>
+
+    <!-- Script import for App Shell (Strict Requirement) -->
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

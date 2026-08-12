@@ -132,6 +132,80 @@ async function hasActiveSotdFrom(senderId, recipientId) {
   return (data?.length ?? 0) > 0;
 }
 
+export { hasActiveSotdFrom };
+
+/** All users who are mutual friends (both follow each other) with `userId`. */
+export async function getMutualFriends(userId) {
+  const { data: followingRows } = await supabase
+    .from('follows')
+    .select('followed_id')
+    .eq('follower_id', userId);
+
+  const followingIds = (followingRows ?? []).map((r) => r.followed_id);
+  if (followingIds.length === 0) return [];
+
+  const { data: followBackRows } = await supabase
+    .from('follows')
+    .select('follower_id')
+    .eq('followed_id', userId)
+    .in('follower_id', followingIds);
+
+  const mutualIds = (followBackRows ?? []).map((r) => r.follower_id);
+  if (mutualIds.length === 0) return [];
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', mutualIds);
+
+  return profiles ?? [];
+}
+
+/** Each mutual friend's most recent unexpired post, plus their SOTD-indicator state. Skips friends with no active post. */
+export async function getFriendsActiveStatuses(userId) {
+  const friends = await getMutualFriends(userId);
+  if (friends.length === 0) return [];
+
+  const results = await Promise.all(
+    friends.map(async (friend) => {
+      const { data: latestPost } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', friend.id)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!latestPost) return null;
+
+      const hasSotd = await hasActiveSotdFrom(friend.id, userId);
+      return { friend, post: latestPost, hasActiveSotd: hasSotd };
+    })
+  );
+
+  return results.filter(Boolean);
+}
+
+/** Sends a private reply to a status -- delivered as a message in that friend's Inbox, not a public comment. */
+export async function sendStatusReply({ postId, authorId, replierId, content }) {
+  const conversationId = await getOrCreateConversation(authorId);
+  await sendMessage({
+    conversationId,
+    senderId: replierId,
+    content,
+    messageType: 'status_reply',
+  });
+  await recordFriendInteraction(authorId);
+  return conversationId;
+}
+
+export async function addStatusQuickReact(postId, userId, emoji = '🔥') {
+  await supabase
+    .from('status_reactions')
+    .upsert({ post_id: postId, user_id: userId, emoji }, { onConflict: 'post_id,user_id' });
+}
+
 /** Full track details for the active SOTD from `senderId` to `recipientId`, for populating the listen modal. Null if none active. */
 export async function getActiveSotdDetails(senderId, recipientId) {
   const { data } = await supabase

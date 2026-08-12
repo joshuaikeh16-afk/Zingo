@@ -132,6 +132,28 @@ async function hasActiveSotdFrom(senderId, recipientId) {
   return (data?.length ?? 0) > 0;
 }
 
+/** Full track details for the active SOTD from `senderId` to `recipientId`, for populating the listen modal. Null if none active. */
+export async function getActiveSotdDetails(senderId, recipientId) {
+  const { data } = await supabase
+    .from('sotd_recipients')
+    .select('sotd_id, viewed_at, sotd_posts!inner(id, sender_id, spotify_track_id, track_name, artist_name, album_art_url, created_at, expires_at)')
+    .eq('recipient_id', recipientId)
+    .eq('sotd_posts.sender_id', senderId)
+    .gt('sotd_posts.expires_at', new Date().toISOString())
+    .order('sotd_posts(created_at)', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.sotd_posts ?? null;
+}
+
+export async function markSotdViewed(sotdId, recipientId) {
+  await supabase
+    .from('sotd_recipients')
+    .update({ viewed_at: new Date().toISOString() })
+    .eq('sotd_id', sotdId)
+    .eq('recipient_id', recipientId);
+}
+
 /** Uses the existing get_or_create_conversation RPC -- don't reimplement find-or-create client-side. */
 export async function getOrCreateConversation(otherUserId) {
   const { data, error } = await supabase.rpc('get_or_create_conversation', {

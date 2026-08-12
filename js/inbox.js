@@ -14,6 +14,8 @@ import {
   subscribeToMessages,
   markConversationRead,
   recordFriendInteraction,
+  getActiveSotdDetails,
+  markSotdViewed,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -65,28 +67,61 @@ function buildConversationRow(convo) {
     ${convo.unreadCount > 0 ? `<span class="conversation-unread-badge bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">${convo.unreadCount}</span>` : ''}
   `;
 
-  row.addEventListener('click', () => openThread(convo.conversationId, convo.otherUserId, name));
+  row.addEventListener('click', (e) => {
+    // Tapping the SOTD indicator badge specifically opens the listen
+    // modal with real track data, rather than opening the thread.
+    if (e.target.closest('.sotd-indicator')) {
+      e.stopPropagation();
+      openSotdListenModal(convo.otherUserId, name);
+      return;
+    }
+    openThread(convo.conversationId, convo.otherUserId, name);
+  });
   return row;
 }
+
+async function openSotdListenModal(senderId, senderName) {
+  const modal = document.getElementById('sotd-listen-modal');
+  if (!modal) return;
+
+  const sotd = await getActiveSotdDetails(senderId, currentUserId);
+  if (!sotd) return;
+
+  const nameEl = modal.querySelector('#sotd-listen-track-name');
+  const artistEl = modal.querySelector('#sotd-listen-artist-name');
+  const artEl = modal.querySelector('#sotd-listen-album-art');
+  const embedContainer = modal.querySelector('#sotd-listen-embed-container');
+  const openBtn = modal.querySelector('#sotd-listen-open-spotify-btn');
+  const sharedByEl = modal.querySelector('p.text-xs.text-slate-400');
+
+  if (nameEl) nameEl.textContent = sotd.track_name;
+  if (artistEl) artistEl.textContent = sotd.artist_name;
+  if (artEl && sotd.album_art_url) artEl.src = sotd.album_art_url;
+  if (sharedByEl) sharedByEl.textContent = `Shared by ${senderName} • ${formatRelativeTime(sotd.created_at)}`;
+  if (openBtn) openBtn.href = `https://open.spotify.com/track/${sotd.spotify_track_id}`;
+  if (embedContainer) {
+    embedContainer.innerHTML = `<iframe class="w-full h-[80px] rounded-xl" src="https://open.spotify.com/embed/track/${sotd.spotify_track_id}?utm_source=generator&theme=0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+  }
+
+  modal.classList.remove('hidden');
+  markSotdViewed(sotd.id, currentUserId);
 
 async function renderConversationList() {
   if (!conversationList) return;
   const conversations = await getConversationsWithDetails(currentUserId);
 
-  // Clear everything except the heading
   const heading = conversationList.querySelector('h2');
-  conversationList.innerHTML = '';
-  if (heading) conversationList.appendChild(heading);
+  const emptyState = document.getElementById('inbox-empty-state');
+  conversationList.querySelectorAll('.conversation-row').forEach((el) => el.remove());
 
   if (conversations.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'text-sm text-slate-500 py-6 text-center';
-    empty.textContent = 'No conversations yet.';
-    conversationList.appendChild(empty);
-    return;
+    emptyState?.classList.remove('hidden');
+    emptyState?.classList.add('flex');
+  } else {
+    emptyState?.classList.add('hidden');
+    emptyState?.classList.remove('flex');
+    conversations.forEach((c) => conversationList.appendChild(buildConversationRow(c)));
   }
-
-  conversations.forEach((c) => conversationList.appendChild(buildConversationRow(c)));
 }
 
 function buildMessageBubble(message) {
@@ -98,6 +133,47 @@ function buildMessageBubble(message) {
   if (message.message_type === 'sticker') {
     bubble.className = `message-bubble ${isMine ? 'self-end' : 'self-start'} text-3xl p-1`;
     bubble.textContent = message.content;
+    return bubble;
+  }
+
+  if (message.message_type === 'image') {
+    bubble.className = isMine
+      ? 'message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-1.5 max-w-[80%] space-y-1 relative cursor-pointer'
+      : 'message-bubble self-start bg-slate-800/90 text-slate-200 rounded-2xl rounded-tl-xs p-1.5 max-w-[80%] space-y-1 relative cursor-pointer';
+    const time = new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    bubble.innerHTML = `
+      <img src="${message.media_url}" alt="Shared image" class="w-full h-36 object-cover rounded-xl" />
+      <span class="text-[9px] ${isMine ? 'text-violet-200' : 'text-slate-400'} px-1 py-0.5 block text-right">${time}</span>
+    `;
+    return bubble;
+  }
+
+  if (message.message_type === 'voice_note') {
+    bubble.className = isMine
+      ? 'message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-2.5 max-w-[80%] space-y-1'
+      : 'message-bubble self-start bg-slate-800/90 text-slate-200 rounded-2xl rounded-tl-xs p-2.5 max-w-[80%] space-y-1';
+    const duration = message.media_duration_seconds ?? 0;
+    const durationLabel = `0:${String(duration).padStart(2, '0')}`;
+    const btnClasses = isMine ? 'bg-white/20 hover:bg-white/30' : 'bg-violet-600 hover:bg-violet-500';
+    const barBg = isMine ? 'bg-white/30' : 'bg-slate-700';
+    const barFill = isMine ? 'bg-white' : 'bg-violet-400';
+    const timeColor = isMine ? 'text-violet-200' : 'text-slate-400';
+    bubble.innerHTML = `
+      <div class="flex items-center gap-2.5">
+        <button type="button" class="voice-play-btn w-8 h-8 rounded-full ${btnClasses} text-white flex items-center justify-center shadow-md cursor-pointer flex-shrink-0">
+          <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="flex-1 space-y-1">
+          <div class="h-1.5 ${barBg} rounded-full overflow-hidden w-28"><div class="h-full ${barFill} w-0 rounded-full"></div></div>
+          <div class="flex items-center justify-between text-[9px] ${timeColor}"><span>0:00</span><span>${durationLabel}</span></div>
+        </div>
+      </div>
+    `;
+    const playBtn = bubble.querySelector('.voice-play-btn');
+    const audio = new Audio(message.media_url);
+    playBtn?.addEventListener('click', () => {
+      audio.paused ? audio.play() : audio.pause();
+    });
     return bubble;
   }
 
@@ -175,20 +251,16 @@ messageInput?.addEventListener('keydown', (e) => {
   currentUserId = session.user.id;
   const conversations = await getConversationsWithDetails(currentUserId);
 
-  // Render list (reuses the same fetch result rather than calling
-  // getConversationsWithDetails twice)
-  const heading = conversationList?.querySelector('h2');
-  if (conversationList) {
-    conversationList.innerHTML = '';
-    if (heading) conversationList.appendChild(heading);
-    if (conversations.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'text-sm text-slate-500 py-6 text-center';
-      empty.textContent = 'No conversations yet.';
-      conversationList.appendChild(empty);
-    } else {
-      conversations.forEach((c) => conversationList.appendChild(buildConversationRow(c)));
-    }
+  const emptyState = document.getElementById('inbox-empty-state');
+  conversationList?.querySelectorAll('.conversation-row').forEach((el) => el.remove());
+
+  if (conversations.length === 0) {
+    emptyState?.classList.remove('hidden');
+    emptyState?.classList.add('flex');
+  } else {
+    emptyState?.classList.add('hidden');
+    emptyState?.classList.remove('flex');
+    conversations.forEach((c) => conversationList?.appendChild(buildConversationRow(c)));
   }
 
   if (conversations.length > 0) {
@@ -196,8 +268,6 @@ messageInput?.addEventListener('keydown', (e) => {
     const name = first.profile?.display_name || first.profile?.username || 'Unknown';
     openThread(first.conversationId, first.otherUserId, name);
   } else if (threadContainer) {
-    // No conversations at all -- clear the static demo messages rather
-    // than leaving fake content visible with nothing real to show yet.
     threadContainer.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">Follow a mutual friend to start chatting.</p>';
   }
 })();

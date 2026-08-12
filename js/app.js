@@ -103,8 +103,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusCloseBtn = document.getElementById('status-close-btn');
   const friendAvatars = document.querySelectorAll('.friend-status-avatar');
 
+  // SOTD Listen Modal
+  const sotdListenModal = document.getElementById('sotd-listen-modal');
+  const sotdListenCloseBtn = document.getElementById('sotd-listen-close-btn');
+
   friendAvatars.forEach((avatar) => {
-    avatar.addEventListener('click', () => {
+    avatar.addEventListener('click', (e) => {
+      // If user tapped on the SOTD indicator badge specifically, open SOTD modal
+      if (e.target.closest('.sotd-indicator')) {
+        e.stopPropagation();
+        if (sotdListenModal) sotdListenModal.classList.remove('hidden');
+        return;
+      }
       if (statusModal) statusModal.classList.remove('hidden');
     });
   });
@@ -112,6 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (statusCloseBtn && statusModal) {
     statusCloseBtn.addEventListener('click', () => {
       statusModal.classList.add('hidden');
+    });
+  }
+
+  if (sotdListenCloseBtn && sotdListenModal) {
+    sotdListenCloseBtn.addEventListener('click', () => {
+      sotdListenModal.classList.add('hidden');
     });
   }
 

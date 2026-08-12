@@ -277,3 +277,118 @@ export async function isVideoBookmarked(userId, videoId) {
     .maybeSingle();
   return !!data;
 }
+
+// ---------------------------------------------------------------------
+// Follows & profile stats
+// ---------------------------------------------------------------------
+
+export async function isMutualFriend(userA, userB) {
+  const { data, error } = await supabase.rpc('is_mutual_friend', { user_a: userA, user_b: userB });
+  if (error) return false;
+  return !!data;
+}
+
+export async function isFollowing(followerId, followedId) {
+  const { data } = await supabase
+    .from('follows')
+    .select('follower_id')
+    .eq('follower_id', followerId)
+    .eq('followed_id', followedId)
+    .maybeSingle();
+  return !!data;
+}
+
+export async function followUser(followerId, followedId) {
+  await supabase.from('follows').insert({ follower_id: followerId, followed_id: followedId });
+}
+
+export async function unfollowUser(followerId, followedId) {
+  await supabase.from('follows').delete().eq('follower_id', followerId).eq('followed_id', followedId);
+}
+
+export async function getFollowCounts(userId) {
+  const [{ count: following }, { count: followers }] = await Promise.all([
+    supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('follower_id', userId),
+    supabase.from('follows').select('followed_id', { count: 'exact', head: true }).eq('followed_id', userId),
+  ]);
+  return { following: following ?? 0, followers: followers ?? 0 };
+}
+
+export async function getTotalLikesForUser(userId) {
+  const { data: posts } = await supabase.from('posts').select('id').eq('user_id', userId);
+  const postIds = (posts ?? []).map((p) => p.id);
+  if (postIds.length === 0) return 0;
+  const { count } = await supabase
+    .from('post_likes')
+    .select('post_id', { count: 'exact', head: true })
+    .in('post_id', postIds);
+  return count ?? 0;
+}
+
+export async function getUserPosts(userId) {
+  const { data } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('user_id', userId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+// ---------------------------------------------------------------------
+// Watchlist -- currently-watching badge + compatibility score
+// ---------------------------------------------------------------------
+
+const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
+
+async function fetchAnimeTitle(anilistId) {
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($id: Int) { Media(id: $id) { title { userPreferred } } }`,
+        variables: { id: anilistId },
+      }),
+    });
+    const json = await res.json();
+    return json?.data?.Media?.title?.userPreferred ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Most recently added 'watching' entry, with a real title from AniList. Null if none. */
+export async function getCurrentlyWatching(userId) {
+  const { data } = await supabase
+    .from('user_watchlist')
+    .select('anime_id, updated_at')
+    .eq('user_id', userId)
+    .eq('status', 'watching')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  const title = await fetchAnimeTitle(data.anime_id);
+  return title ? { animeId: data.anime_id, title } : null;
+}
+
+/**
+ * Jaccard similarity between two users' watching+completed anime lists.
+ * Returns an integer percentage, or null if either list is empty.
+ */
+export async function getCompatibilityScore(userA, userB) {
+  const [{ data: listA }, { data: listB }] = await Promise.all([
+    supabase.from('user_watchlist').select('anime_id').eq('user_id', userA).in('status', ['watching', 'completed']),
+    supabase.from('user_watchlist').select('anime_id').eq('user_id', userB).in('status', ['watching', 'completed']),
+  ]);
+
+  const setA = new Set((listA ?? []).map((r) => r.anime_id));
+  const setB = new Set((listB ?? []).map((r) => r.anime_id));
+  if (setA.size === 0 || setB.size === 0) return null;
+
+  const shared = [...setA].filter((id) => setB.has(id)).length;
+  const union = new Set([...setA, ...setB]).size;
+  return Math.round((shared / union) * 100);
+}

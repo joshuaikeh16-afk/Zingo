@@ -212,3 +212,68 @@ export async function markConversationRead(conversationId, userId) {
 export async function recordFriendInteraction(otherUserId) {
   await supabase.rpc('record_friend_interaction', { other_user_id: otherUserId });
 }
+
+// ---------------------------------------------------------------------
+// YouTube (Home feed) -- via the youtube-feed Edge Function, so the
+// API key never ships in this app.
+// ---------------------------------------------------------------------
+
+export async function searchYoutubeVideos({ query = 'anime amv', maxResults = 10, pageToken } = {}) {
+  const { data, error } = await supabase.functions.invoke('youtube-feed', {
+    body: { query, maxResults, ...(pageToken ? { pageToken } : {}) },
+  });
+  if (error) throw error;
+  return data; // { videos: [...], nextPageToken }
+}
+
+export async function toggleVideoLike(userId, videoId) {
+  const { data: existing } = await supabase
+    .from('video_likes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('video_id', videoId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from('video_likes').delete().eq('id', existing.id);
+    return false; // now unliked
+  }
+  await supabase.from('video_likes').insert({ user_id: userId, video_id: videoId });
+  return true; // now liked
+}
+
+export async function isVideoLiked(userId, videoId) {
+  const { data } = await supabase
+    .from('video_likes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('video_id', videoId)
+    .maybeSingle();
+  return !!data;
+}
+
+export async function toggleVideoBookmark(userId, videoId) {
+  const { data: existing } = await supabase
+    .from('user_bookmarks')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('article_id', videoId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from('user_bookmarks').delete().eq('id', existing.id);
+    return false;
+  }
+  await supabase.from('user_bookmarks').insert({ user_id: userId, article_id: videoId });
+  return true;
+}
+
+export async function isVideoBookmarked(userId, videoId) {
+  const { data } = await supabase
+    .from('user_bookmarks')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('article_id', videoId)
+    .maybeSingle();
+  return !!data;
+}

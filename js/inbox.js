@@ -105,6 +105,7 @@ async function openSotdListenModal(senderId, senderName) {
 
   modal.classList.remove('hidden');
   markSotdViewed(sotd.id, currentUserId);
+}
 
 async function renderConversationList() {
   if (!conversationList) return;

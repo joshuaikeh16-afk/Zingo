@@ -80,8 +80,12 @@
       <section id="view-friends" class="hidden space-y-4">
         <div class="flex items-center justify-between">
           <h2 class="font-heading font-bold text-lg text-white">Mutual Statuses (24h)</h2>
-          <span class="text-[11px] text-violet-400 bg-violet-950/60 px-2.5 py-1 rounded-full border border-violet-800/40">3 Active</span>
+          <button type="button" id="find-friends-btn" class="text-[11px] text-white bg-violet-600 hover:bg-violet-500 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            Find Friends
+          </button>
         </div>
+        <p id="friends-active-count" class="text-[11px] text-violet-400"></p>
 
         <!-- Friends Status Container -->
         <div id="friends-status-container" class="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center gap-4 overflow-x-auto no-scrollbar">
@@ -696,6 +700,17 @@
     </div>
 
     <!-- SOTD Listen Modal (Receiving Flow) -->
+    <!-- Find Friends Modal -->
+    <div id="find-friends-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex flex-col">
+      <div class="w-full max-w-md mx-auto flex-1 flex flex-col p-4">
+        <div class="flex items-center gap-3 mb-4">
+          <input type="text" id="find-friends-input" placeholder="Search by username..." class="flex-1 bg-slate-900 border border-slate-800 rounded-full px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500" />
+          <button type="button" id="find-friends-close-btn" class="text-slate-400 text-sm">Cancel</button>
+        </div>
+        <div id="find-friends-results" class="flex-1 overflow-y-auto space-y-2"></div>
+      </div>
+    </div>
+
     <div id="sotd-listen-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
       <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative text-center">
         <!-- Close Button -->
@@ -749,7 +764,7 @@
     </div>
 
     <!-- PAGE 3: BOTTOM NAVIGATION BAR (5-tab structure) -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-[#0b0c10]/95 backdrop-blur-lg border-t border-slate-800/80 z-40">
+    <nav class="fixed bottom-0 left-0 right-0 bg-[#0b0c10]/60 backdrop-blur-xl border-t border-slate-800/50 z-40">
       <div class="w-full max-w-md mx-auto px-4 py-2 flex items-center justify-between">
         
         <!-- Tab 1: Home -->

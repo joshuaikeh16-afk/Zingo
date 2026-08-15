@@ -369,6 +369,19 @@ export async function isMutualFriend(userA, userB) {
   return !!data;
 }
 
+/** Searches profiles by username (case-insensitive partial match), excluding the current user. */
+export async function searchUsers(query, currentUserId) {
+  if (!query || query.trim().length < 2) return [];
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .ilike('username', `%${query.trim()}%`)
+    .neq('id', currentUserId)
+    .limit(20);
+  if (error) return [];
+  return data ?? [];
+}
+
 export async function isFollowing(followerId, followedId) {
   const { data } = await supabase
     .from('follows')

@@ -8,6 +8,10 @@ import {
   getFriendsActiveStatuses,
   sendStatusReply,
   addStatusQuickReact,
+  searchUsers,
+  isFollowing,
+  followUser,
+  unfollowUser,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -15,7 +19,7 @@ let openStatus = null; // { friend, post } currently shown in the viewer
 
 const statusContainer = document.getElementById('friends-status-container');
 const emptyState = document.getElementById('friends-empty-state');
-const activeCountBadge = document.querySelector('#view-friends span.text-violet-400');
+const activeCountBadge = document.getElementById('friends-active-count');
 
 const statusModal = document.getElementById('status-viewer-modal');
 const statusMediaEl = statusModal?.querySelector('.status-media');
@@ -155,3 +159,101 @@ quickReactBtn?.addEventListener('click', async () => {
   currentUserId = session.user.id;
   await renderFriendsStatuses();
 })();
+
+// ---------------------------------------------------------------------
+// Find Friends: search users by username, follow/unfollow inline.
+// This is the actual discovery entry point -- without it, there was no
+// way for two users to ever become mutual friends in the first place.
+// ---------------------------------------------------------------------
+
+const findFriendsBtn = document.getElementById('find-friends-btn');
+const findFriendsModal = document.getElementById('find-friends-modal');
+const findFriendsInput = document.getElementById('find-friends-input');
+const findFriendsResults = document.getElementById('find-friends-results');
+const findFriendsCloseBtn = document.getElementById('find-friends-close-btn');
+
+let searchDebounceTimer = null;
+
+findFriendsBtn?.addEventListener('click', () => {
+  findFriendsModal?.classList.remove('hidden');
+  findFriendsInput?.focus();
+});
+
+findFriendsCloseBtn?.addEventListener('click', () => {
+  findFriendsModal?.classList.add('hidden');
+  if (findFriendsInput) findFriendsInput.value = '';
+  if (findFriendsResults) findFriendsResults.innerHTML = '';
+});
+
+findFriendsInput?.addEventListener('input', () => {
+  clearTimeout(searchDebounceTimer);
+  const query = findFriendsInput.value;
+  searchDebounceTimer = setTimeout(() => runUserSearch(query), 350);
+});
+
+async function runUserSearch(query) {
+  if (!findFriendsResults) return;
+  if (!query || query.trim().length < 2) {
+    findFriendsResults.innerHTML = '<p class="text-xs text-slate-500 text-center py-6">Type at least 2 characters to search.</p>';
+    return;
+  }
+
+  const results = await searchUsers(query, currentUserId);
+  findFriendsResults.innerHTML = '';
+
+  if (results.length === 0) {
+    findFriendsResults.innerHTML = '<p class="text-xs text-slate-500 text-center py-6">No users found.</p>';
+    return;
+  }
+
+  results.forEach((user) => findFriendsResults.appendChild(buildUserSearchRow(user)));
+}
+
+function buildUserSearchRow(user) {
+  const row = document.createElement('div');
+  row.className = 'flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5';
+  const name = user.display_name || user.username;
+  const avatarUrl = user.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
+
+  row.innerHTML = `
+    <img src="${avatarUrl}" alt="${name}" class="w-11 h-11 rounded-full object-cover" />
+    <div class="flex-1 min-w-0">
+      <p class="text-sm font-semibold text-white truncate">${name}</p>
+      <p class="text-xs text-slate-500 truncate">@${user.username}</p>
+    </div>
+    <button type="button" class="follow-toggle-btn text-xs font-semibold px-4 py-1.5 rounded-full bg-violet-600 text-white">Follow</button>
+  `;
+
+  const btn = row.querySelector('.follow-toggle-btn');
+
+  isFollowing(currentUserId, user.id).then((already) => {
+    setFollowBtnState(btn, already);
+  });
+
+  btn?.addEventListener('click', async () => {
+    const currentlyFollowing = btn.textContent.trim() === 'Following';
+    btn.disabled = true;
+    try {
+      if (currentlyFollowing) {
+        await unfollowUser(currentUserId, user.id);
+        setFollowBtnState(btn, false);
+      } else {
+        await followUser(currentUserId, user.id);
+        setFollowBtnState(btn, true);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  return row;
+}
+
+function setFollowBtnState(btn, following) {
+  if (!btn) return;
+  btn.textContent = following ? 'Following' : 'Follow';
+  btn.classList.toggle('bg-violet-600', !following);
+  btn.classList.toggle('bg-slate-800', following);
+  btn.classList.toggle('text-white', !following);
+  btn.classList.toggle('text-slate-300', following);
+}

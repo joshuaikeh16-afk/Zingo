@@ -263,12 +263,13 @@ export function subscribeToMessages(conversationId, onNewMessage) {
   return channel;
 }
 
-export async function sendMessage({ conversationId, senderId, content, messageType = 'text' }) {
+export async function sendMessage({ conversationId, senderId, content, messageType = 'text', externalRefId = null }) {
   const { error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
     sender_id: senderId,
     content,
     message_type: messageType,
+    ...(externalRefId ? { external_ref_id: externalRefId } : {}),
   });
   if (error) throw error;
 }

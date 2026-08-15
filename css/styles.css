@@ -2141,6 +2141,7 @@ h1, h2, h3, h4, .font-heading {
 #video-feed-container {
   scroll-snap-type: y mandatory;
   overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
   height: 100vh;
   margin: -0.75rem -1rem 0;
   scrollbar-width: none;
@@ -2265,4 +2266,216 @@ h1, h2, h3, h4, .font-heading {
 
 #view-home > div:first-child {
   display: none;
+}
+
+/* ===================================================================
+   Home feed v2: custom controls, real colors, share menu, forward
+   picker. The pointer-events split below is the actual fix for touch
+   scroll being broken on mobile -- the YouTube-generated iframe never
+   receives touch events at all now, so swipe gestures reach the outer
+   scroll-snap container instead of being eaten by the embed.
+   =================================================================== */
+
+.video-player-embed {
+  background-size: cover;
+  background-position: center;
+}
+
+.video-player-embed .player-mount,
+.video-player-embed iframe {
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.video-tap-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Like = red, Save = yellow/gold -- distinct colors per action, not a
+   single shared accent. */
+.feed-action-btn.like-btn.active {
+  color: #ef4444;
+}
+
+.feed-action-btn.bookmark-btn.active {
+  color: #eab308;
+}
+
+.feed-controls {
+  position: absolute;
+  left: 12px;
+  bottom: 90px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.control-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.control-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.speed-control {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.speed-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.speed-btn.active {
+  background: #ffffff;
+  color: #0c0a10;
+}
+
+.share-wrapper {
+  position: relative;
+}
+
+.share-menu {
+  position: absolute;
+  right: 100%;
+  bottom: 0;
+  margin-right: 8px;
+  background: rgba(20, 18, 26, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  z-index: 5;
+}
+
+.share-menu.hidden {
+  display: none;
+}
+
+.share-menu-item {
+  background: none;
+  border: none;
+  color: #ffffff;
+  text-align: left;
+  font-size: 0.8rem;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.share-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.soon-tag {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.forward-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: flex-end;
+}
+
+.forward-picker-panel {
+  background: #14121a;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  border-radius: 20px 20px 0 0;
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.forward-picker-panel h4 {
+  color: #ffffff;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+
+.forward-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.forward-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  padding: 10px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.forward-picker-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.forward-picker-item img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.forward-picker-cancel {
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
 }

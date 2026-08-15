@@ -2143,6 +2143,7 @@ h1, h2, h3, h4, .font-heading {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   height: 100vh;
+  height: 100dvh;
   margin: -0.75rem -1rem 0;
   scrollbar-width: none;
 }
@@ -2162,6 +2163,7 @@ h1, h2, h3, h4, .font-heading {
   scroll-snap-align: start;
   scroll-snap-stop: always;
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   position: relative;
   background: #0c0a10;
@@ -2194,6 +2196,7 @@ h1, h2, h3, h4, .font-heading {
   height: 56.25vw; /* 9/16 of 100vw */
   min-height: 100%;
   min-width: 177.78vh; /* 16/9 of 100vh */
+  min-width: 177.78dvh; /* dvh-correct version for mobile browser chrome */
   transform: translate(-50%, -50%);
   border: none;
 }

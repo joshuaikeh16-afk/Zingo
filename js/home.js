@@ -409,6 +409,8 @@ if (loadMoreTrigger) {
   observer.observe(loadMoreTrigger);
 }
 
+let hasLoadedOnce = false;
+
 (async () => {
   const session = await requireAuth();
   if (!session) return;
@@ -416,5 +418,15 @@ if (loadMoreTrigger) {
   if (!profile) return;
 
   currentUserId = session.user.id;
-  await loadVideos({ append: false });
+
+  // Videos is now a separate sub-tab under Home (not the default view)
+  // -- only load videos once the tab is actually opened, so a user who
+  // stays on News never triggers an unnecessary YouTube API call.
+  const videosTab = document.getElementById('home-subtab-videos');
+  videosTab?.addEventListener('click', () => {
+    if (!hasLoadedOnce) {
+      hasLoadedOnce = true;
+      loadVideos({ append: false });
+    }
+  });
 })();

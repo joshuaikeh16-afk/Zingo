@@ -301,6 +301,12 @@ export async function searchYoutubeVideos({ query = 'anime amv', maxResults = 10
   return data; // { videos: [...], nextPageToken }
 }
 
+export async function fetchNewsFeed() {
+  const { data, error } = await supabase.functions.invoke('news-feed', { body: {} });
+  if (error) throw error;
+  return data.articles ?? [];
+}
+
 export async function toggleVideoLike(userId, videoId) {
   const { data: existing } = await supabase
     .from('video_likes')

@@ -164,18 +164,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Feed like & bookmark toggles
-  document.addEventListener('click', (e) => {
-    const likeBtn = e.target.closest('.like-btn');
-    if (likeBtn) {
-      likeBtn.classList.toggle('text-rose-500');
-      likeBtn.classList.toggle('text-slate-400');
-    }
+  // Note: real like/bookmark logic now lives in home.js (video cards)
+  // and news.js (news cards) -- removed the old demo click handler
+  // that toggled Tailwind color classes directly, since it was
+  // superseded by real Supabase-backed state and could conflict with it.
 
-    const bookmarkBtn = e.target.closest('.bookmark-btn');
-    if (bookmarkBtn) {
-      bookmarkBtn.classList.toggle('text-amber-400');
-      bookmarkBtn.classList.toggle('text-slate-400');
-    }
+  // Home sub-nav: News | Videos
+  const newsTab = document.getElementById('home-subtab-news');
+  const videosTab = document.getElementById('home-subtab-videos');
+  const newsPanel = document.getElementById('home-panel-news');
+  const videosPanel = document.getElementById('home-panel-videos');
+
+  newsTab?.addEventListener('click', () => {
+    newsTab.classList.add('active');
+    videosTab?.classList.remove('active');
+    newsPanel?.classList.remove('hidden');
+    videosPanel?.classList.add('hidden');
+  });
+
+  videosTab?.addEventListener('click', () => {
+    videosTab.classList.add('active');
+    newsTab?.classList.remove('active');
+    videosPanel?.classList.remove('hidden');
+    newsPanel?.classList.add('hidden');
   });
 });

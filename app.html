@@ -43,119 +43,37 @@
     <!-- Main View Container -->
     <main id="view-container" class="w-full max-w-md mx-auto flex-1 px-4 py-3 relative">
 
-      <!-- PAGE 4: HOME FEED (YouTube Sourced Feed) -->
-      <section id="view-home" class="space-y-4">
-        <!-- Feed Title -->
+      <!-- PAGE 4: HOME (News + Videos as separate sub-sections) -->
+      <section id="view-home" class="space-y-3">
         <div class="flex items-center justify-between">
-          <h2 class="font-heading font-bold text-lg text-white">Recommended Feed</h2>
-          <span class="text-[11px] text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800">YouTube Sync</span>
+          <h2 class="font-heading font-bold text-lg text-white">Kaidra</h2>
         </div>
 
-        <!-- Video Feed Container -->
-        <div id="video-feed-container" class="space-y-4">
-          
-          <!-- Video Card 1 -->
-          <article class="video-card glass-panel rounded-2xl overflow-hidden border border-slate-800/80 shadow-lg">
-            <div class="video-player-embed relative aspect-video bg-slate-900 overflow-hidden group">
-              <iframe
-                class="w-full h-full"
-                src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                title="Anime Music Video Showcase"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen
-              ></iframe>
-            </div>
-            <div class="p-3.5 space-y-2">
-              <h3 class="video-title text-sm font-semibold text-white line-clamp-2">
-                Chainsaw Man — Official Season 2 Teaser Trailer &amp; OST
-              </h3>
-              <p class="video-channel text-xs text-slate-400 font-medium">
-                MAPPA Channel • 1.2M views
-              </p>
-              <!-- Action Row: Like, Bookmark, Share (No Comment button per spec) -->
-              <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                <button
-                  type="button"
-                  class="like-btn text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  data-video-id="yt-101"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-4.318-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                  <span>14.2K</span>
-                </button>
-                <button
-                  type="button"
-                  class="bookmark-btn text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  data-video-id="yt-101"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-                  <span>Save</span>
-                </button>
-                <button
-                  type="button"
-                  class="share-btn text-slate-400 hover:text-violet-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  data-video-id="yt-101"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
-                  <span>Share</span>
-                </button>
-              </div>
-            </div>
-          </article>
-
-          <!-- Video Card 2 -->
-          <article class="video-card glass-panel rounded-2xl overflow-hidden border border-slate-800/80 shadow-lg">
-            <div class="video-player-embed relative aspect-video bg-slate-900 overflow-hidden">
-              <iframe
-                class="w-full h-full"
-                src="https://www.youtube.com/embed/LqI_35m9M8M"
-                title="Anime OP/ED Top Hits 2026"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen
-              ></iframe>
-            </div>
-            <div class="p-3.5 space-y-2">
-              <h3 class="video-title text-sm font-semibold text-white line-clamp-2">
-                Top 10 Most Iconic Anime Soundtracks of 2026
-              </h3>
-              <p class="video-channel text-xs text-slate-400 font-medium">
-                Anibeats Official • 840K views
-              </p>
-              <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                <button
-                  type="button"
-                  class="like-btn text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  data-video-id="yt-102"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-4.318-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                  <span>8.9K</span>
-                </button>
-                <button
-                  type="button"
-                  class="bookmark-btn text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  data-video-id="yt-102"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-                  <span>Save</span>
-                </button>
-                <button
-                  type="button"
-                  class="share-btn text-slate-400 hover:text-violet-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  data-video-id="yt-102"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
-                  <span>Share</span>
-                </button>
-              </div>
-            </div>
-          </article>
-
+        <!-- Sub-nav: News | Videos -->
+        <div class="flex gap-2 border-b border-slate-800 pb-0">
+          <button type="button" id="home-subtab-news" class="home-subtab active px-4 py-2 text-sm font-semibold">News</button>
+          <button type="button" id="home-subtab-videos" class="home-subtab px-4 py-2 text-sm font-semibold">Videos</button>
         </div>
 
-        <!-- Feed Loading & Infinite Scroll Trigger -->
-        <div id="feed-loading" class="hidden text-center py-4 text-xs text-slate-400 animate-pulse">
-          <span>Loading more videos...</span>
+        <!-- News sub-section (default) -->
+        <div id="home-panel-news">
+          <div id="news-feed-container" class="space-y-3"></div>
+          <div id="news-loading" class="text-center py-6 text-xs text-slate-400 animate-pulse">
+            <span>Loading news...</span>
+          </div>
+          <div id="news-empty-state" class="hidden flex-col items-center justify-center py-16 text-center">
+            <p class="text-sm text-slate-500">No news available right now.</p>
+          </div>
         </div>
-        <div id="feed-load-more-trigger" class="h-8 w-full"></div>
+
+        <!-- Videos sub-section -->
+        <div id="home-panel-videos" class="hidden">
+          <div id="video-feed-container" class="space-y-4"></div>
+          <div id="feed-loading" class="hidden text-center py-4 text-xs text-slate-400 animate-pulse">
+            <span>Loading more videos...</span>
+          </div>
+          <div id="feed-load-more-trigger" class="h-8 w-full"></div>
+        </div>
       </section>
 
       <!-- PAGE 5: FRIENDS TAB (24hr mutual-friend statuses & SOTD) -->
@@ -894,6 +812,7 @@
     <script type="module" src="/js/app.js"></script>
     <script type="module" src="/js/inbox.js"></script>
     <script type="module" src="/js/home.js"></script>
+    <script type="module" src="/js/news.js"></script>
     <script type="module" src="/js/profile.js"></script>
     <script type="module" src="/js/friends.js"></script>
   </body>

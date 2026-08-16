@@ -174,12 +174,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const videosTab = document.getElementById('home-subtab-videos');
   const newsPanel = document.getElementById('home-panel-news');
   const videosPanel = document.getElementById('home-panel-videos');
+  const bottomNav = document.querySelector('nav.fixed.bottom-0');
 
   newsTab?.addEventListener('click', () => {
     newsTab.classList.add('active');
     videosTab?.classList.remove('active');
     newsPanel?.classList.remove('hidden');
     videosPanel?.classList.add('hidden');
+    // Exit immersive video mode -- header/tabs go back to normal flow,
+    // bottom nav goes back to its regular (non-transparent) state.
+    viewHome?.classList.remove('videos-immersive');
+    bottomNav?.classList.remove('nav-over-video');
   });
 
   videosTab?.addEventListener('click', () => {
@@ -187,5 +192,9 @@ document.addEventListener('DOMContentLoaded', () => {
     newsTab?.classList.remove('active');
     videosPanel?.classList.remove('hidden');
     newsPanel?.classList.add('hidden');
+    // Enter immersive mode -- header/tabs float over the full-screen
+    // video instead of taking their own row above it.
+    viewHome?.classList.add('videos-immersive');
+    bottomNav?.classList.add('nav-over-video');
   });
 });

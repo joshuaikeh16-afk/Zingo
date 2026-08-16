@@ -359,6 +359,14 @@ export async function isVideoBookmarked(userId, videoId) {
   return !!data;
 }
 
+export async function getVideoLikeCount(videoId) {
+  const { count } = await supabase
+    .from('video_likes')
+    .select('id', { count: 'exact', head: true })
+    .eq('video_id', videoId);
+  return count ?? 0;
+}
+
 // ---------------------------------------------------------------------
 // Follows & profile stats
 // ---------------------------------------------------------------------

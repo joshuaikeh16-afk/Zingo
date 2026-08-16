@@ -44,19 +44,19 @@
     <main id="view-container" class="w-full max-w-md mx-auto flex-1 px-4 py-3 relative">
 
       <!-- PAGE 4: HOME (News + Videos as separate sub-sections) -->
-      <section id="view-home" class="space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="font-heading font-bold text-lg text-white">Kaidra</h2>
+      <section id="view-home">
+        <div id="home-header-bar" class="flex items-center justify-between">
+          <h2 id="home-header-title" class="font-heading font-bold text-lg text-white">Kaidra</h2>
         </div>
 
         <!-- Sub-nav: News | Videos -->
-        <div class="flex gap-2 border-b border-slate-800 pb-0">
-          <button type="button" id="home-subtab-news" class="home-subtab active px-4 py-2 text-sm font-semibold">News</button>
-          <button type="button" id="home-subtab-videos" class="home-subtab px-4 py-2 text-sm font-semibold">Videos</button>
+        <div id="home-subnav" class="flex gap-1">
+          <button type="button" id="home-subtab-news" class="home-subtab active">News</button>
+          <button type="button" id="home-subtab-videos" class="home-subtab">Videos</button>
         </div>
 
         <!-- News sub-section (default) -->
-        <div id="home-panel-news">
+        <div id="home-panel-news" class="space-y-3 mt-3">
           <div id="news-feed-container" class="space-y-3"></div>
           <div id="news-loading" class="text-center py-6 text-xs text-slate-400 animate-pulse">
             <span>Loading news...</span>
@@ -68,7 +68,7 @@
 
         <!-- Videos sub-section -->
         <div id="home-panel-videos" class="hidden">
-          <div id="video-feed-container" class="space-y-4"></div>
+          <div id="video-feed-container"></div>
           <div id="feed-loading" class="hidden text-center py-4 text-xs text-slate-400 animate-pulse">
             <span>Loading more videos...</span>
           </div>

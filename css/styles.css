@@ -2579,3 +2579,397 @@ h1, h2, h3, h4, .font-heading {
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
 }
+
+/* ===================================================================
+   Home video feed v3 — full TikTok-style redesign per detailed spec.
+   Floating immersive header/tabs, real action-bar counts, lower-left
+   info block, double-tap-to-like, long-press-for-2x, thin progress
+   bar, safe-area insets, desktop centered 9:16 viewer.
+   =================================================================== */
+
+/* --- Floating header/tabs, only in immersive (Videos-active) mode --- */
+
+#home-header-bar {
+  transition: all 200ms ease;
+}
+
+#home-subnav {
+  transition: all 200ms ease;
+}
+
+.home-subtab {
+  color: rgba(255, 255, 255, 0.45);
+  background: none;
+  border: none;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+}
+
+.home-subtab.active {
+  color: #ffffff;
+}
+
+.home-subtab.active::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: #d97a3f;
+  transition: all 200ms ease;
+}
+
+#view-home.videos-immersive {
+  position: relative;
+}
+
+#view-home.videos-immersive #home-header-bar,
+#view-home.videos-immersive #home-subnav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+}
+
+#view-home.videos-immersive #home-header-bar {
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 6px;
+}
+
+#view-home.videos-immersive #home-subnav {
+  top: calc(env(safe-area-inset-top, 0px) + 42px);
+  padding: 0 12px;
+  background: none;
+}
+
+#view-home.videos-immersive #home-panel-videos {
+  margin: 0 -1rem;
+}
+
+/* Bottom nav goes fully transparent/floating over video, heavier blur */
+nav.nav-over-video {
+  background: rgba(11, 12, 16, 0.35) !important;
+  border-top-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* --- Video card v3 layout --- */
+
+.video-card {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.video-progress-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  z-index: 4;
+}
+
+.video-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #ffffff;
+  transition: width 100ms linear;
+}
+
+/* Right-side action bar: circular glass buttons, real counts below */
+.feed-actions-v3 {
+  position: absolute;
+  right: 10px;
+  bottom: 130px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.action-btn-v3 {
+  background: none;
+  border: none;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.action-btn-v3 .icon-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(20, 18, 26, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 150ms ease;
+}
+
+.action-btn-v3:active .icon-circle {
+  transform: scale(0.88);
+}
+
+.action-btn-v3 .icon-circle svg {
+  width: 21px;
+  height: 21px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+.action-btn-v3 .count-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.action-btn-v3.like-btn.active .icon-circle {
+  background: rgba(239, 68, 68, 0.25);
+}
+.action-btn-v3.like-btn.active svg {
+  color: #ef4444;
+}
+
+.action-btn-v3.bookmark-btn.active .icon-circle {
+  background: rgba(234, 179, 8, 0.25);
+}
+.action-btn-v3.bookmark-btn.active svg {
+  color: #eab308;
+}
+
+/* --- Lower-left info block: avatar/channel/follow, caption, hashtags, source --- */
+
+.video-info-v3 {
+  position: absolute;
+  left: 14px;
+  right: 76px;
+  bottom: 26px;
+  z-index: 3;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.video-info-v3 .channel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.video-info-v3 .channel-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #d97a3f, #9b59b6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.video-info-v3 .channel-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.video-info-v3 .source-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
+
+.video-info-v3 .video-title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 1.4;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-card .feed-overlay {
+  display: none; /* replaced by video-info-v3 */
+}
+
+/* --- Double-tap heart animation --- */
+
+.double-tap-heart {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  width: 90px;
+  height: 90px;
+  color: #ef4444;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.5);
+}
+
+.double-tap-heart.animate {
+  animation: heart-pop 700ms ease forwards;
+}
+
+@keyframes heart-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  40% { transform: translate(-50%, -50%) scale(0.95); }
+  75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* --- Speed menu (3-dot, replaces the old always-visible bar) --- */
+
+.speed-menu-btn {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 90px);
+  right: 12px;
+  z-index: 3;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(20, 18, 26, 0.45);
+  backdrop-filter: blur(6px);
+  border: none;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.speed-menu-popover {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 128px);
+  right: 12px;
+  z-index: 4;
+  background: rgba(20, 18, 26, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 90px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: all 180ms ease;
+}
+
+.speed-menu-popover.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.speed-menu-item {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 0.78rem;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.speed-menu-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #d97a3f;
+  font-weight: 600;
+}
+
+/* --- 2x long-press indicator --- */
+
+.speed-boost-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+
+.speed-boost-indicator.visible {
+  opacity: 1;
+}
+
+/* --- Retry state on video load failure --- */
+
+.video-error-state {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #0c0a10;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  padding: 24px;
+}
+
+.video-error-state button {
+  background: #d97a3f;
+  color: #0c0a10;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- Desktop: centered 9:16 viewer, not a stretched full-width video --- */
+
+@media (min-width: 768px) {
+  #home-panel-videos #video-feed-container {
+    max-width: 420px;
+    margin: 0 auto;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  #view-home.videos-immersive #home-header-bar,
+  #view-home.videos-immersive #home-subnav {
+    max-width: 420px;
+  }
+
+  body {
+    background: #050408;
+  }
+}

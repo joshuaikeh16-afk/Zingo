@@ -437,6 +437,62 @@ export async function getUserPosts(userId) {
   return data ?? [];
 }
 
+/**
+ * Real user-posted videos from mutual friends (Videos sub-tab is no
+ * longer YouTube-sourced -- this replaces that entirely). Same
+ * visibility rule as everything else in `posts`: mutual friends only,
+ * unexpired (24h). Includes the author's profile so cards can show a
+ * real avatar/username instead of a generic channel name.
+ */
+export async function getFriendsVideoPosts(userId) {
+  const friends = await getMutualFriends(userId);
+  const friendIds = friends.map((f) => f.id);
+  // Include the current user's own video posts too, not just friends'.
+  const authorIds = [...friendIds, userId];
+  if (authorIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from('posts')
+    .select('*, profiles!posts_user_id_fkey(id, username, display_name, avatar_url)')
+    .eq('post_type', 'video')
+    .in('user_id', authorIds)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+
+  return data ?? [];
+}
+
+// ---------------------------------------------------------------------
+// Comments -- only relevant now that Videos means real user-posted
+// content with an actual author, not YouTube-sourced videos.
+// ---------------------------------------------------------------------
+
+export async function getComments(postId) {
+  const { data } = await supabase
+    .from('post_comments')
+    .select('*, profiles!post_comments_user_id_fkey(username, display_name, avatar_url)')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
+  return data ?? [];
+}
+
+export async function addComment(postId, userId, content) {
+  const { error } = await supabase.from('post_comments').insert({
+    post_id: postId,
+    user_id: userId,
+    content,
+  });
+  if (error) throw error;
+}
+
+export async function getCommentCount(postId) {
+  const { count } = await supabase
+    .from('post_comments')
+    .select('id', { count: 'exact', head: true })
+    .eq('post_id', postId);
+  return count ?? 0;
+}
+
 // ---------------------------------------------------------------------
 // Watchlist -- currently-watching badge + compatibility score
 // ---------------------------------------------------------------------

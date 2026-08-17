@@ -1,22 +1,22 @@
-// Real Home video feed logic — TikTok-style: full-screen, one video
-// active at a time via the YouTube Player API (pointer-events:none on
-// the generated iframe so touch always reaches our own controls and
-// the outer scroll container, not the embed itself), double-tap to
-// like, long-press for temporary 2x speed, a compact 3-dot speed menu
-// instead of a permanently-visible speed bar, real counts (YouTube's
-// real view count + our own real Supabase like/bookmark counts, never
-// placeholder numbers), a thin progress bar, and a retry state if a
-// video embed fails to load.
+// Real Home Videos logic — no longer YouTube-sourced. Shows real
+// user-posted videos from mutual friends (same visibility rule as
+// everything else in `posts`: mutual friends only, 24h expiry). Same
+// TikTok-style interaction model as before (double-tap to like,
+// long-press for 2x speed, real counts) but now driven by our own
+// video files in Supabase Storage instead of embedded YouTube iframes,
+// and comments are real now since there's an actual author to comment
+// at (unlike YouTube content, which had none).
 
 import {
   requireAuth,
   requireProfile,
-  searchYoutubeVideos,
+  getFriendsVideoPosts,
   toggleVideoLike,
   isVideoLiked,
   getVideoLikeCount,
-  toggleVideoBookmark,
-  isVideoBookmarked,
+  getComments,
+  addComment,
+  getCommentCount,
   getMutualFriends,
   getOrCreateConversation,
   sendMessage,
@@ -24,227 +24,133 @@ import {
 } from './supabase-client.js';
 
 let currentUserId = null;
-let nextPageToken = null;
-let isLoadingMore = false;
-let feedExhausted = false;
-let ytApiReadyPromise = null;
-const players = {};
-
 const feedContainer = document.getElementById('video-feed-container');
-const loadingEl = document.getElementById('feed-loading');
-const loadMoreTrigger = document.getElementById('feed-load-more-trigger');
+const emptyState = document.getElementById('video-feed-empty-state');
 
 const HEART_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-4.318-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>';
 const HEART_FILLED = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.001 4.529c2.349-2.532 6.147-2.532 8.496 0 2.348 2.531 2.348 6.635 0 9.166L12 21.997l-8.497-8.302c-2.348-2.531-2.348-6.635 0-9.166 2.349-2.532 6.147-2.532 8.496 0z"/></svg>';
-const BOOKMARK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>';
-const BOOKMARK_FILLED = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>';
-const SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>';
 const COMMENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>';
-const DOTS_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+const SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>';
 
-function loadYouTubeApi() {
-  if (ytApiReadyPromise) return ytApiReadyPromise;
-  ['https://www.youtube.com', 'https://s.ytimg.com'].forEach((origin) => {
-    const link = document.createElement('link');
-    link.rel = 'preconnect';
-    link.href = origin;
-    document.head.appendChild(link);
-  });
-  ytApiReadyPromise = new Promise((resolve) => {
-    if (window.YT && window.YT.Player) {
-      resolve();
-      return;
-    }
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    document.head.appendChild(tag);
-    window.onYouTubeIframeAPIReady = () => resolve();
-  });
-  return ytApiReadyPromise;
+function timeAgo(dateStr) {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const hours = Math.floor(diffMs / 3600000);
+  if (hours < 1) return 'just now';
+  return `${hours}h ago`;
 }
-loadYouTubeApi();
 
-// ---------------------------------------------------------------------
-// Card construction
-// ---------------------------------------------------------------------
+function formatCount(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
+}
 
-function buildVideoCard(video) {
+function buildVideoCard(post) {
+  const author = post.profiles ?? {};
+  const name = author.display_name || author.username || 'Kaidra user';
+  const initial = name[0]?.toUpperCase() ?? '?';
+
   const article = document.createElement('article');
   article.className = 'video-card';
-  article.dataset.videoId = video.videoId;
-
-  const channelInitial = (video.channelTitle || '?')[0].toUpperCase();
+  article.dataset.postId = post.id;
 
   article.innerHTML = `
-    <div class="video-player-embed" style="background-image:url('${video.thumbnailUrl ?? ''}')">
-      <div class="player-mount"></div>
+    <div class="video-player-embed">
+      <video class="video-el" src="${post.media_url}" playsinline loop muted></video>
       <button type="button" class="video-tap-layer" aria-label="Play/Pause/Like"></button>
       <div class="double-tap-heart">${HEART_FILLED}</div>
       <div class="speed-boost-indicator">2x Speed</div>
       <div class="video-progress-track"><div class="video-progress-fill"></div></div>
     </div>
 
-    <button type="button" class="speed-menu-btn" aria-label="Playback speed">${DOTS_ICON}</button>
-    <div class="speed-menu-popover">
-      <button type="button" class="speed-menu-item" data-speed="0.5">0.5x</button>
-      <button type="button" class="speed-menu-item active" data-speed="1">1x (Normal)</button>
-      <button type="button" class="speed-menu-item" data-speed="1.5">1.5x</button>
-      <button type="button" class="speed-menu-item" data-speed="2">2x</button>
-    </div>
-
     <div class="feed-actions-v3">
-      <button type="button" class="action-btn-v3 like-btn" data-video-id="${video.videoId}">
+      <button type="button" class="action-btn-v3 like-btn">
         <span class="icon-circle">${HEART_ICON}</span>
         <span class="count-label like-count">0</span>
       </button>
-      <button type="button" class="action-btn-v3 comment-btn" aria-label="Comments not available for this video">
+      <button type="button" class="action-btn-v3 comment-btn">
         <span class="icon-circle">${COMMENT_ICON}</span>
-        <span class="count-label">—</span>
-      </button>
-      <button type="button" class="action-btn-v3 bookmark-btn" data-video-id="${video.videoId}">
-        <span class="icon-circle">${BOOKMARK_ICON}</span>
-        <span class="count-label bookmark-count">0</span>
+        <span class="count-label comment-count">0</span>
       </button>
       <div class="share-wrapper">
-        <button type="button" class="action-btn-v3 share-btn" data-video-id="${video.videoId}">
+        <button type="button" class="action-btn-v3 share-btn">
           <span class="icon-circle">${SHARE_ICON}</span>
           <span class="count-label">Share</span>
         </button>
         <div class="share-menu hidden">
           <button type="button" class="share-menu-item" data-action="forward">Send to a friend</button>
-          <button type="button" class="share-menu-item" data-action="status">Post as status <span class="soon-tag">soon</span></button>
-          <button type="button" class="share-menu-item" data-action="copy">Copy link</button>
         </div>
       </div>
     </div>
 
     <div class="video-info-v3">
       <div class="channel-row">
-        <div class="channel-avatar">${channelInitial}</div>
-        <span class="channel-name">${video.channelTitle}</span>
-        <span class="source-badge">YouTube</span>
+        <div class="channel-avatar">${initial}</div>
+        <span class="channel-name">${name}</span>
       </div>
-      <p class="video-title">${video.title}${video.viewCount ? ` <span style="opacity:.55">• ${video.viewCount} views</span>` : ''}</p>
+      <p class="video-title">${post.caption ?? ''} <span style="opacity:.55">• ${timeAgo(post.created_at)}</span></p>
+    </div>
+
+    <div class="comment-sheet hidden">
+      <div class="comment-sheet-header">
+        <h4>Comments</h4>
+        <button type="button" class="comment-sheet-close">✕</button>
+      </div>
+      <div class="comment-list"></div>
+      <div class="comment-input-row">
+        <input type="text" class="comment-input" placeholder="Add a comment..." />
+        <button type="button" class="comment-send-btn">Send</button>
+      </div>
     </div>
   `;
 
-  wireCardActions(article, video);
+  wireCardActions(article, post);
   return article;
 }
 
-function wireCardActions(article, video) {
-  const videoId = video.videoId;
-  const likeBtn = article.querySelector('.like-btn');
-  const likeCountEl = article.querySelector('.like-count');
-  const bookmarkBtn = article.querySelector('.bookmark-btn');
-  const bookmarkCountEl = article.querySelector('.bookmark-count');
-  const shareBtn = article.querySelector('.share-btn');
-  const shareMenu = article.querySelector('.share-menu');
-  const commentBtn = article.querySelector('.comment-btn');
+function wireCardActions(article, post) {
+  const postId = post.id;
+  const videoEl = article.querySelector('.video-el');
   const tapLayer = article.querySelector('.video-tap-layer');
   const heartEl = article.querySelector('.double-tap-heart');
-  const speedMenuBtn = article.querySelector('.speed-menu-btn');
-  const speedMenuPopover = article.querySelector('.speed-menu-popover');
-  const speedMenuItems = article.querySelectorAll('.speed-menu-item');
   const speedBoostIndicator = article.querySelector('.speed-boost-indicator');
+  const progressFill = article.querySelector('.video-progress-fill');
+  const likeBtn = article.querySelector('.like-btn');
+  const likeCountEl = article.querySelector('.like-count');
+  const commentBtn = article.querySelector('.comment-btn');
+  const commentCountEl = article.querySelector('.comment-count');
+  const commentSheet = article.querySelector('.comment-sheet');
 
-  // --- Real counts ---
-  isVideoLiked(currentUserId, videoId).then((liked) => setLikeState(likeBtn, liked));
-  getVideoLikeCount(videoId).then((count) => {
-    if (likeCountEl) likeCountEl.textContent = formatCount(count);
-  });
-  isVideoBookmarked(currentUserId, videoId).then((saved) => setBookmarkState(bookmarkBtn, saved));
-  // Bookmark count intentionally not shown as a number (no aggregate
-  // bookmark-count query built yet) -- showing 0 for everyone would be
-  // misleading, so this stays blank rather than fake.
-  if (bookmarkCountEl) bookmarkCountEl.textContent = '';
+  isVideoLiked(currentUserId, postId).then((liked) => setLikeState(likeBtn, liked));
+  getVideoLikeCount(postId).then((c) => (likeCountEl.textContent = formatCount(c)));
+  getCommentCount(postId).then((c) => (commentCountEl.textContent = formatCount(c)));
 
   async function doLike() {
-    const nowLiked = await toggleVideoLike(currentUserId, videoId);
+    const nowLiked = await toggleVideoLike(currentUserId, postId);
     setLikeState(likeBtn, nowLiked);
-    const count = await getVideoLikeCount(videoId);
-    if (likeCountEl) likeCountEl.textContent = formatCount(count);
-    return nowLiked;
+    getVideoLikeCount(postId).then((c) => (likeCountEl.textContent = formatCount(c)));
   }
-
   likeBtn?.addEventListener('click', doLike);
 
-  bookmarkBtn?.addEventListener('click', async () => {
-    const nowSaved = await toggleVideoBookmark(currentUserId, videoId);
-    setBookmarkState(bookmarkBtn, nowSaved);
-  });
-
-  commentBtn?.addEventListener('click', () => {
-    flashLabel(commentBtn.querySelector('.count-label'), 'No comments');
-  });
-
-  // --- Share menu ---
-  shareBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.querySelectorAll('.share-menu').forEach((m) => {
-      if (m !== shareMenu) m.classList.add('hidden');
-    });
-    shareMenu?.classList.toggle('hidden');
-  });
-
-  shareMenu?.querySelectorAll('.share-menu-item').forEach((item) => {
-    item.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const action = item.dataset.action;
-      shareMenu.classList.add('hidden');
-      if (action === 'copy') {
-        await navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
-      } else if (action === 'forward') {
-        openForwardPicker(video);
-      }
-    });
-  });
-
-  // --- Speed menu (3-dot, replaces the old permanent speed bar) ---
-  speedMenuBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.querySelectorAll('.speed-menu-popover').forEach((p) => {
-      if (p !== speedMenuPopover) p.classList.remove('open');
-    });
-    speedMenuPopover?.classList.toggle('open');
-  });
-
-  speedMenuItems.forEach((item) => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const rate = parseFloat(item.dataset.speed);
-      players[videoId]?.setPlaybackRate(rate);
-      speedMenuItems.forEach((i) => i.classList.remove('active'));
-      item.classList.add('active');
-      speedMenuPopover.classList.remove('open');
-    });
-  });
-
-  // --- Tap interactions: single tap = play/pause, double tap = like
-  // with heart animation at tap position, long press = temp 2x speed ---
+  // --- Tap: single = play/pause, double = like + heart animation ---
   let tapTimeout = null;
   let longPressTimer = null;
   let longPressActive = false;
-  let normalSpeedBeforeBoost = 1;
 
   function togglePlayback() {
-    const player = players[videoId];
-    if (!player || typeof player.getPlayerState !== 'function') return;
-    player.getPlayerState() === 1 ? player.pauseVideo() : player.playVideo();
+    if (videoEl.paused) videoEl.play(); else videoEl.pause();
   }
 
   function showHeartAt(x, y) {
-    if (!heartEl) return;
     heartEl.style.left = `${x}px`;
     heartEl.style.top = `${y}px`;
     heartEl.classList.remove('animate');
-    void heartEl.offsetWidth; // restart animation
+    void heartEl.offsetWidth;
     heartEl.classList.add('animate');
   }
 
   tapLayer?.addEventListener('click', (e) => {
     if (tapTimeout) {
-      // Second click within the window = double tap
       clearTimeout(tapTimeout);
       tapTimeout = null;
       const rect = tapLayer.getBoundingClientRect();
@@ -262,51 +168,91 @@ function wireCardActions(article, video) {
     longPressActive = false;
     longPressTimer = setTimeout(() => {
       longPressActive = true;
-      const player = players[videoId];
-      if (player?.getPlaybackRate) {
-        normalSpeedBeforeBoost = player.getPlaybackRate();
-        player.setPlaybackRate(2);
-      }
+      videoEl.playbackRate = 2;
       speedBoostIndicator?.classList.add('visible');
     }, 500);
   });
-
   function endLongPress() {
     clearTimeout(longPressTimer);
     if (longPressActive) {
-      const player = players[videoId];
-      player?.setPlaybackRate(normalSpeedBeforeBoost);
+      videoEl.playbackRate = 1;
       speedBoostIndicator?.classList.remove('visible');
       longPressActive = false;
     }
   }
   tapLayer?.addEventListener('pointerup', endLongPress);
   tapLayer?.addEventListener('pointerleave', endLongPress);
+
+  videoEl?.addEventListener('timeupdate', () => {
+    if (videoEl.duration > 0 && progressFill) {
+      progressFill.style.width = `${(videoEl.currentTime / videoEl.duration) * 100}%`;
+    }
+  });
+
+  // --- Comments ---
+  commentBtn?.addEventListener('click', () => openComments());
+
+  // --- Share (forward to a mutual friend) ---
+  const shareBtn = article.querySelector('.share-btn');
+  const shareMenu = article.querySelector('.share-menu');
+  shareBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.share-menu').forEach((m) => {
+      if (m !== shareMenu) m.classList.add('hidden');
+    });
+    shareMenu?.classList.toggle('hidden');
+  });
+  shareMenu?.querySelector('[data-action="forward"]')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    shareMenu.classList.add('hidden');
+    openForwardPicker(post);
+  });
+
+  async function openComments() {
+    commentSheet.classList.remove('hidden');
+    videoEl.pause();
+    await renderComments();
+  }
+
+  async function renderComments() {
+    const list = article.querySelector('.comment-list');
+    const comments = await getComments(postId);
+    list.innerHTML = comments.length
+      ? comments
+          .map((c) => {
+            const cName = c.profiles?.display_name || c.profiles?.username || 'User';
+            return `<div class="comment-row"><strong>${cName}</strong><span>${c.content}</span></div>`;
+          })
+          .join('')
+      : '<p class="text-xs text-slate-500 text-center py-6">Be the first to comment.</p>';
+  }
+
+  article.querySelector('.comment-sheet-close')?.addEventListener('click', () => {
+    commentSheet.classList.add('hidden');
+  });
+
+  const commentInput = article.querySelector('.comment-input');
+  article.querySelector('.comment-send-btn')?.addEventListener('click', async () => {
+    const text = commentInput.value.trim();
+    if (!text) return;
+    commentInput.value = '';
+    await addComment(postId, currentUserId, text);
+    await renderComments();
+    getCommentCount(postId).then((c) => (commentCountEl.textContent = formatCount(c)));
+  });
+  commentInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') article.querySelector('.comment-send-btn')?.click();
+  });
 }
 
-function flashLabel(el, message) {
-  if (!el) return;
-  const original = el.textContent;
-  el.textContent = message;
-  setTimeout(() => (el.textContent = original), 1500);
+function setLikeState(btn, liked) {
+  if (!btn) return;
+  const iconEl = btn.querySelector('.icon-circle');
+  if (iconEl) iconEl.innerHTML = liked ? HEART_FILLED : HEART_ICON;
+  btn.classList.toggle('active', liked);
 }
 
-function formatCount(n) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
-  return String(n);
-}
-
-document.addEventListener('click', () => {
-  document.querySelectorAll('.share-menu').forEach((m) => m.classList.add('hidden'));
-  document.querySelectorAll('.speed-menu-popover').forEach((p) => p.classList.remove('open'));
-});
-
-// ---------------------------------------------------------------------
-// Forward-to-friend picker
-// ---------------------------------------------------------------------
-
-async function openForwardPicker(video) {
+async function openForwardPicker(post) {
   const friends = await getMutualFriends(currentUserId);
   if (friends.length === 0) {
     alert('You need a mutual friend to forward videos to.');
@@ -345,98 +291,14 @@ async function openForwardPicker(video) {
       await sendMessage({
         conversationId,
         senderId: currentUserId,
-        content: video.title,
+        content: post.caption || 'Check out this video',
         messageType: 'forwarded_video',
-        externalRefId: video.videoId,
+        externalRefId: post.id,
       });
       await recordFriendInteraction(friendId);
       overlay.remove();
     });
   });
-}
-
-function setLikeState(btn, liked) {
-  if (!btn) return;
-  const iconEl = btn.querySelector('.icon-circle');
-  if (iconEl) iconEl.innerHTML = liked ? HEART_FILLED : HEART_ICON;
-  btn.classList.toggle('active', liked);
-}
-
-function setBookmarkState(btn, saved) {
-  if (!btn) return;
-  const iconEl = btn.querySelector('.icon-circle');
-  if (iconEl) iconEl.innerHTML = saved ? BOOKMARK_FILLED : BOOKMARK_ICON;
-  btn.classList.toggle('active', saved);
-}
-
-// ---------------------------------------------------------------------
-// Active-card playback, progress bar, preload, error/retry state
-// ---------------------------------------------------------------------
-
-let progressInterval = null;
-
-function startProgressTracking(card, videoId) {
-  clearInterval(progressInterval);
-  const fill = card.querySelector('.video-progress-fill');
-  if (!fill) return;
-  progressInterval = setInterval(() => {
-    const player = players[videoId];
-    if (!player || typeof player.getDuration !== 'function') return;
-    const duration = player.getDuration();
-    const current = player.getCurrentTime();
-    if (duration > 0) {
-      fill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
-    }
-  }, 250);
-}
-
-async function setCardActive(card, active) {
-  const videoId = card.dataset.videoId;
-  if (active) {
-    await ensurePlayerCreated(card);
-    players[videoId]?.playVideo();
-    startProgressTracking(card, videoId);
-    preloadAdjacentCards(card);
-  } else if (players[videoId]) {
-    players[videoId].pauseVideo();
-    clearInterval(progressInterval);
-  }
-}
-
-async function ensurePlayerCreated(card) {
-  const videoId = card.dataset.videoId;
-  const mount = card.querySelector('.player-mount');
-  if (players[videoId] || !mount) return;
-
-  await loadYouTubeApi();
-  players[videoId] = new YT.Player(mount, {
-    videoId,
-    host: 'https://www.youtube-nocookie.com',
-    playerVars: { autoplay: 0, playsinline: 1, controls: 0, rel: 0, modestbranding: 1, loop: 1, playlist: videoId },
-    events: {
-      onError: () => showErrorState(card),
-    },
-  });
-}
-
-function showErrorState(card) {
-  if (card.querySelector('.video-error-state')) return;
-  const errorEl = document.createElement('div');
-  errorEl.className = 'video-error-state';
-  errorEl.innerHTML = `<p>Video unavailable</p><button type="button">Retry</button>`;
-  errorEl.querySelector('button')?.addEventListener('click', () => {
-    errorEl.remove();
-    delete players[card.dataset.videoId];
-    ensurePlayerCreated(card).then(() => players[card.dataset.videoId]?.playVideo());
-  });
-  card.querySelector('.video-player-embed')?.appendChild(errorEl);
-}
-
-function preloadAdjacentCards(activeCard) {
-  const next = activeCard.nextElementSibling;
-  if (next && next.classList.contains('video-card')) {
-    ensurePlayerCreated(next);
-  }
 }
 
 let activeCardObserver = null;
@@ -446,7 +308,13 @@ function observeCardsForAutoplay() {
   activeCardObserver = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
-        setCardActive(entry.target, entry.isIntersecting && entry.intersectionRatio > 0.6);
+        const videoEl = entry.target.querySelector('.video-el');
+        if (!videoEl) return;
+        if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+          videoEl.play().catch(() => {});
+        } else {
+          videoEl.pause();
+        }
       });
     },
     { root: feedContainer, threshold: [0, 0.6, 1] }
@@ -454,64 +322,28 @@ function observeCardsForAutoplay() {
   feedContainer?.querySelectorAll('.video-card').forEach((card) => activeCardObserver.observe(card));
 }
 
-// ---------------------------------------------------------------------
-// Feed loading
-// ---------------------------------------------------------------------
+async function loadVideos() {
+  if (!feedContainer) return;
+  const posts = await getFriendsVideoPosts(currentUserId);
+  feedContainer.innerHTML = '';
 
-async function loadVideos({ append = false } = {}) {
-  if (isLoadingMore || feedExhausted) return;
-  isLoadingMore = true;
-  if (loadingEl) loadingEl.classList.remove('hidden');
-
-  try {
-    const result = await searchYoutubeVideos({
-      query: 'anime amv',
-      maxResults: 10,
-      pageToken: append ? nextPageToken : undefined,
-    });
-
-    if (!append && feedContainer) {
-      feedContainer.querySelectorAll('.video-card').forEach((el) => el.remove());
-    }
-
-    if (!result.videos || result.videos.length === 0) {
-      feedExhausted = true;
-      return;
-    }
-
-    result.videos.forEach((video) => {
-      if (video.videoId) feedContainer?.appendChild(buildVideoCard(video));
-    });
-
-    observeCardsForAutoplay();
-
-    nextPageToken = result.nextPageToken;
-    if (!nextPageToken) feedExhausted = true;
-  } catch (err) {
-    console.error('Failed to load YouTube feed:', err);
-    if (feedContainer && !append) {
-      const errorEl = document.createElement('p');
-      errorEl.className = 'text-sm text-slate-500 text-center py-6';
-      errorEl.textContent = 'Could not load videos. Check the connection or try again shortly.';
-      feedContainer.appendChild(errorEl);
-    }
-  } finally {
-    isLoadingMore = false;
-    if (loadingEl) loadingEl.classList.add('hidden');
+  if (posts.length === 0) {
+    emptyState?.classList.remove('hidden');
+    emptyState?.classList.add('flex');
+    return;
   }
-}
+  emptyState?.classList.add('hidden');
+  emptyState?.classList.remove('flex');
 
-if (loadMoreTrigger) {
-  const observer = new IntersectionObserver(
-    (entries) => {
-      if (entries[0].isIntersecting) loadVideos({ append: true });
-    },
-    { rootMargin: '200px' }
-  );
-  observer.observe(loadMoreTrigger);
+  posts.forEach((post) => feedContainer.appendChild(buildVideoCard(post)));
+  observeCardsForAutoplay();
 }
 
 let hasLoadedOnce = false;
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.share-menu').forEach((m) => m.classList.add('hidden'));
+});
 
 (async () => {
   const session = await requireAuth();
@@ -521,11 +353,16 @@ let hasLoadedOnce = false;
 
   currentUserId = session.user.id;
 
-  const videosTab = document.getElementById('home-subtab-videos');
-  videosTab?.addEventListener('click', () => {
-    if (!hasLoadedOnce) {
-      hasLoadedOnce = true;
-      loadVideos({ append: false });
-    }
+  const videosTabButtons = [
+    document.getElementById('home-subtab-videos'),
+    document.getElementById('home-subtab-videos-from-news'),
+  ];
+  videosTabButtons.forEach((btn) => {
+    btn?.addEventListener('click', () => {
+      if (!hasLoadedOnce) {
+        hasLoadedOnce = true;
+        loadVideos();
+      }
+    });
   });
 })();

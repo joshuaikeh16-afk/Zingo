@@ -2315,6 +2315,23 @@ h1, h2, h3, h4, .font-heading {
   background: #0c0a10;
 }
 
+/* Clean fallback when a real article image genuinely isn't available
+   -- a subtle gradient + newspaper icon, not a giant repeated-text
+   placeholder image (which looked broken, not intentional). */
+.news-card.no-image::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 90px;
+  background: linear-gradient(135deg, #241f30, #14121a);
+  background-image:
+    linear-gradient(135deg, #241f30, #14121a),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23d97a3f' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2zM7 8h10M7 12h10M7 16h6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center, center;
+  background-size: cover, 26px;
+}
+
 .news-card-body {
   padding: 12px 14px;
 }
@@ -2587,14 +2604,10 @@ h1, h2, h3, h4, .font-heading {
    bar, safe-area insets, desktop centered 9:16 viewer.
    =================================================================== */
 
-/* --- Floating header/tabs, only in immersive (Videos-active) mode --- */
+/* --- News header: always normal document flow --- */
 
-#home-header-bar {
-  transition: all 200ms ease;
-}
-
-#home-subnav {
-  transition: all 200ms ease;
+#news-header-bar {
+  padding-bottom: 4px;
 }
 
 .home-subtab {
@@ -2621,15 +2634,15 @@ h1, h2, h3, h4, .font-heading {
   height: 2px;
   border-radius: 2px;
   background: #d97a3f;
-  transition: all 200ms ease;
 }
 
-#view-home.videos-immersive {
-  position: relative;
-}
+/* --- Videos header: a completely separate, always-fixed element.
+   Never repositioned via a class+transition on a shared node -- that
+   was causing a visual double-render during the News/Videos switch.
+   Shown/hidden purely via the .hidden class, no position animation. --- */
 
-#view-home.videos-immersive #home-header-bar,
-#view-home.videos-immersive #home-subnav {
+#videos-header-bar,
+#videos-subnav {
   position: fixed;
   top: 0;
   left: 0;
@@ -2638,21 +2651,33 @@ h1, h2, h3, h4, .font-heading {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  padding-top: env(safe-area-inset-top, 0px);
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
 }
 
-#view-home.videos-immersive #home-header-bar {
+#videos-header-bar {
   padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-#view-home.videos-immersive #home-subnav {
+#videos-header-bar.hidden {
+  display: none;
+}
+
+#videos-subnav {
   top: calc(env(safe-area-inset-top, 0px) + 42px);
   padding: 0 12px;
   background: none;
+  display: flex;
+  gap: 4px;
 }
 
-#view-home.videos-immersive #home-panel-videos {
+#videos-subnav.hidden {
+  display: none;
+}
+
+#home-panel-videos:not(.hidden) {
   margin: 0 -1rem;
 }
 
@@ -2964,12 +2989,111 @@ nav.nav-over-video {
     overflow: hidden;
   }
 
-  #view-home.videos-immersive #home-header-bar,
-  #view-home.videos-immersive #home-subnav {
+  #videos-header-bar,
+  #videos-subnav {
     max-width: 420px;
   }
 
   body {
     background: #050408;
   }
+}
+
+/* ===================================================================
+   Comment sheet (now real -- Videos means user-posted content with an
+   actual author, unlike the earlier YouTube-sourced feed where
+   comments were intentionally disabled since there was no author).
+   =================================================================== */
+
+.comment-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #14121a;
+  border-radius: 20px 20px 0 0;
+  max-height: 65vh;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.comment-sheet.hidden {
+  display: none;
+}
+
+.comment-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.comment-sheet-header h4 {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.comment-sheet-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.comment-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 16px;
+}
+
+.comment-row {
+  display: flex;
+  gap: 8px;
+  font-size: 0.8rem;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.comment-row strong {
+  color: #d97a3f;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.comment-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.comment-input {
+  flex: 1;
+  background: #0b0c10;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #ffffff;
+  font-size: 0.82rem;
+}
+
+.comment-send-btn {
+  background: #d97a3f;
+  color: #0c0a10;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
 }

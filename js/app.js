@@ -169,32 +169,42 @@ document.addEventListener('DOMContentLoaded', () => {
   // that toggled Tailwind color classes directly, since it was
   // superseded by real Supabase-backed state and could conflict with it.
 
-  // Home sub-nav: News | Videos
-  const newsTab = document.getElementById('home-subtab-news');
-  const videosTab = document.getElementById('home-subtab-videos');
+  // Home sub-nav: News | Videos. Two separate header blocks now
+  // (#news-header-bar/#news-subnav for News, #videos-header-bar/
+  // #videos-subnav for Videos), each with their own News/Videos
+  // buttons -- switched via simple show/hide, never a shared element
+  // repositioned via a class+transition (that caused a visual
+  // double-render glitch during the switch).
   const newsPanel = document.getElementById('home-panel-news');
   const videosPanel = document.getElementById('home-panel-videos');
+  const newsHeaderBar = document.getElementById('news-header-bar');
+  const newsSubnav = document.getElementById('news-subnav');
+  const videosHeaderBar = document.getElementById('videos-header-bar');
+  const videosSubnav = document.getElementById('videos-subnav');
   const bottomNav = document.querySelector('nav.fixed.bottom-0');
 
-  newsTab?.addEventListener('click', () => {
-    newsTab.classList.add('active');
-    videosTab?.classList.remove('active');
+  function showNews() {
     newsPanel?.classList.remove('hidden');
     videosPanel?.classList.add('hidden');
-    // Exit immersive video mode -- header/tabs go back to normal flow,
-    // bottom nav goes back to its regular (non-transparent) state.
-    viewHome?.classList.remove('videos-immersive');
+    newsHeaderBar?.classList.remove('hidden');
+    newsSubnav?.classList.remove('hidden');
+    videosHeaderBar?.classList.add('hidden');
+    videosSubnav?.classList.add('hidden');
     bottomNav?.classList.remove('nav-over-video');
-  });
+  }
 
-  videosTab?.addEventListener('click', () => {
-    videosTab.classList.add('active');
-    newsTab?.classList.remove('active');
+  function showVideos() {
     videosPanel?.classList.remove('hidden');
     newsPanel?.classList.add('hidden');
-    // Enter immersive mode -- header/tabs float over the full-screen
-    // video instead of taking their own row above it.
-    viewHome?.classList.add('videos-immersive');
+    videosHeaderBar?.classList.remove('hidden');
+    videosSubnav?.classList.remove('hidden');
+    newsHeaderBar?.classList.add('hidden');
+    newsSubnav?.classList.add('hidden');
     bottomNav?.classList.add('nav-over-video');
-  });
+  }
+
+  document.getElementById('home-subtab-news')?.addEventListener('click', showNews);
+  document.getElementById('home-subtab-news-from-videos')?.addEventListener('click', showNews);
+  document.getElementById('home-subtab-videos')?.addEventListener('click', showVideos);
+  document.getElementById('home-subtab-videos-from-news')?.addEventListener('click', showVideos);
 });

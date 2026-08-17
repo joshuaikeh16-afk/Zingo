@@ -45,14 +45,26 @@
 
       <!-- PAGE 4: HOME (News + Videos as separate sub-sections) -->
       <section id="view-home">
-        <div id="home-header-bar" class="flex items-center justify-between">
-          <h2 id="home-header-title" class="font-heading font-bold text-lg text-white">Kaidra</h2>
+        <!-- News header (normal document flow, always used for News) -->
+        <div id="news-header-bar" class="flex items-center justify-between">
+          <h2 class="font-heading font-bold text-lg text-white">Kaidra</h2>
+        </div>
+        <div id="news-subnav" class="flex gap-1">
+          <button type="button" id="home-subtab-news" class="home-subtab active">News</button>
+          <button type="button" id="home-subtab-videos-from-news" class="home-subtab">Videos</button>
         </div>
 
-        <!-- Sub-nav: News | Videos -->
-        <div id="home-subnav" class="flex gap-1">
-          <button type="button" id="home-subtab-news" class="home-subtab active">News</button>
-          <button type="button" id="home-subtab-videos" class="home-subtab">Videos</button>
+        <!-- Videos header: a completely separate element, always
+             position:fixed, shown/hidden purely via display -- never
+             the same DOM node as the News header repositioned via a
+             class+transition, which was causing a visual double-render
+             during the switch. -->
+        <div id="videos-header-bar" class="hidden">
+          <h2 class="font-heading font-bold text-lg text-white">Kaidra</h2>
+        </div>
+        <div id="videos-subnav" class="hidden">
+          <button type="button" id="home-subtab-news-from-videos" class="home-subtab">News</button>
+          <button type="button" id="home-subtab-videos" class="home-subtab active">Videos</button>
         </div>
 
         <!-- News sub-section (default) -->
@@ -66,13 +78,15 @@
           </div>
         </div>
 
-        <!-- Videos sub-section -->
+        <!-- Videos sub-section: now shows real user-posted videos
+             (friends-only, 24h, same rule as Friends tab statuses) --
+             NOT YouTube content. -->
         <div id="home-panel-videos" class="hidden">
           <div id="video-feed-container"></div>
-          <div id="feed-loading" class="hidden text-center py-4 text-xs text-slate-400 animate-pulse">
-            <span>Loading more videos...</span>
+          <div id="video-feed-empty-state" class="hidden flex-col items-center justify-center py-24 text-center px-6">
+            <p class="text-sm text-slate-400 font-semibold mb-1">No videos yet</p>
+            <p class="text-xs text-slate-500">When a mutual friend posts a video, it'll show up here.</p>
           </div>
-          <div id="feed-load-more-trigger" class="h-8 w-full"></div>
         </div>
       </section>
 

@@ -37,10 +37,12 @@ function buildNewsCard(article) {
   card.className = 'news-card';
   card.dataset.articleId = article.articleId;
 
-  const fallbackImage = `https://placehold.co/600x320/1a1625/f2ede4?text=${encodeURIComponent(article.source)}`;
+  const imageHtml = article.imageUrl
+    ? `<img src="${article.imageUrl}" alt="" loading="lazy" onerror="this.parentElement.querySelector('img').remove(); this.parentElement.classList.add('no-image');" />`
+    : '';
 
   card.innerHTML = `
-    <img src="${article.imageUrl || fallbackImage}" alt="" loading="lazy" onerror="this.src='${fallbackImage}'" />
+    ${imageHtml}
     <div class="news-card-body">
       <span class="news-card-source">${article.source}</span>
       <h3 class="news-card-title">${article.title}</h3>
@@ -58,6 +60,8 @@ function buildNewsCard(article) {
       </div>
     </div>
   `;
+
+  if (!article.imageUrl) card.classList.add('no-image');
 
   card.addEventListener('click', (e) => {
     if (e.target.closest('.news-bookmark-btn') || e.target.closest('.news-forward-btn')) return;

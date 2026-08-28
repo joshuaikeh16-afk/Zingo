@@ -263,15 +263,49 @@ export function subscribeToMessages(conversationId, onNewMessage) {
   return channel;
 }
 
-export async function sendMessage({ conversationId, senderId, content, messageType = 'text', externalRefId = null }) {
+export async function sendMessage({ conversationId, senderId, content, messageType = 'text', externalRefId = null, mediaUrl = null, mediaDurationSeconds = null }) {
   const { error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
     sender_id: senderId,
     content,
     message_type: messageType,
     ...(externalRefId ? { external_ref_id: externalRefId } : {}),
+    ...(mediaUrl ? { media_url: mediaUrl } : {}),
+    ...(mediaDurationSeconds != null ? { media_duration_seconds: mediaDurationSeconds } : {}),
   });
   if (error) throw error;
+}
+
+/**
+ * Uploads a chat image to the (private) chat-images bucket, path
+ * {conversationId}/{timestamp}.{ext} to match the storage RLS policy,
+ * which grants access based on conversation_participants. Returns the
+ * storage PATH, not a URL -- buckets are private, so display-time code
+ * must call getSignedMediaUrl() to get a real, time-limited URL rather
+ * than storing a permanent public one.
+ */
+export async function uploadChatImage(conversationId, file) {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `${conversationId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('chat-images').upload(path, file);
+  if (error) throw error;
+  return path;
+}
+
+export async function uploadVoiceNote(conversationId, blob) {
+  const path = `${conversationId}/${Date.now()}.webm`;
+  const { error } = await supabase.storage.from('voice-notes').upload(path, blob, {
+    contentType: 'audio/webm',
+  });
+  if (error) throw error;
+  return path;
+}
+
+/** Generates a short-lived signed URL for a private chat-images/voice-notes object. Call at render time, never store the result permanently. */
+export async function getSignedMediaUrl(bucket, path, expiresInSeconds = 3600) {
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds);
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 export async function markConversationRead(conversationId, userId) {

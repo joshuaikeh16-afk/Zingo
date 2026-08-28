@@ -5,15 +5,14 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Navigation tabs
-  const navHome = document.getElementById('nav-home');
+  // Navigation tabs -- Home removed entirely, Inbox (Chats) is the
+  // default/primary tab now, matching WhatsApp's own layout.
   const navFriends = document.getElementById('nav-friends');
   const navCompose = document.getElementById('nav-compose');
   const navInbox = document.getElementById('nav-inbox');
   const navProfile = document.getElementById('nav-profile');
 
   // Views
-  const viewHome = document.getElementById('view-home');
   const viewFriends = document.getElementById('view-friends');
   const viewInbox = document.getElementById('view-inbox');
   const viewProfile = document.getElementById('view-profile');
@@ -21,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Tab switching helper
   function switchTab(targetViewId, activeNavBtn) {
-    const views = [viewHome, viewFriends, viewInbox, viewProfile, viewDiscover];
+    const views = [viewFriends, viewInbox, viewProfile, viewDiscover];
     views.forEach((v) => {
       if (v) v.classList.add('hidden');
     });
@@ -29,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetView = document.getElementById(targetViewId);
     if (targetView) targetView.classList.remove('hidden');
 
-    [navHome, navFriends, navInbox, navProfile].forEach((btn) => {
+    [navFriends, navInbox, navProfile].forEach((btn) => {
       if (btn) {
         btn.classList.remove('active', 'text-violet-400');
         btn.classList.add('text-slate-400');
@@ -42,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  if (navHome) navHome.addEventListener('click', () => switchTab('view-home', navHome));
   if (navFriends) navFriends.addEventListener('click', () => switchTab('view-friends', navFriends));
   if (navInbox) navInbox.addEventListener('click', () => switchTab('view-inbox', navInbox));
   if (navProfile) navProfile.addEventListener('click', () => switchTab('view-profile', navProfile));
@@ -164,47 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Note: real like/bookmark logic now lives in home.js (video cards)
-  // and news.js (news cards) -- removed the old demo click handler
-  // that toggled Tailwind color classes directly, since it was
-  // superseded by real Supabase-backed state and could conflict with it.
-
-  // Home sub-nav: News | Videos. Two separate header blocks now
-  // (#news-header-bar/#news-subnav for News, #videos-header-bar/
-  // #videos-subnav for Videos), each with their own News/Videos
-  // buttons -- switched via simple show/hide, never a shared element
-  // repositioned via a class+transition (that caused a visual
-  // double-render glitch during the switch).
-  const newsPanel = document.getElementById('home-panel-news');
-  const videosPanel = document.getElementById('home-panel-videos');
-  const newsHeaderBar = document.getElementById('news-header-bar');
-  const newsSubnav = document.getElementById('news-subnav');
-  const videosHeaderBar = document.getElementById('videos-header-bar');
-  const videosSubnav = document.getElementById('videos-subnav');
-  const bottomNav = document.querySelector('nav.fixed.bottom-0');
-
-  function showNews() {
-    newsPanel?.classList.remove('hidden');
-    videosPanel?.classList.add('hidden');
-    newsHeaderBar?.classList.remove('hidden');
-    newsSubnav?.classList.remove('hidden');
-    videosHeaderBar?.classList.add('hidden');
-    videosSubnav?.classList.add('hidden');
-    bottomNav?.classList.remove('nav-over-video');
-  }
-
-  function showVideos() {
-    videosPanel?.classList.remove('hidden');
-    newsPanel?.classList.add('hidden');
-    videosHeaderBar?.classList.remove('hidden');
-    videosSubnav?.classList.remove('hidden');
-    newsHeaderBar?.classList.add('hidden');
-    newsSubnav?.classList.add('hidden');
-    bottomNav?.classList.add('nav-over-video');
-  }
-
-  document.getElementById('home-subtab-news')?.addEventListener('click', showNews);
-  document.getElementById('home-subtab-news-from-videos')?.addEventListener('click', showNews);
-  document.getElementById('home-subtab-videos')?.addEventListener('click', showVideos);
-  document.getElementById('home-subtab-videos-from-news')?.addEventListener('click', showVideos);
+  // Note: real like/bookmark logic previously lived in home.js/news.js
+  // -- both removed entirely along with the Home tab (News + Videos),
+  // per the pivot to a chat-first app matching WhatsApp's structure.
 });

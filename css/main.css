@@ -206,10 +206,9 @@ input { font-family: inherit; }
 }
 
 /* ------------------------------------------------------------------
-   Pills — filter chips & status pills
+   Pills — status pills (Watchlist)
    ------------------------------------------------------------------ */
 
-.news-filter-bar,
 .status-filters {
   display: flex;
   gap: 8px;
@@ -219,10 +218,8 @@ input { font-family: inherit; }
   scrollbar-width: none;
 }
 
-.news-filter-bar::-webkit-scrollbar,
 .status-filters::-webkit-scrollbar { display: none; }
 
-.filter-chip,
 .status-pill {
   flex-shrink: 0;
   padding: 8px 15px;
@@ -236,7 +233,6 @@ input { font-family: inherit; }
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.filter-chip.active,
 .status-pill.active {
   background: var(--ink);
   border-color: var(--ink);

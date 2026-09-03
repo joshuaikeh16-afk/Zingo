@@ -10,11 +10,10 @@
   height: calc(100vh - 66px - 76px); /* header height, bottom nav height */
 }
 
-.news-filter-bar { flex-shrink: 0; }
-
 .news-mode-scroll {
   flex: 1;
   min-height: 0;
+  padding-top: 4px;
 }
 
 #scroll-feed-container {

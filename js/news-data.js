@@ -76,19 +76,16 @@ const KAIDRA_NEWS_FALLBACK = [
 // State
 // ------------------------------------------------------------------
 let currentNewsData = [];
-let activeCategory = 'all';
 let userInterests = null; // null = unknown/not logged in -> no personalization filter
 let bookmarkedArticleIds = new Set();
 
 function getFilteredData() {
-  // "All" respects the user's own interests, if we know them. This is
-  // the actual point of asking for interests at onboarding -- it's not
-  // just decoration on the filter bar.
-  let base = currentNewsData;
+  // Feed is filtered to the user's own selected interests, if known.
+  // No manual category chips -- this is the whole feed, personalized.
   if (userInterests && userInterests.length > 0) {
-    base = base.filter(item => userInterests.includes(item.category));
+    return currentNewsData.filter(item => userInterests.includes(item.category));
   }
-  return activeCategory === 'all' ? base : base.filter(item => item.category === activeCategory);
+  return currentNewsData;
 }
 
 function findArticleById(id) {
@@ -144,14 +141,6 @@ function renderNewsScroll(filteredData) {
 function renderAll() {
   renderNewsScroll(getFilteredData());
 }
-
-// ------------------------------------------------------------------
-// Category Filter Listener (dispatched by app.js's filter-chip handler)
-// ------------------------------------------------------------------
-document.addEventListener('kaidra:news-filter-change', function(e) {
-  activeCategory = e.detail.category;
-  renderAll();
-});
 
 // ------------------------------------------------------------------
 // Delegated Click Handlers — bookmark, forward, anime tag

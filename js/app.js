@@ -109,21 +109,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   });
 
-  // News Category Filter Chip Switcher
-  document.querySelectorAll('#news-category-filters .filter-chip').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('#news-category-filters .filter-chip').forEach(function(b) {
-        b.classList.remove('active');
-      });
-      btn.classList.add('active');
-
-      var category = btn.getAttribute('data-category');
-      document.dispatchEvent(new CustomEvent('kaidra:news-filter-change', { 
-        detail: { category: category } 
-      }));
-    });
-  });
-
   // Direct Message Drawer — close control only (opening is owned by
   // inbox.js's openThread, and by forwardArticleToChat below)
   var chatDrawer = document.getElementById('chat-view-drawer');

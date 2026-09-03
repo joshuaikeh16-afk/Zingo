@@ -55,15 +55,18 @@
     </section>
 
     <!-- TAB: FRIENDS (Hook: #tab-friends) — restored real feature: mutual
-         24hr statuses + Song of the Day. Follow model replaced below with
-         friend requests (search -> request -> accept). -->
+         24hr statuses + Anime of the Day. Follow model replaced below
+         with friend requests (search -> request -> accept). -->
     <section class="tab-pane" id="tab-friends">
       <div class="section-header">
         <div>
           <h2>Friends</h2>
           <p id="friends-active-count"></p>
         </div>
-        <button type="button" id="find-friends-btn" class="status-pill active" style="padding: 6px 12px; font-size:12px;">Find Friends</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="share-aotd-btn" class="status-pill" style="padding: 6px 12px; font-size:12px;">🎬 Share</button>
+          <button type="button" id="find-friends-btn" class="status-pill active" style="padding: 6px 12px; font-size:12px;">Find Friends</button>
+        </div>
       </div>
 
       <!-- Incoming Friend Requests -->
@@ -102,10 +105,11 @@
 
       <div class="watchlist-section-label">Your List</div>
       <div class="status-filters" id="watchlist-filters">
-        <button class="status-pill active" data-status="watching">Watching</button>
-        <button class="status-pill" data-status="planned">Plan to Watch</button>
-        <button class="status-pill" data-status="completed">Completed</button>
-        <button class="status-pill" data-status="dropped">Dropped</button>
+        <button class="status-pill active" data-status="watching">Currently Watching</button>
+        <button class="status-pill" data-status="planned">About to Watch</button>
+        <button class="status-pill" data-status="completed">Watched</button>
+        <button class="status-pill" data-status="favourite">Favourite</button>
+        <button class="status-pill" data-status="worst">Worst</button>
       </div>
 
       <div class="watchlist-grid" id="watchlist-cards-container"></div>
@@ -116,27 +120,17 @@
       <div class="section-header">
         <div>
           <h2>Messages</h2>
-          <p>Direct chats and discussions</p>
+          <p>Every friend appears here — you can only chat with friends</p>
         </div>
-        <button class="status-pill active" id="new-chat-btn" style="padding: 6px 12px; font-size:12px;">+ New Chat</button>
       </div>
 
       <div class="inbox-list" id="conversation-list"></div>
       <div class="empty-state hidden" id="inbox-empty-state">
         <div class="empty-state-icon">💬</div>
-        <h4>No conversations yet</h4>
-        <p>Add a friend, then start a chat with "+ New Chat" above.</p>
+        <h4>No friends yet</h4>
+        <p>Add a friend from the Friends tab, and they'll show up here to chat with.</p>
       </div>
     </section>
-
-    <!-- NEW CHAT MODAL (Hook: #new-chat-modal) -->
-    <div class="find-friends-modal hidden" id="new-chat-modal">
-      <div class="find-friends-search-bar">
-        <input type="text" id="new-chat-search-input" placeholder="Search by username..." />
-        <button type="button" id="new-chat-close-btn">Cancel</button>
-      </div>
-      <div id="new-chat-results" class="find-friends-results"></div>
-    </div>
 
     <!-- TAB 4: PROFILE & PREFERENCES (Hook: #tab-profile) -->
     <section class="tab-pane" id="tab-profile">
@@ -160,7 +154,9 @@
           <div class="avatar-ring">
             <img class="profile-avatar" id="profile-avatar" src="" alt="User Avatar" />
           </div>
-          <h3 class="display-name" id="profile-username">@</h3>
+          <h3 class="display-name" id="profile-display-name"></h3>
+          <div class="handle" id="profile-username">@</div>
+          <p class="profile-status-text" id="profile-status"></p>
           <p class="user-bio" id="profile-bio"></p>
 
           <span class="compat-badge hidden" id="compatibility-score"><span></span></span>
@@ -256,19 +252,60 @@
     <div id="find-friends-results" class="find-friends-results"></div>
   </div>
 
-  <!-- SOTD LISTEN MODAL (Hook: #sotd-listen-modal) -->
-  <div class="sotd-listen-modal hidden" id="sotd-listen-modal">
+  <!-- ANIME OF THE DAY VIEWER (Hook: #aotd-viewer-modal) -->
+  <div class="sotd-listen-modal hidden" id="aotd-viewer-modal">
     <div class="sotd-listen-card">
-      <button type="button" id="sotd-listen-close-btn" class="sotd-listen-close" aria-label="Close">
+      <button type="button" id="aotd-viewer-close-btn" class="sotd-listen-close" aria-label="Close">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
-      <span class="sotd-listen-eyebrow">🎵 Song of the Day</span>
-      <p id="sotd-listen-shared-by" class="sotd-listen-shared-by"></p>
-      <img id="sotd-listen-album-art" class="sotd-listen-art" src="" alt="Album art" />
-      <h3 id="sotd-listen-track-name" class="sotd-listen-track"></h3>
-      <p id="sotd-listen-artist-name" class="sotd-listen-artist"></p>
-      <div id="sotd-listen-embed-container"></div>
-      <a id="sotd-listen-open-spotify-btn" href="#" target="_blank" rel="noopener" class="sotd-listen-open-btn">Open in Spotify</a>
+      <span class="sotd-listen-eyebrow">🎬 Anime of the Day</span>
+      <p id="aotd-viewer-shared-by" class="sotd-listen-shared-by"></p>
+      <img id="aotd-viewer-cover" class="sotd-listen-art" src="" alt="Anime cover" />
+      <h3 id="aotd-viewer-title" class="sotd-listen-track"></h3>
+      <p id="aotd-viewer-note" class="sotd-listen-artist"></p>
+      <a id="aotd-viewer-anilist-link" href="#" target="_blank" rel="noopener" class="sotd-listen-open-btn">View on AniList</a>
+    </div>
+  </div>
+
+  <!-- SHARE ANIME OF THE DAY (Hook: #aotd-share-modal) -->
+  <div class="find-friends-modal hidden" id="aotd-share-modal">
+    <div class="find-friends-search-bar">
+      <input type="text" id="aotd-share-search-input" placeholder="Search an anime to share..." />
+      <button type="button" id="aotd-share-close-btn">Cancel</button>
+    </div>
+    <div id="aotd-share-results" class="find-friends-results"></div>
+  </div>
+
+  <!-- EDIT PROFILE MODAL (Hook: #edit-profile-modal) -->
+  <div class="find-friends-modal hidden" id="edit-profile-modal">
+    <div class="find-friends-search-bar">
+      <span style="font-family:var(--font-display); font-weight:700; color:var(--ink);">Edit Profile</span>
+      <button type="button" id="edit-profile-close-btn">Cancel</button>
+    </div>
+    <div class="edit-profile-form">
+      <div class="edit-profile-avatar-row">
+        <img id="edit-profile-avatar-preview" class="edit-profile-avatar-preview" src="" alt="Avatar" />
+        <label for="edit-profile-avatar-input" class="edit-profile-avatar-btn">Change Photo</label>
+        <input type="file" id="edit-profile-avatar-input" accept="image/*" class="hidden" />
+      </div>
+
+      <div class="auth-field">
+        <label for="edit-profile-display-name">Display Name</label>
+        <input type="text" id="edit-profile-display-name" class="auth-input" placeholder="Your display name" />
+      </div>
+
+      <div class="auth-field">
+        <label for="edit-profile-status">Status</label>
+        <input type="text" id="edit-profile-status" class="auth-input" placeholder="What's on your mind?" maxlength="60" />
+      </div>
+
+      <div class="auth-field">
+        <label for="edit-profile-bio">Bio</label>
+        <textarea id="edit-profile-bio" class="auth-input edit-profile-bio-input" placeholder="Tell people about yourself" maxlength="160" rows="3"></textarea>
+      </div>
+
+      <div id="edit-profile-error" class="auth-error-message hidden"></div>
+      <button type="button" id="edit-profile-save-btn" class="auth-submit-btn">Save Changes</button>
     </div>
   </div>
 

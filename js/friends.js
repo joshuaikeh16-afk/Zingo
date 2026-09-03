@@ -15,6 +15,7 @@ import {
   respondToFriendRequest,
   removeFriend,
   getIncomingRequests,
+  shareAnimeOfTheDay,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -42,7 +43,7 @@ function formatRelativeTime(isoString) {
   return `${Math.floor(mins / 60)}h ago`;
 }
 
-function buildFriendAvatar({ friend, post, hasActiveSotd }) {
+function buildFriendAvatar({ friend, post, hasActiveAotd }) {
   const name = friend.display_name || friend.username || 'Friend';
   const avatarUrl = friend.avatar_url || `https://placehold.co/120x120/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
 
@@ -55,7 +56,7 @@ function buildFriendAvatar({ friend, post, hasActiveSotd }) {
     <div class="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-violet-500 via-rose-500 to-amber-400 shadow-md">
       <img src="${avatarUrl}" alt="${name}" class="w-full h-full rounded-full object-cover" />
     </div>
-    ${hasActiveSotd ? '<span class="sotd-indicator absolute bottom-4 right-0 w-5 h-5 rounded-full bg-violet-600 border border-slate-900 text-[10px] text-white flex items-center justify-center shadow-md">🎵</span>' : ''}
+    ${hasActiveAotd ? '<span class="sotd-indicator">🎬</span>' : ''}
     <span class="block text-[11px] font-medium text-slate-300 mt-1 truncate max-w-[60px]">${name}</span>
   `;
 
@@ -321,4 +322,100 @@ async function renderIncomingRequests() {
 
     requestsList.appendChild(row);
   });
+}
+
+// ---------------------------------------------------------------------
+// Share Anime of the Day: search AniList, pick one, optional note,
+// share with every mutual friend at once.
+// ---------------------------------------------------------------------
+
+const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
+const shareAotdBtn = document.getElementById('share-aotd-btn');
+const aotdShareModal = document.getElementById('aotd-share-modal');
+const aotdShareInput = document.getElementById('aotd-share-search-input');
+const aotdShareResults = document.getElementById('aotd-share-results');
+const aotdShareCloseBtn = document.getElementById('aotd-share-close-btn');
+
+let aotdShareDebounce = null;
+
+shareAotdBtn?.addEventListener('click', () => {
+  aotdShareModal?.classList.remove('hidden');
+  aotdShareInput?.focus();
+});
+
+aotdShareCloseBtn?.addEventListener('click', () => {
+  aotdShareModal?.classList.add('hidden');
+  if (aotdShareInput) aotdShareInput.value = '';
+  if (aotdShareResults) aotdShareResults.innerHTML = '';
+});
+
+aotdShareInput?.addEventListener('input', () => {
+  clearTimeout(aotdShareDebounce);
+  const term = aotdShareInput.value.trim();
+  aotdShareDebounce = setTimeout(() => runAotdSearch(term), 350);
+});
+
+async function runAotdSearch(term) {
+  if (!aotdShareResults) return;
+  if (term.length < 2) {
+    aotdShareResults.innerHTML = '<p class="find-friends-hint">Type at least 2 characters to search.</p>';
+    return;
+  }
+
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($search: String) { Page(perPage: 8) { media(search: $search, type: ANIME) { id title { romaji english } coverImage { medium } } } }`,
+        variables: { search: term },
+      }),
+    });
+    const json = await res.json();
+    const media = json?.data?.Page?.media ?? [];
+    aotdShareResults.innerHTML = '';
+
+    if (media.length === 0) {
+      aotdShareResults.innerHTML = '<p class="find-friends-hint">No matches found.</p>';
+      return;
+    }
+
+    media.forEach((anime) => {
+      const title = anime.title.english || anime.title.romaji;
+      const row = document.createElement('div');
+      row.className = 'find-friend-result-row';
+      row.innerHTML = `
+        <img src="${anime.coverImage.medium}" alt="${title}" />
+        <div class="find-friend-result-info">
+          <p class="find-friend-result-name">${title}</p>
+        </div>
+        <button type="button" class="friend-request-btn is-active-state">Share</button>
+      `;
+      row.querySelector('button').addEventListener('click', () => promptAndShare(anime, title));
+      aotdShareResults.appendChild(row);
+    });
+  } catch (err) {
+    console.error('AniList search failed:', err);
+    aotdShareResults.innerHTML = '<p class="find-friends-hint">Search failed — try again.</p>';
+  }
+}
+
+async function promptAndShare(anime, title) {
+  const note = window.prompt(`Add a note to share with "${title}"? (optional)`) || '';
+
+  try {
+    await shareAnimeOfTheDay(currentUserId, {
+      animeId: anime.id,
+      animeTitle: title,
+      coverImageUrl: anime.coverImage.medium,
+      note,
+    });
+    aotdShareModal?.classList.add('hidden');
+    if (aotdShareInput) aotdShareInput.value = '';
+    if (aotdShareResults) aotdShareResults.innerHTML = '';
+    await renderFriendsStatuses();
+  } catch (err) {
+    console.error('Failed to share Anime of the Day:', err);
+    alert(err.message || 'Failed to share.');
+  }
 }

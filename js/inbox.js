@@ -1,22 +1,21 @@
-// Real Inbox logic: renders actual conversations, opens real threads,
-// sends real messages, and subscribes to realtime updates. Layered on
-// top of app.html's existing markup and app.js's UI-only interactivity
-// (tab switching, modal toggles) -- this file owns all the Supabase
-// data for the Inbox view specifically.
+// Real Inbox logic: friends-only chat model. Every mutual friend shows
+// up here whether or not a conversation has started yet -- there's no
+// "New Chat / search anyone" flow, because you can only message
+// friends. Tapping a friend with no conversation yet creates one on
+// the spot.
 
 import {
   supabase,
   requireAuth,
   requireProfile,
-  getConversationsWithDetails,
+  getFriendsInbox,
   getMessages,
   sendMessage,
   subscribeToMessages,
   markConversationRead,
   recordFriendInteraction,
-  getActiveSotdDetails,
-  markSotdViewed,
-  searchUsers,
+  getActiveAotdDetails,
+  markAotdViewed,
   getOrCreateConversation,
 } from './supabase-client.js';
 
@@ -41,22 +40,22 @@ function formatRelativeTime(isoString) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function buildConversationRow(convo) {
+function buildConversationRow(friendRow) {
   const row = document.createElement('div');
   row.className = 'conversation-row chat-row';
-  row.dataset.conversationId = convo.conversationId;
-  row.dataset.otherUserId = convo.otherUserId;
+  row.dataset.conversationId = friendRow.conversationId || '';
+  row.dataset.otherUserId = friendRow.otherUserId;
 
-  const name = convo.profile?.display_name || convo.profile?.username || 'Unknown';
-  const avatarUrl = convo.profile?.avatar_url || 'https://placehold.co/120x120/1a1625/f2ede4?text=' + name[0];
-  const preview = convo.lastMessage?.content || 'Say hi 👋';
-  const time = formatRelativeTime(convo.lastMessage?.created_at);
+  const name = friendRow.profile?.display_name || friendRow.profile?.username || 'Unknown';
+  const avatarUrl = friendRow.profile?.avatar_url || 'https://placehold.co/120x120/1a1625/f2ede4?text=' + name[0];
+  const preview = friendRow.lastMessage?.content || 'Say hi 👋';
+  const time = formatRelativeTime(friendRow.lastMessage?.created_at);
 
   row.innerHTML = `
     <div class="conversation-avatar-wrap">
       <img src="${avatarUrl}" alt="${name}" class="avatar" />
-      ${convo.hasActiveSotd ? '<span class="sotd-indicator">🎵</span>' : ''}
-      ${convo.streak > 0 ? `<span class="streak-badge-mini">🔥 ${convo.streak}</span>` : ''}
+      ${friendRow.hasActiveAotd ? '<span class="sotd-indicator">🎬</span>' : ''}
+      ${friendRow.streak > 0 ? `<span class="streak-badge-mini">🔥 ${friendRow.streak}</span>` : ''}
     </div>
     <div class="chat-meta">
       <div class="chat-name">
@@ -65,64 +64,71 @@ function buildConversationRow(convo) {
       </div>
       <p class="chat-preview">${preview}</p>
     </div>
-    ${convo.unreadCount > 0 ? `<span class="conversation-unread-badge">${convo.unreadCount}</span>` : ''}
+    ${friendRow.unreadCount > 0 ? `<span class="conversation-unread-badge">${friendRow.unreadCount}</span>` : ''}
   `;
 
-  row.addEventListener('click', (e) => {
-    // Tapping the SOTD indicator badge specifically opens the listen
-    // modal with real track data, rather than opening the thread.
+  row.addEventListener('click', async (e) => {
+    // Tapping the Anime-of-the-Day badge specifically opens the viewer,
+    // rather than opening the thread.
     if (e.target.closest('.sotd-indicator')) {
       e.stopPropagation();
-      openSotdListenModal(convo.otherUserId, name);
+      openAotdViewer(friendRow.otherUserId, name);
       return;
     }
-    openThread(convo.conversationId, convo.otherUserId, name, avatarUrl);
+
+    let conversationId = friendRow.conversationId;
+    if (!conversationId) {
+      // First message to this friend -- create the conversation now.
+      conversationId = await getOrCreateConversation(friendRow.otherUserId);
+      friendRow.conversationId = conversationId;
+      row.dataset.conversationId = conversationId;
+    }
+
+    openThread(conversationId, friendRow.otherUserId, name, avatarUrl);
   });
+
   return row;
 }
 
-async function openSotdListenModal(senderId, senderName) {
-  const modal = document.getElementById('sotd-listen-modal');
+async function openAotdViewer(senderId, senderName) {
+  const modal = document.getElementById('aotd-viewer-modal');
   if (!modal) return;
 
-  const sotd = await getActiveSotdDetails(senderId, currentUserId);
-  if (!sotd) return;
+  const aotd = await getActiveAotdDetails(senderId, currentUserId);
+  if (!aotd) return;
 
-  const nameEl = modal.querySelector('#sotd-listen-track-name');
-  const artistEl = modal.querySelector('#sotd-listen-artist-name');
-  const artEl = modal.querySelector('#sotd-listen-album-art');
-  const embedContainer = modal.querySelector('#sotd-listen-embed-container');
-  const openBtn = modal.querySelector('#sotd-listen-open-spotify-btn');
-  const sharedByEl = modal.querySelector('#sotd-listen-shared-by');
+  const titleEl = document.getElementById('aotd-viewer-title');
+  const noteEl = document.getElementById('aotd-viewer-note');
+  const coverEl = document.getElementById('aotd-viewer-cover');
+  const linkEl = document.getElementById('aotd-viewer-anilist-link');
+  const sharedByEl = document.getElementById('aotd-viewer-shared-by');
 
-  if (nameEl) nameEl.textContent = sotd.track_name;
-  if (artistEl) artistEl.textContent = sotd.artist_name;
-  if (artEl && sotd.album_art_url) artEl.src = sotd.album_art_url;
-  if (sharedByEl) sharedByEl.textContent = `Shared by ${senderName} • ${formatRelativeTime(sotd.created_at)}`;
-  if (openBtn) openBtn.href = `https://open.spotify.com/track/${sotd.spotify_track_id}`;
-  if (embedContainer) {
-    embedContainer.innerHTML = `<iframe class="w-full h-[80px] rounded-xl" src="https://open.spotify.com/embed/track/${sotd.spotify_track_id}?utm_source=generator&theme=0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
-  }
+  if (titleEl) titleEl.textContent = aotd.anime_title;
+  if (noteEl) noteEl.textContent = aotd.note || '';
+  if (coverEl && aotd.cover_image_url) coverEl.src = aotd.cover_image_url;
+  if (sharedByEl) sharedByEl.textContent = `Shared by ${senderName} • ${formatRelativeTime(aotd.created_at)}`;
+  if (linkEl) linkEl.href = `https://anilist.co/anime/${aotd.anime_id}`;
 
   modal.classList.remove('hidden');
-  markSotdViewed(sotd.id, currentUserId);
+  markAotdViewed(aotd.id, currentUserId);
 }
+
+document.getElementById('aotd-viewer-close-btn')?.addEventListener('click', () => {
+  document.getElementById('aotd-viewer-modal')?.classList.add('hidden');
+});
 
 async function renderConversationList() {
   if (!conversationList) return;
-  const conversations = await getConversationsWithDetails(currentUserId);
+  const friends = await getFriendsInbox(currentUserId);
 
-  const heading = conversationList.querySelector('h2');
   const emptyState = document.getElementById('inbox-empty-state');
   conversationList.querySelectorAll('.conversation-row').forEach((el) => el.remove());
 
-  if (conversations.length === 0) {
+  if (friends.length === 0) {
     emptyState?.classList.remove('hidden');
-    emptyState?.classList.add('flex');
   } else {
     emptyState?.classList.add('hidden');
-    emptyState?.classList.remove('flex');
-    conversations.forEach((c) => conversationList.appendChild(buildConversationRow(c)));
+    friends.forEach((f) => conversationList.appendChild(buildConversationRow(f)));
   }
 }
 
@@ -248,24 +254,12 @@ messageInput?.addEventListener('keydown', (e) => {
   if (!profile) return;
 
   currentUserId = session.user.id;
-  const conversations = await getConversationsWithDetails(currentUserId);
+  await renderConversationList();
 
-  const emptyState = document.getElementById('inbox-empty-state');
-  conversationList?.querySelectorAll('.conversation-row').forEach((el) => el.remove());
-
-  if (conversations.length === 0) {
-    emptyState?.classList.remove('hidden');
-    emptyState?.classList.add('flex');
-  } else {
-    emptyState?.classList.add('hidden');
-    emptyState?.classList.remove('flex');
-    conversations.forEach((c) => conversationList?.appendChild(buildConversationRow(c)));
-  }
-
-  // Note: does NOT auto-open the first conversation on load. The
-  // thread view is a full-screen overlay here (not an inline split
-  // view), so auto-opening would hijack the screen on every page load
-  // regardless of which tab is active. Left closed until a row is tapped.
+  // Note: does NOT auto-open a thread on load. The thread view is a
+  // full-screen overlay here (not an inline split view), so
+  // auto-opening would hijack the screen on every page load regardless
+  // of which tab is active. Left closed until a row is tapped.
 })();
 
 document.addEventListener('kaidra:open-conversation', async (e) => {
@@ -273,75 +267,3 @@ document.addEventListener('kaidra:open-conversation', async (e) => {
   await openThread(conversationId, otherUserId, otherUserName, otherUserAvatar);
   await renderConversationList();
 });
-
-// ---------------------------------------------------------------------
-// New Chat: search users, start (or resume) a conversation, open it.
-// ---------------------------------------------------------------------
-
-const newChatBtn = document.getElementById('new-chat-btn');
-const newChatModal = document.getElementById('new-chat-modal');
-const newChatInput = document.getElementById('new-chat-search-input');
-const newChatResults = document.getElementById('new-chat-results');
-const newChatCloseBtn = document.getElementById('new-chat-close-btn');
-
-let newChatDebounceTimer = null;
-
-newChatBtn?.addEventListener('click', () => {
-  newChatModal?.classList.remove('hidden');
-  newChatInput?.focus();
-});
-
-newChatCloseBtn?.addEventListener('click', () => {
-  newChatModal?.classList.add('hidden');
-  if (newChatInput) newChatInput.value = '';
-  if (newChatResults) newChatResults.innerHTML = '';
-});
-
-newChatInput?.addEventListener('input', () => {
-  clearTimeout(newChatDebounceTimer);
-  const query = newChatInput.value;
-  newChatDebounceTimer = setTimeout(() => runNewChatSearch(query), 350);
-});
-
-async function runNewChatSearch(query) {
-  if (!newChatResults) return;
-  if (!query || query.trim().length < 2) {
-    newChatResults.innerHTML = '<p class="find-friends-hint">Type at least 2 characters to search.</p>';
-    return;
-  }
-
-  const results = await searchUsers(query, currentUserId);
-  newChatResults.innerHTML = '';
-
-  if (results.length === 0) {
-    newChatResults.innerHTML = '<p class="find-friends-hint">No users found.</p>';
-    return;
-  }
-
-  results.forEach((user) => {
-    const row = document.createElement('div');
-    row.className = 'find-friend-result-row';
-    const name = user.display_name || user.username;
-    const avatarUrl = user.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
-
-    row.innerHTML = `
-      <img src="${avatarUrl}" alt="${name}" />
-      <div class="find-friend-result-info">
-        <p class="find-friend-result-name">${name}</p>
-        <p class="find-friend-result-handle">@${user.username}</p>
-      </div>
-      <button type="button" class="friend-request-btn is-active-state">Chat</button>
-    `;
-
-    row.querySelector('button').addEventListener('click', async () => {
-      const conversationId = await getOrCreateConversation(user.id);
-      newChatModal?.classList.add('hidden');
-      if (newChatInput) newChatInput.value = '';
-      if (newChatResults) newChatResults.innerHTML = '';
-      await openThread(conversationId, user.id, name, avatarUrl);
-      await renderConversationList();
-    });
-
-    newChatResults.appendChild(row);
-  });
-}

@@ -80,13 +80,13 @@ export async function getConversationsWithDetails(userId) {
       if (!otherParticipant) return null;
       const otherUserId = otherParticipant.user_id;
 
-      const [{ data: profile }, { data: lastMessage }, { count: unreadCount }, streak, activeSotd] =
+      const [{ data: profile }, { data: lastMessage }, { count: unreadCount }, streak, activeAotd] =
         await Promise.all([
           supabase.from('profiles').select('id, username, display_name, avatar_url').eq('id', otherUserId).maybeSingle(),
           supabase.from('messages').select('content, message_type, created_at').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
           supabase.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', conversationId).neq('sender_id', userId).is('read_at', null),
           getStreak(userId, otherUserId),
-          hasActiveSotdFrom(otherUserId, userId),
+          hasActiveAotdFrom(otherUserId, userId),
         ]);
 
       return {
@@ -96,7 +96,7 @@ export async function getConversationsWithDetails(userId) {
         lastMessage,
         unreadCount: unreadCount ?? 0,
         streak,
-        hasActiveSotd: activeSotd,
+        hasActiveAotd: activeAotd,
       };
     })
   );
@@ -110,6 +110,63 @@ export async function getConversationsWithDetails(userId) {
     });
 }
 
+/**
+ * Inbox listing for a friends-only chat model: every friend appears,
+ * whether or not a conversation has actually started yet. Friends with
+ * an existing conversation are sorted by most recent message first;
+ * friends with no conversation yet (conversationId: null) come after.
+ */
+export async function getFriendsInbox(userId) {
+  const friends = await getMutualFriends(userId);
+  if (friends.length === 0) return [];
+
+  const rows = await Promise.all(
+    friends.map(async (friend) => {
+      const { data: myConvos } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', userId);
+      const myConvoIds = (myConvos ?? []).map((r) => r.conversation_id);
+
+      let conversationId = null;
+      if (myConvoIds.length > 0) {
+        const { data: shared } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', friend.id)
+          .in('conversation_id', myConvoIds)
+          .maybeSingle();
+        conversationId = shared?.conversation_id ?? null;
+      }
+
+      let lastMessage = null;
+      let unreadCount = 0;
+      if (conversationId) {
+        const [{ data: lm }, { count }] = await Promise.all([
+          supabase.from('messages').select('content, message_type, created_at').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+          supabase.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', conversationId).neq('sender_id', userId).is('read_at', null),
+        ]);
+        lastMessage = lm;
+        unreadCount = count ?? 0;
+      }
+
+      const [streak, activeAotd] = await Promise.all([
+        getStreak(userId, friend.id),
+        hasActiveAotdFrom(friend.id, userId),
+      ]);
+
+      return { conversationId, otherUserId: friend.id, profile: friend, lastMessage, unreadCount, streak, hasActiveAotd: activeAotd };
+    })
+  );
+
+  return rows.sort((a, b) => {
+    if (!a.lastMessage && !b.lastMessage) return 0;
+    if (!a.lastMessage) return 1;
+    if (!b.lastMessage) return -1;
+    return new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at);
+  });
+}
+
 export async function getStreak(userA, userB) {
   const [a, b] = userA < userB ? [userA, userB] : [userB, userA];
   const { data } = await supabase
@@ -121,18 +178,18 @@ export async function getStreak(userA, userB) {
   return data?.current_streak ?? 0;
 }
 
-async function hasActiveSotdFrom(senderId, recipientId) {
+async function hasActiveAotdFrom(senderId, recipientId) {
   const { data } = await supabase
-    .from('sotd_recipients')
-    .select('sotd_id, sotd_posts!inner(sender_id, expires_at)')
+    .from('aotd_recipients')
+    .select('aotd_id, aotd_posts!inner(sender_id, expires_at)')
     .eq('recipient_id', recipientId)
-    .eq('sotd_posts.sender_id', senderId)
-    .gt('sotd_posts.expires_at', new Date().toISOString())
+    .eq('aotd_posts.sender_id', senderId)
+    .gt('aotd_posts.expires_at', new Date().toISOString())
     .limit(1);
   return (data?.length ?? 0) > 0;
 }
 
-export { hasActiveSotdFrom };
+export { hasActiveAotdFrom };
 
 /** All users who are accepted friends with `userId`. */
 export async function getMutualFriends(userId) {
@@ -153,7 +210,7 @@ export async function getMutualFriends(userId) {
   return profiles ?? [];
 }
 
-/** Each mutual friend's most recent unexpired post, plus their SOTD-indicator state. Skips friends with no active post. */
+/** Each mutual friend's most recent unexpired post, plus their Anime-of-the-Day indicator state. Skips friends with no active post. */
 export async function getFriendsActiveStatuses(userId) {
   const friends = await getMutualFriends(userId);
   if (friends.length === 0) return [];
@@ -171,8 +228,8 @@ export async function getFriendsActiveStatuses(userId) {
 
       if (!latestPost) return null;
 
-      const hasSotd = await hasActiveSotdFrom(friend.id, userId);
-      return { friend, post: latestPost, hasActiveSotd: hasSotd };
+      const hasAotd = await hasActiveAotdFrom(friend.id, userId);
+      return { friend, post: latestPost, hasActiveAotd: hasAotd };
     })
   );
 
@@ -198,26 +255,47 @@ export async function addStatusQuickReact(postId, userId, emoji = '🔥') {
     .upsert({ post_id: postId, user_id: userId, emoji }, { onConflict: 'post_id,user_id' });
 }
 
-/** Full track details for the active SOTD from `senderId` to `recipientId`, for populating the listen modal. Null if none active. */
-export async function getActiveSotdDetails(senderId, recipientId) {
+/** Full details for the active Anime of the Day from `senderId` to `recipientId`, for populating the viewer modal. Null if none active. */
+export async function getActiveAotdDetails(senderId, recipientId) {
   const { data } = await supabase
-    .from('sotd_recipients')
-    .select('sotd_id, viewed_at, sotd_posts!inner(id, sender_id, spotify_track_id, track_name, artist_name, album_art_url, created_at, expires_at)')
+    .from('aotd_recipients')
+    .select('aotd_id, viewed_at, aotd_posts!inner(id, sender_id, anime_id, anime_title, cover_image_url, note, created_at, expires_at)')
     .eq('recipient_id', recipientId)
-    .eq('sotd_posts.sender_id', senderId)
-    .gt('sotd_posts.expires_at', new Date().toISOString())
-    .order('sotd_posts(created_at)', { ascending: false })
+    .eq('aotd_posts.sender_id', senderId)
+    .gt('aotd_posts.expires_at', new Date().toISOString())
+    .order('aotd_posts(created_at)', { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.sotd_posts ?? null;
+  return data?.aotd_posts ?? null;
 }
 
-export async function markSotdViewed(sotdId, recipientId) {
+export async function markAotdViewed(aotdId, recipientId) {
   await supabase
-    .from('sotd_recipients')
+    .from('aotd_recipients')
     .update({ viewed_at: new Date().toISOString() })
-    .eq('sotd_id', sotdId)
+    .eq('aotd_id', aotdId)
     .eq('recipient_id', recipientId);
+}
+
+/** Shares an Anime of the Day with every mutual friend. Expires in 24h, same as a status post. */
+export async function shareAnimeOfTheDay(senderId, { animeId, animeTitle, coverImageUrl, note }) {
+  const friends = await getMutualFriends(senderId);
+  if (friends.length === 0) throw new Error('No friends to share with yet.');
+
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: post, error } = await supabase
+    .from('aotd_posts')
+    .insert({ sender_id: senderId, anime_id: animeId, anime_title: animeTitle, cover_image_url: coverImageUrl, note: note || null, expires_at: expiresAt })
+    .select('id')
+    .single();
+  if (error) throw error;
+
+  const recipientRows = friends.map((f) => ({ aotd_id: post.id, recipient_id: f.id }));
+  const { error: recipErr } = await supabase.from('aotd_recipients').insert(recipientRows);
+  if (recipErr) throw recipErr;
+
+  return post.id;
 }
 
 /** Uses the existing get_or_create_conversation RPC -- don't reimplement find-or-create client-side. */

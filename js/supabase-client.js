@@ -639,3 +639,191 @@ export async function getCompatibilityScore(userA, userB) {
   const union = new Set([...setA, ...setB]).size;
   return Math.round((shared / union) * 100);
 }
+
+// ---------------------------------------------------------------------
+// Watchlist — real add/update/remove/list, backed by user_watchlist.
+// (fetchAnimeTitle above only fetches a title; these fetch full detail.)
+// ---------------------------------------------------------------------
+
+async function fetchAnimeDetails(anilistId) {
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($id: Int) { Media(id: $id) { title { userPreferred } coverImage { large } episodes } }`,
+        variables: { id: anilistId },
+      }),
+    });
+    const json = await res.json();
+    const m = json?.data?.Media;
+    if (!m) return null;
+    return { title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/** Batch-fetch title/cover/episodes for many AniList ids in one request. */
+async function fetchAnimeDetailsBatch(ids) {
+  if (!ids || ids.length === 0) return new Map();
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids) { id title { userPreferred } coverImage { large } episodes } } }`,
+        variables: { ids },
+      }),
+    });
+    const json = await res.json();
+    const list = json?.data?.Page?.media ?? [];
+    return new Map(list.map((m) => [m.id, { title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }]));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Adds an anime to the user's watchlist, or updates its status if it's already there. */
+export async function addToWatchlist(userId, animeId, status, totalEpisodes) {
+  const { error } = await supabase.from('user_watchlist').upsert(
+    { user_id: userId, anime_id: animeId, status, total_episodes: totalEpisodes, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,anime_id' }
+  );
+  if (error) throw error;
+}
+
+export async function updateWatchlistProgress(userId, animeId, progress) {
+  const { error } = await supabase
+    .from('user_watchlist')
+    .update({ progress, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('anime_id', animeId);
+  if (error) throw error;
+}
+
+export async function updateWatchlistStatus(userId, animeId, status) {
+  const { error } = await supabase
+    .from('user_watchlist')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('anime_id', animeId);
+  if (error) throw error;
+}
+
+export async function removeFromWatchlist(userId, animeId) {
+  await supabase.from('user_watchlist').delete().eq('user_id', userId).eq('anime_id', animeId);
+}
+
+/** Full watchlist for a user, with real AniList title/cover/episodes attached. */
+export async function getUserWatchlist(userId) {
+  const { data: rows } = await supabase
+    .from('user_watchlist')
+    .select('anime_id, status, progress, total_episodes')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+
+  if (!rows || rows.length === 0) return [];
+
+  const details = await fetchAnimeDetailsBatch(rows.map((r) => r.anime_id));
+  return rows.map((r) => ({
+    animeId: r.anime_id,
+    status: r.status,
+    progress: r.progress,
+    totalEpisodes: r.total_episodes ?? details.get(r.anime_id)?.totalEpisodes ?? null,
+    title: details.get(r.anime_id)?.title ?? `Anime #${r.anime_id}`,
+    coverUrl: details.get(r.anime_id)?.coverUrl ?? null,
+  }));
+}
+
+/** Bulk-imports a public AniList username's list into the user's own watchlist. */
+export async function importAniListByUsername(userId, aniListUsername) {
+  const res = await fetch(ANILIST_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `query ($name: String) {
+        MediaListCollection(userName: $name, type: ANIME) {
+          lists { entries { status progress media { id episodes } } }
+        }
+      }`,
+      variables: { name: aniListUsername },
+    }),
+  });
+  const json = await res.json();
+  const lists = json?.data?.MediaListCollection?.lists ?? [];
+  if (lists.length === 0) return { imported: 0 };
+
+  const statusMap = { CURRENT: 'watching', PLANNING: 'planned', COMPLETED: 'completed', DROPPED: 'dropped', PAUSED: 'watching', REPEATING: 'watching' };
+
+  const rows = lists.flatMap((list) => list.entries).map((entry) => ({
+    user_id: userId,
+    anime_id: entry.media.id,
+    status: statusMap[entry.status] || 'planned',
+    progress: entry.progress ?? 0,
+    total_episodes: entry.media.episodes ?? null,
+    updated_at: new Date().toISOString(),
+  }));
+
+  if (rows.length === 0) return { imported: 0 };
+
+  const { error } = await supabase.from('user_watchlist').upsert(rows, { onConflict: 'user_id,anime_id' });
+  if (error) throw error;
+  return { imported: rows.length };
+}
+
+/** Trending anime from AniList, for the Watchlist tab's recommendations rail. */
+export async function getTrendingAnime(limit = 12) {
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($perPage: Int) { Page(perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME) { id title { userPreferred } coverImage { large } episodes } } }`,
+        variables: { perPage: limit },
+      }),
+    });
+    const json = await res.json();
+    const list = json?.data?.Page?.media ?? [];
+    return list.map((m) => ({ animeId: m.id, title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------
+// User Preferences (Settings toggles)
+// ---------------------------------------------------------------------
+
+export async function getUserPreferences(userId) {
+  const { data } = await supabase
+    .from('user_preferences')
+    .select('allow_dms, public_watchlist, nsfw_filter, notify_dm')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // Row may not exist yet for a user -- defaults match the table's own
+  // column defaults (all true) rather than silently showing everything off.
+  return data ?? { allow_dms: true, public_watchlist: true, nsfw_filter: true, notify_dm: true };
+}
+
+export async function updateUserPreferences(userId, patch) {
+  const { error } = await supabase
+    .from('user_preferences')
+    .upsert({ user_id: userId, ...patch }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------
+// Friend count (replaces getFollowCounts' following/followers pair --
+// there's no asymmetric follow anymore, just one mutual Friends count)
+// ---------------------------------------------------------------------
+
+export async function getFriendCount(userId) {
+  const { count } = await supabase
+    .from('friend_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'accepted')
+    .or(`requester_id.eq.${userId},target_id.eq.${userId}`);
+  return count ?? 0;
+}

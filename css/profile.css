@@ -326,3 +326,78 @@
   fill: none;
   stroke-width: 1.8;
 }
+
+/* ------------------------------------------------------------------
+   Profile badges (compatibility, streak, currently watching)
+   ------------------------------------------------------------------ */
+
+.compat-badge,
+.watching-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 4px 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1.5px dashed var(--gold);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.streak-badge {
+  display: inline-block;
+  margin: 6px 4px 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--vermillion-soft);
+  color: var(--vermillion);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------
+   Posts Grid
+   ------------------------------------------------------------------ */
+
+.profile-posts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.profile-posts-grid > div {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid var(--hairline);
+  position: relative;
+  background: var(--surface);
+}
+
+.profile-posts-grid img { width: 100%; height: 100%; object-fit: cover; }
+
+.post-tile-text {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
+.profile-posts-grid > div > span:last-child {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(27, 29, 34, 0.65);
+  color: #fff;
+}

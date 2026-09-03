@@ -8,7 +8,7 @@
    shouldn't be there pretending to do something.
    ========================================================================== */
 
-import { supabase } from './supabase-client.js';
+import { supabase, fetchNewsFeed } from './supabase-client.js';
 
 // ------------------------------------------------------------------
 // Fallback dataset — used only if the real /api/news fetch fails.
@@ -223,15 +223,9 @@ async function loadRealNews() {
   }
 
   try {
-    const res = await fetch('/api/news');
-    if (!res.ok) throw new Error('news API responded ' + res.status);
-    const data = await res.json();
-    if (!data.articles || data.articles.length === 0) throw new Error('no articles returned');
-
-    currentNewsData = data.articles;
-    if (data.failedFeeds && data.failedFeeds.length) {
-      console.warn('Some news sources failed to fetch:', data.failedFeeds);
-    }
+    const articles = await fetchNewsFeed();
+    if (!articles || articles.length === 0) throw new Error('no articles returned');
+    currentNewsData = articles;
   } catch (err) {
     console.warn('Live news fetch failed, using fallback dataset:', err);
     currentNewsData = KAIDRA_NEWS_FALLBACK;

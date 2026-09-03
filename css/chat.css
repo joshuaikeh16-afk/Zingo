@@ -206,6 +206,80 @@
 
 .shared-anime-episode { font-size: 10.5px; color: var(--indigo); margin-top: 1px; }
 
+.conversation-avatar-wrap { position: relative; flex-shrink: 0; }
+
+.sotd-indicator {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--indigo);
+  border: 2px solid var(--surface);
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.streak-badge-mini {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.conversation-unread-badge {
+  background: var(--indigo);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.sticker-bubble .message-bubble,
+.message-row.sticker-bubble {
+  font-size: 32px;
+  background: none;
+  border: none;
+  padding: 4px;
+}
+
+.message-bubble-image { padding: 0; overflow: hidden; }
+.message-bubble-image img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
+
+.voice-note-bubble { display: flex; align-items: center; gap: 10px; min-width: 180px; }
+
+.voice-play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--indigo);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.voice-play-btn svg { width: 14px; height: 14px; margin-left: 1px; }
+
+.voice-note-track { flex: 1; }
+.voice-note-bar { height: 5px; border-radius: var(--radius-pill); background: rgba(0,0,0,0.12); overflow: hidden; }
+.message-row.outgoing .voice-note-bar { background: rgba(255,255,255,0.3); }
+.voice-note-fill { height: 100%; width: 0; background: var(--indigo); }
+.message-row.outgoing .voice-note-fill { background: #fff; }
+.voice-note-times { display: flex; justify-content: space-between; font-size: 9px; margin-top: 3px; color: var(--ink-faint); }
+.message-row.outgoing .voice-note-times { color: rgba(255,255,255,0.7); }
+
 .chat-input-bar {
   display: flex;
   align-items: center;
@@ -242,3 +316,82 @@
 }
 
 .chat-send-btn svg { width: 17px; height: 17px; fill: #fff; }
+
+/* ------------------------------------------------------------------
+   SOTD Listen Modal
+   ------------------------------------------------------------------ */
+
+.sotd-listen-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 29, 34, 0.55);
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.sotd-listen-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-stamp);
+  padding: 22px 20px;
+  text-align: center;
+  position: relative;
+}
+
+.sotd-listen-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hairline);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sotd-listen-close svg { width: 13px; height: 13px; stroke: var(--ink); fill: none; stroke-width: 2; }
+
+.sotd-listen-eyebrow {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+  border: 1.5px dashed var(--indigo);
+  background: var(--indigo-soft);
+  color: var(--indigo);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.sotd-listen-shared-by { font-size: 11px; color: var(--ink-soft); margin-top: 6px; }
+
+.sotd-listen-art {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  margin: 16px auto;
+  border: 1.5px solid var(--hairline);
+}
+
+.sotd-listen-track { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.sotd-listen-artist { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; margin-bottom: 14px; }
+
+.sotd-listen-open-btn {
+  display: block;
+  margin-top: 12px;
+  padding: 11px;
+  border-radius: var(--radius-pill);
+  background: var(--indigo);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12.5px;
+}

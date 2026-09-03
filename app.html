@@ -97,6 +97,10 @@
 
       <div class="search-results-dropdown" id="anilist-results" style="display:none;"></div>
 
+      <div class="watchlist-section-label">Recommended for you</div>
+      <div class="recommended-rail" id="watchlist-recommended-rail"></div>
+
+      <div class="watchlist-section-label">Your List</div>
       <div class="status-filters" id="watchlist-filters">
         <button class="status-pill active" data-status="watching">Watching</button>
         <button class="status-pill" data-status="planned">Plan to Watch</button>
@@ -104,18 +108,7 @@
         <button class="status-pill" data-status="dropped">Dropped</button>
       </div>
 
-      <div class="watchlist-grid" id="watchlist-cards-container">
-        <div class="anime-card" data-anime-id="1535" data-status="watching">
-          <img class="anime-poster" src="https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&q=80" alt="Poster" />
-          <div class="anime-info">
-            <div class="anime-title">Jujutsu Kaisen</div>
-            <div class="ep-counter">
-              <span>Ep <strong class="ep-val">18</strong>/24</span>
-              <button class="ep-btn" data-action="increment-ep" title="Quick Increment">+1</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="watchlist-grid" id="watchlist-cards-container"></div>
     </section>
 
     <!-- TAB 3: INBOX (Hook: #tab-inbox) -->
@@ -128,19 +121,22 @@
         <button class="status-pill active" id="new-chat-btn" style="padding: 6px 12px; font-size:12px;">+ New Chat</button>
       </div>
 
-      <div class="inbox-list" id="chats-container">
-        <div class="chat-row" data-chat-id="conv-881" data-username="Ren_Kaidra" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Ren">
-          <img class="avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Ren" alt="Avatar" />
-          <div class="chat-meta">
-            <div class="chat-name">
-              <span>Ren_Kaidra</span>
-              <span class="chat-time">10:42 AM</span>
-            </div>
-            <div class="chat-preview">Did you catch the new episode drop last night?</div>
-          </div>
-        </div>
+      <div class="inbox-list" id="conversation-list"></div>
+      <div class="empty-state hidden" id="inbox-empty-state">
+        <div class="empty-state-icon">💬</div>
+        <h4>No conversations yet</h4>
+        <p>Add a friend, then start a chat with "+ New Chat" above.</p>
       </div>
     </section>
+
+    <!-- NEW CHAT MODAL (Hook: #new-chat-modal) -->
+    <div class="find-friends-modal hidden" id="new-chat-modal">
+      <div class="find-friends-search-bar">
+        <input type="text" id="new-chat-search-input" placeholder="Search by username..." />
+        <button type="button" id="new-chat-close-btn">Cancel</button>
+      </div>
+      <div id="new-chat-results" class="find-friends-results"></div>
+    </div>
 
     <!-- TAB 4: PROFILE & PREFERENCES (Hook: #tab-profile) -->
     <section class="tab-pane" id="tab-profile">
@@ -162,28 +158,36 @@
         <!-- Profile Hero Card -->
         <div class="profile-hero-card">
           <div class="avatar-ring">
-            <img class="profile-avatar" id="user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=AlexKaidra" alt="User Avatar" />
+            <img class="profile-avatar" id="profile-avatar" src="" alt="User Avatar" />
           </div>
-          <h3 class="display-name" id="user-display-name">Alex Johnson</h3>
-          <div class="handle" id="user-handle">@alex_kaidra</div>
-          <p class="user-bio" id="user-bio">Watching summer 2026 seasonals • Studio MAPPA fan</p>
+          <h3 class="display-name" id="profile-username">@</h3>
+          <p class="user-bio" id="profile-bio"></p>
+
+          <span class="compat-badge hidden" id="compatibility-score"><span></span></span>
+          <span class="streak-badge hidden" id="streak-badge"></span>
+          <span class="watching-badge hidden" id="currently-watching-badge"><span>📺</span><span></span></span>
 
           <div class="profile-stats">
             <div class="stat-box">
-              <span class="stat-number" id="stat-completed">42</span>
-              <span class="stat-label">Completed</span>
+              <span class="stat-number" id="stat-friends">0</span>
+              <span class="stat-label">Friends</span>
             </div>
             <div class="stat-divider"></div>
             <div class="stat-box">
-              <span class="stat-number" id="stat-watching">6</span>
-              <span class="stat-label">Watching</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-box">
-              <span class="stat-number" id="stat-planned">18</span>
-              <span class="stat-label">Planned</span>
+              <span class="stat-number" id="stat-likes">0</span>
+              <span class="stat-label">Likes</span>
             </div>
           </div>
+
+          <button type="button" class="friend-request-btn hidden" id="friend-action-btn" style="margin-top:14px;">Add Friend</button>
+        </div>
+
+        <div class="watchlist-section-label" style="margin-top:20px;">Posts</div>
+        <div class="profile-posts-grid" id="profile-posts-grid"></div>
+        <div class="empty-state hidden" id="profile-posts-empty-state">
+          <div class="empty-state-icon">📭</div>
+          <h4>No posts yet</h4>
+          <p>Status posts and Song of the Day shares will show up here.</p>
         </div>
 
       </div>
@@ -200,58 +204,27 @@
 
       <div class="chat-user-meta" id="chat-header-user" data-action="view-profile">
         <div class="chat-avatar-wrapper">
-          <img class="chat-avatar" id="dm-active-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Ren" alt="Avatar" />
+          <img class="chat-avatar" id="dm-active-avatar" src="" alt="Avatar" />
           <div class="online-indicator"></div>
         </div>
         <div class="chat-user-info">
-          <span class="name" id="dm-active-name">Ren_Kaidra</span>
-          <span class="status">Online • Active in Watchlist</span>
+          <span class="name" id="dm-active-name"></span>
         </div>
       </div>
 
       <div style="width: 36px;"></div>
     </header>
 
-    <div class="chat-messages-body" id="dm-messages-container">
-      <div class="chat-date-divider">Today</div>
+    <div class="chat-messages-body" id="message-thread-container"></div>
 
-      <div class="message-row incoming">
-        <div class="message-bubble">
-          Yo! Have you seen the updated trailer for the MAPPA sci-fi movie project yet?
-        </div>
-        <span class="message-time">10:41 AM</span>
-      </div>
-
-      <div class="message-row outgoing">
-        <div class="message-bubble">
-          Yeah I just saw it on Kaidra's news tab! Looks incredible!
-        </div>
-        <span class="message-time">10:42 AM</span>
-      </div>
-
-      <div class="message-row incoming">
-        <div class="message-bubble">
-          Check out what I'm currently watching:
-          <div class="shared-anime-card">
-            <img class="shared-anime-thumb" src="https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=200&q=80" alt="Anime" />
-            <div class="shared-anime-meta">
-              <span class="shared-anime-title">Jujutsu Kaisen</span>
-              <span class="shared-anime-episode">Episode 18 / 24</span>
-            </div>
-          </div>
-        </div>
-        <span class="message-time">10:44 AM</span>
-      </div>
-    </div>
-
-    <form class="chat-input-bar" id="dm-form">
+    <div class="chat-input-bar">
       <div class="chat-input-wrapper">
-        <input type="text" class="chat-input-field" id="dm-message-input" placeholder="Message @Ren_Kaidra..." autocomplete="off" />
+        <input type="text" class="chat-input-field" id="message-text-input" placeholder="Message..." autocomplete="off" />
       </div>
-      <button type="submit" class="chat-send-btn" aria-label="Send Message">
+      <button type="button" class="chat-send-btn" id="message-send-btn" aria-label="Send Message">
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
-    </form>
+    </div>
   </div>
 
   <!-- STATUS VIEWER MODAL (Hook: #status-viewer-modal) -->
@@ -281,6 +254,22 @@
       <button type="button" id="find-friends-close-btn">Cancel</button>
     </div>
     <div id="find-friends-results" class="find-friends-results"></div>
+  </div>
+
+  <!-- SOTD LISTEN MODAL (Hook: #sotd-listen-modal) -->
+  <div class="sotd-listen-modal hidden" id="sotd-listen-modal">
+    <div class="sotd-listen-card">
+      <button type="button" id="sotd-listen-close-btn" class="sotd-listen-close" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <span class="sotd-listen-eyebrow">🎵 Song of the Day</span>
+      <p id="sotd-listen-shared-by" class="sotd-listen-shared-by"></p>
+      <img id="sotd-listen-album-art" class="sotd-listen-art" src="" alt="Album art" />
+      <h3 id="sotd-listen-track-name" class="sotd-listen-track"></h3>
+      <p id="sotd-listen-artist-name" class="sotd-listen-artist"></p>
+      <div id="sotd-listen-embed-container"></div>
+      <a id="sotd-listen-open-spotify-btn" href="#" target="_blank" rel="noopener" class="sotd-listen-open-btn">Open in Spotify</a>
+    </div>
   </div>
 
   <!-- FORWARD-TO-DM PICKER (Hook: #forward-picker-overlay) -->
@@ -315,8 +304,7 @@
           <div class="user-card-meta">
             <div class="name" id="settings-user-name">Alex Johnson</div>
             <div class="tag">
-              <span class="badge-status">Pro Member</span>
-              <span id="settings-user-handle">@alex_kaidra</span>
+              <span id="settings-user-handle"></span>
             </div>
           </div>
         </div>
@@ -503,8 +491,10 @@
   </div>
 
   <script type="module" src="/js/news-data.js"></script>
-  <script src="/js/watchlist.js"></script>
+  <script type="module" src="/js/watchlist.js"></script>
   <script type="module" src="/js/friends.js"></script>
-  <script src="/js/app.js"></script>
+  <script type="module" src="/js/inbox.js"></script>
+  <script type="module" src="/js/profile.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>

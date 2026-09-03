@@ -7,7 +7,7 @@
 .news-view-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 78px - 82px); /* header height, bottom nav height */
+  height: calc(100vh - 66px - 76px); /* header height, bottom nav height */
 }
 
 .news-filter-bar { flex-shrink: 0; }
@@ -38,7 +38,7 @@
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow-stamp);
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .scroll-media {
@@ -74,8 +74,10 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 1.5px solid var(--ink);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(27, 29, 34, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;

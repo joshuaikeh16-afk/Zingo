@@ -2,7 +2,57 @@
    Kaidra — Core Application & Event Router
    ========================================================================== */
 
-document.addEventListener('DOMContentLoaded', function() {
+import { supabase, requireAuth, getUserPreferences, updateUserPreferences, getMutualFriends, getOrCreateConversation, sendMessage } from './supabase-client.js';
+
+let currentUserId = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+
+  const session = await requireAuth();
+  if (session) currentUserId = session.user.id;
+
+  // Settings mini user card — real data, not the hardcoded placeholder
+  if (currentUserId) {
+    const { data: profile } = await supabase.from('profiles').select('username, display_name, avatar_url').eq('id', currentUserId).maybeSingle();
+    if (profile) {
+      const nameEl = document.getElementById('settings-user-name');
+      const handleEl = document.getElementById('settings-user-handle');
+      const avatarEl = document.getElementById('settings-user-avatar');
+      if (nameEl) nameEl.textContent = profile.display_name || profile.username;
+      if (handleEl) handleEl.textContent = '@' + profile.username;
+      if (avatarEl) avatarEl.src = profile.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${profile.username[0].toUpperCase()}`;
+    }
+  }
+
+  // Real Settings: load current values, persist on change
+  if (currentUserId) {
+    const prefs = await getUserPreferences(currentUserId);
+    const toggleMap = {
+      'setting-allow-dms': 'allow_dms',
+      'setting-public-watchlist': 'public_watchlist',
+      'setting-notify-dm': 'notify_dm',
+      'setting-nsfw-filter': 'nsfw_filter',
+    };
+    Object.entries(toggleMap).forEach(([elId, prefKey]) => {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      el.checked = !!prefs[prefKey];
+      el.addEventListener('change', () => {
+        updateUserPreferences(currentUserId, { [prefKey]: el.checked }).catch((err) => {
+          console.error('Failed to save setting:', err);
+          el.checked = !el.checked; // revert on failure
+        });
+      });
+    });
+  }
+
+  // Real Logout
+  const logoutBtn = document.getElementById('settings-logout-btn');
+  logoutBtn?.addEventListener('click', async () => {
+    logoutBtn.disabled = true;
+    await supabase.auth.signOut();
+    window.location.href = '/auth.html';
+  });
 
   // Bottom Navigation Routing
   document.querySelectorAll('#app-bottom-nav .nav-item').forEach(function(btn) {
@@ -44,32 +94,6 @@ document.addEventListener('DOMContentLoaded', function() {
   if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettings);
   if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettings);
 
-  // Direct Message Drawer Controls
-  var chatDrawer = document.getElementById('chat-view-drawer');
-  var closeChatBtn = document.getElementById('close-chat-btn');
-
-  function openDirectMessage(chatId, username, avatarUrl) {
-    if (username) document.getElementById('dm-active-name').textContent = username;
-    if (avatarUrl) document.getElementById('dm-active-avatar').src = avatarUrl;
-    if (chatDrawer) chatDrawer.classList.add('is-active');
-  }
-
-  function closeDirectMessage() {
-    if (chatDrawer) chatDrawer.classList.remove('is-active');
-  }
-
-  if (closeChatBtn) closeChatBtn.addEventListener('click', closeDirectMessage);
-
-  // Bind Inbox Row Clicks to Open DM Drawer
-  document.querySelectorAll('#chats-container .chat-row').forEach(function(row) {
-    row.addEventListener('click', function() {
-      var chatId = row.getAttribute('data-chat-id');
-      var username = row.getAttribute('data-username');
-      var avatarUrl = row.getAttribute('data-avatar');
-      openDirectMessage(chatId, username, avatarUrl);
-    });
-  });
-
   // Watchlist Filter Pill Switcher
   document.querySelectorAll('#watchlist-filters .status-pill').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -100,69 +124,74 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Direct Message Drawer — close control only (opening is owned by
+  // inbox.js's openThread, and by forwardArticleToChat below)
+  var chatDrawer = document.getElementById('chat-view-drawer');
+  var closeChatBtn = document.getElementById('close-chat-btn');
+  if (closeChatBtn) {
+    closeChatBtn.addEventListener('click', function() {
+      if (chatDrawer) chatDrawer.classList.remove('is-active');
+    });
+  }
+
   // Forward-to-DM Picker
   // Listens for 'kaidra:news-forward-request' (dispatched by news-data.js)
-  // and lets the user pick an existing Inbox contact to forward the story to.
-  // HOOK: listen for 'kaidra:dm-forward-send' to persist the forwarded
-  // message via Supabase.
+  // and lets the user pick a real friend to forward the story to.
   var forwardOverlay = document.getElementById('forward-picker-overlay');
   var forwardList = document.getElementById('forward-picker-list');
   var closeForwardBtn = document.getElementById('close-forward-picker-btn');
 
   function openForwardPicker(article) {
-    if (!forwardOverlay || !forwardList) return;
-    forwardList.innerHTML = '';
-
-    document.querySelectorAll('#chats-container .chat-row').forEach(function(row) {
-      var username = row.getAttribute('data-username');
-      var avatarUrl = row.getAttribute('data-avatar');
-      var chatId = row.getAttribute('data-chat-id');
-
-      var pickRow = document.createElement('div');
-      pickRow.className = 'forward-pick-row';
-      pickRow.innerHTML =
-        '<img class="avatar" src="' + avatarUrl + '" alt="' + username + '" />' +
-        '<span>' + username + '</span>';
-
-      pickRow.addEventListener('click', function() {
-        forwardArticleToChat(chatId, username, avatarUrl, article);
-      });
-
-      forwardList.appendChild(pickRow);
-    });
-
+    if (!forwardOverlay || !forwardList || !currentUserId) return;
+    forwardList.innerHTML = '<div class="find-friends-hint">Loading friends…</div>';
     forwardOverlay.classList.add('is-open');
+
+    getMutualFriends(currentUserId).then(function(friends) {
+      forwardList.innerHTML = '';
+
+      if (friends.length === 0) {
+        forwardList.innerHTML = '<div class="find-friends-hint">Add a friend first to forward stories.</div>';
+        return;
+      }
+
+      friends.forEach(function(friend) {
+        var name = friend.display_name || friend.username;
+        var avatarUrl = friend.avatar_url || ('https://placehold.co/80x80/1a1625/f2ede4?text=' + name[0].toUpperCase());
+
+        var pickRow = document.createElement('div');
+        pickRow.className = 'forward-pick-row';
+        pickRow.innerHTML =
+          '<img class="avatar" src="' + avatarUrl + '" alt="' + name + '" />' +
+          '<span>' + name + '</span>';
+
+        pickRow.addEventListener('click', function() {
+          forwardArticleToFriend(friend.id, name, avatarUrl, article);
+        });
+
+        forwardList.appendChild(pickRow);
+      });
+    });
   }
 
   function closeForwardPicker() {
     if (forwardOverlay) forwardOverlay.classList.remove('is-open');
   }
 
-  function forwardArticleToChat(chatId, username, avatarUrl, article) {
-    openDirectMessage(chatId, username, avatarUrl);
+  function forwardArticleToFriend(friendId, name, avatarUrl, article) {
+    var content = 'Check out this news: ' + article.title +
+      (article.sourceUrl ? ' — ' + article.sourceUrl : '') +
+      (article.relatedAnimeTitle ? ' (About: ' + article.relatedAnimeTitle + ')' : '');
 
-    var messagesBody = document.getElementById('dm-messages-container');
-    if (messagesBody) {
-      var row = document.createElement('div');
-      row.className = 'message-row outgoing';
-      row.innerHTML =
-        '<div class="message-bubble">' +
-          'Check out this news:' +
-          '<div class="shared-news-card">' +
-            '<img class="shared-news-thumb" src="' + article.coverImage + '" alt="News" />' +
-            '<div class="shared-news-meta">' +
-              '<span class="shared-news-title">' + article.title + '</span>' +
-              (article.relatedAnimeTitle ? '<span class="shared-news-anime">About: ' + article.relatedAnimeTitle + '</span>' : '') +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<span class="message-time">Now</span>';
-      messagesBody.appendChild(row);
-    }
-
-    document.dispatchEvent(new CustomEvent('kaidra:dm-forward-send', {
-      detail: { chatId: chatId, article: article }
-    }));
+    getOrCreateConversation(friendId).then(function(conversationId) {
+      return sendMessage({ conversationId: conversationId, senderId: currentUserId, content: content })
+        .then(function() { return conversationId; });
+    }).then(function(conversationId) {
+      document.dispatchEvent(new CustomEvent('kaidra:open-conversation', {
+        detail: { conversationId: conversationId, otherUserId: friendId, otherUserName: name, otherUserAvatar: avatarUrl }
+      }));
+    }).catch(function(err) {
+      console.error('Failed to forward article:', err);
+    });
 
     closeForwardPicker();
   }

@@ -7,16 +7,17 @@ import {
   supabase,
   requireAuth,
   requireProfile,
-  getFollowCounts,
+  getFriendCount,
   getTotalLikesForUser,
   getUserPosts,
   getCurrentlyWatching,
   getCompatibilityScore,
   getStreak,
   isMutualFriend,
-  isFollowing,
-  followUser,
-  unfollowUser,
+  getFriendshipStatus,
+  sendFriendRequest,
+  cancelFriendRequest,
+  removeFriend,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -29,10 +30,9 @@ const bioEl = document.getElementById('profile-bio');
 const streakBadgeEl = document.getElementById('streak-badge');
 const currentlyWatchingEl = document.getElementById('currently-watching-badge');
 const compatibilityEl = document.getElementById('compatibility-score');
-const followingStatEl = document.getElementById('stat-following');
-const followersStatEl = document.getElementById('stat-followers');
+const friendsStatEl = document.getElementById('stat-friends');
 const likesStatEl = document.getElementById('stat-likes');
-const followBtn = document.getElementById('follow-btn');
+const friendActionBtn = document.getElementById('friend-action-btn');
 const postsGrid = document.getElementById('profile-posts-grid');
 const postsEmptyState = document.getElementById('profile-posts-empty-state');
 
@@ -43,15 +43,14 @@ function formatCount(n) {
 
 function buildPostTile(post) {
   const tile = document.createElement('div');
-  tile.className = 'aspect-square bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative group cursor-pointer';
   tile.dataset.postId = post.id;
 
   const badge = post.post_type === 'sotd' ? '🎵 SOTD' : post.post_type === 'text_only' ? '📝' : '❤️';
   const mediaHtml = post.media_url
-    ? `<img src="${post.media_url}" alt="Post" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />`
-    : `<div class="w-full h-full flex items-center justify-center p-3 text-center text-[11px] text-slate-300 bg-slate-800">${post.caption ?? ''}</div>`;
+    ? `<img src="${post.media_url}" alt="Post" />`
+    : `<div class="post-tile-text">${post.caption ?? ''}</div>`;
 
-  tile.innerHTML = `${mediaHtml}<span class="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1.5 py-0.5 rounded text-white">${badge}</span>`;
+  tile.innerHTML = `${mediaHtml}<span>${badge}</span>`;
   return tile;
 }
 
@@ -93,22 +92,21 @@ async function renderHeader() {
   }
 
   // Stats
-  const [{ following, followers }, likes] = await Promise.all([
-    getFollowCounts(profileUserId),
+  const [friendCount, likes] = await Promise.all([
+    getFriendCount(profileUserId),
     getTotalLikesForUser(profileUserId),
   ]);
-  if (followingStatEl) followingStatEl.textContent = formatCount(following);
-  if (followersStatEl) followersStatEl.textContent = formatCount(followers);
+  if (friendsStatEl) friendsStatEl.textContent = formatCount(friendCount);
   if (likesStatEl) likesStatEl.textContent = formatCount(likes);
 
   if (isOwnProfile) {
     // Compatibility score and streak don't apply to your own profile;
-    // follow button doesn't either.
+    // the friend-action button doesn't either.
     compatibilityEl?.classList.add('hidden');
     streakBadgeEl?.classList.add('hidden');
-    followBtn?.classList.add('hidden');
+    friendActionBtn?.classList.add('hidden');
   } else {
-    followBtn?.classList.remove('hidden');
+    friendActionBtn?.classList.remove('hidden');
     const mutual = await isMutualFriend(currentUserId, profileUserId);
 
     if (mutual) {
@@ -137,36 +135,38 @@ async function renderHeader() {
       streakBadgeEl?.classList.add('hidden');
     }
 
-    const alreadyFollowing = await isFollowing(currentUserId, profileUserId);
-    setFollowButtonState(alreadyFollowing);
+    const status = await getFriendshipStatus(currentUserId, profileUserId);
+    setFriendActionState(status);
   }
 }
 
-function setFollowButtonState(following) {
-  if (!followBtn) return;
-  followBtn.textContent = following ? 'Following' : 'Follow User';
-  followBtn.classList.toggle('from-violet-600', !following);
-  followBtn.classList.toggle('to-rose-500', !following);
-  followBtn.classList.toggle('bg-slate-800', following);
-  followBtn.classList.toggle('bg-gradient-to-r', !following);
+function setFriendActionState(status) {
+  if (!friendActionBtn) return;
+  friendActionBtn.dataset.state = status;
+  const labels = { none: 'Add Friend', pending_sent: 'Requested', pending_received: 'Respond in Friends tab', friends: 'Friends' };
+  friendActionBtn.textContent = labels[status] || 'Add Friend';
+  friendActionBtn.disabled = status === 'pending_received';
+  friendActionBtn.classList.toggle('is-active-state', status === 'none');
 }
 
-followBtn?.addEventListener('click', async () => {
-  const currentlyFollowing = followBtn.textContent.trim() === 'Following';
-  followBtn.disabled = true;
+friendActionBtn?.addEventListener('click', async () => {
+  const state = friendActionBtn.dataset.state;
+  friendActionBtn.disabled = true;
   try {
-    if (currentlyFollowing) {
-      await unfollowUser(currentUserId, profileUserId);
-      setFollowButtonState(false);
-    } else {
-      await followUser(currentUserId, profileUserId);
-      setFollowButtonState(true);
+    if (state === 'none') {
+      await sendFriendRequest(currentUserId, profileUserId);
+      setFriendActionState(await getFriendshipStatus(currentUserId, profileUserId));
+    } else if (state === 'pending_sent') {
+      await cancelFriendRequest(currentUserId, profileUserId);
+      setFriendActionState('none');
+    } else if (state === 'friends') {
+      await removeFriend(currentUserId, profileUserId);
+      setFriendActionState('none');
     }
-    const { following, followers } = await getFollowCounts(profileUserId);
-    if (followingStatEl) followingStatEl.textContent = formatCount(following);
-    if (followersStatEl) followersStatEl.textContent = formatCount(followers);
+    const friendCount = await getFriendCount(profileUserId);
+    if (friendsStatEl) friendsStatEl.textContent = formatCount(friendCount);
   } finally {
-    followBtn.disabled = false;
+    friendActionBtn.disabled = false;
   }
 });
 

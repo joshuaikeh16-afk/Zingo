@@ -150,6 +150,65 @@
 .ep-counter span { font-size: 11px; color: var(--ink-soft); }
 .ep-val { color: var(--ink); font-weight: 700; }
 
+.watchlist-section-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 4px 0 8px;
+}
+
+.recommended-rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.recommended-rail::-webkit-scrollbar { display: none; }
+
+.recommended-card {
+  flex-shrink: 0;
+  width: 108px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--hairline);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.recommended-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
+
+.recommended-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 7px 8px 4px;
+  line-height: 1.3;
+  min-height: 2.4em;
+}
+
+.recommended-add-btn {
+  width: calc(100% - 14px);
+  margin: 0 7px 7px;
+  padding: 5px 0;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--indigo);
+  background: var(--indigo-soft);
+  color: var(--indigo);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.watchlist-loading,
+.watchlist-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
 .ep-btn {
   padding: 4px 9px;
   border-radius: var(--radius-pill);

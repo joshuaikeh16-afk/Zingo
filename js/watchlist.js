@@ -1,28 +1,90 @@
 /* ==========================================================================
    Kaidra — Watchlist Tab Logic
-   Handles: AniList search, add-to-list, status filtering, episode progress.
-
-   This file only touches the DOM + AniList's public GraphQL API. It does
-   NOT talk to Supabase — persistence is left to hook points marked below
-   so it can be wired into your data layer.
+   Real persistence via user_watchlist (add, episode progress, status),
+   trending recommendations so browsing doesn't require searching first,
+   and AniList list import.
    ========================================================================== */
 
-document.addEventListener('DOMContentLoaded', function () {
+import {
+  supabase,
+  requireAuth,
+  addToWatchlist,
+  updateWatchlistProgress,
+  getUserWatchlist,
+  getTrendingAnime,
+  importAniListByUsername,
+} from './supabase-client.js';
 
-  var ANILIST_ENDPOINT = 'https://graphql.anilist.co';
+document.addEventListener('DOMContentLoaded', async function () {
 
-  var searchInput = document.getElementById('anilist-search-input');
-  var resultsBox = document.getElementById('anilist-results');
-  var cardsContainer = document.getElementById('watchlist-cards-container');
+  const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
 
-  var searchDebounceTimer = null;
-  var activeStatus = 'watching';
+  const searchInput = document.getElementById('anilist-search-input');
+  const resultsBox = document.getElementById('anilist-results');
+  const cardsContainer = document.getElementById('watchlist-cards-container');
+  const recommendedRail = document.getElementById('watchlist-recommended-rail');
+
+  let searchDebounceTimer = null;
+  let activeStatus = 'watching';
+  let currentUserId = null;
+  let watchlistCache = [];
+
+  const session = await requireAuth();
+  if (!session) return;
+  currentUserId = session.user.id;
+
+  // ------------------------------------------------------------------
+  // LOAD REAL WATCHLIST
+  // ------------------------------------------------------------------
+
+  function renderCard(entry) {
+    if (!cardsContainer) return;
+
+    const existing = cardsContainer.querySelector('[data-anime-id="' + entry.animeId + '"]');
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.className = 'anime-card';
+    card.setAttribute('data-anime-id', entry.animeId);
+    card.setAttribute('data-status', entry.status);
+
+    const current = entry.progress || 0;
+    const total = entry.totalEpisodes ? '/' + entry.totalEpisodes : '';
+
+    card.innerHTML =
+      '<img class="anime-poster" src="' + (entry.coverUrl || '') + '" alt="Poster" />' +
+      '<div class="anime-info">' +
+        '<div class="anime-title">' + entry.title + '</div>' +
+        '<div class="ep-counter">' +
+          '<span>Ep <strong class="ep-val">' + current + '</strong>' + total + '</span>' +
+          '<button class="ep-btn" data-action="increment-ep" title="Quick Increment">+1</button>' +
+        '</div>' +
+      '</div>';
+
+    cardsContainer.appendChild(card);
+    applyStatusFilter(activeStatus);
+  }
+
+  async function loadWatchlist() {
+    if (!cardsContainer) return;
+    cardsContainer.innerHTML = '<div class="watchlist-loading">Loading your list…</div>';
+    watchlistCache = await getUserWatchlist(currentUserId);
+
+    if (watchlistCache.length === 0) {
+      cardsContainer.innerHTML = '<div class="watchlist-empty">Nothing here yet — search above or add something from Recommended.</div>';
+      return;
+    }
+
+    cardsContainer.innerHTML = '';
+    watchlistCache.forEach(renderCard);
+    applyStatusFilter(activeStatus);
+  }
 
   // ------------------------------------------------------------------
   // ANILIST SEARCH
   // ------------------------------------------------------------------
 
-  var SEARCH_QUERY = 'query ($search: String) { Page(page: 1, perPage: 8) { media(search: $search, type: ANIME) { id title { romaji english } coverImage { large medium } episodes status } } }';
+  const SEARCH_QUERY = 'query ($search: String) { Page(page: 1, perPage: 8) { media(search: $search, type: ANIME) { id title { romaji english } coverImage { large medium } episodes status } } }';
 
   function searchAniList(term) {
     return fetch(ANILIST_ENDPOINT, {
@@ -30,8 +92,8 @@ document.addEventListener('DOMContentLoaded', function () {
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ query: SEARCH_QUERY, variables: { search: term } })
     })
-      .then(function (res) { return res.json(); })
-      .then(function (json) {
+      .then((res) => res.json())
+      .then((json) => {
         if (json.errors) throw new Error(json.errors[0].message);
         return json.data.Page.media;
       });
@@ -47,9 +109,9 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    mediaList.forEach(function (media) {
-      var title = media.title.english || media.title.romaji;
-      var row = document.createElement('div');
+    mediaList.forEach((media) => {
+      const title = media.title.english || media.title.romaji;
+      const row = document.createElement('div');
       row.className = 'search-result-row';
       row.setAttribute('data-anime-id', media.id);
       row.innerHTML =
@@ -60,8 +122,13 @@ document.addEventListener('DOMContentLoaded', function () {
         '</div>' +
         '<button class="result-add-btn" type="button">Add</button>';
 
-      row.querySelector('.result-add-btn').addEventListener('click', function () {
-        requestAddToWatchlist(media);
+      row.querySelector('.result-add-btn').addEventListener('click', () => {
+        addAnimeToList({
+          animeId: media.id,
+          title,
+          coverUrl: media.coverImage.large,
+          totalEpisodes: media.episodes || null,
+        });
       });
 
       resultsBox.appendChild(row);
@@ -71,8 +138,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   if (searchInput) {
-    searchInput.addEventListener('input', function () {
-      var term = searchInput.value.trim();
+    searchInput.addEventListener('input', () => {
+      const term = searchInput.value.trim();
       clearTimeout(searchDebounceTimer);
 
       if (term.length < 2) {
@@ -80,10 +147,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      searchDebounceTimer = setTimeout(function () {
+      searchDebounceTimer = setTimeout(() => {
         searchAniList(term)
           .then(renderResults)
-          .catch(function (err) {
+          .catch((err) => {
             console.error('AniList search failed:', err);
             if (resultsBox) {
               resultsBox.innerHTML = '<div class="search-result-empty">Search failed — try again</div>';
@@ -93,8 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }, 350);
     });
 
-    // Close the dropdown on outside click
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', (e) => {
       if (resultsBox && !resultsBox.contains(e.target) && e.target !== searchInput) {
         resultsBox.style.display = 'none';
       }
@@ -102,122 +168,113 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ------------------------------------------------------------------
-  // ADD TO WATCHLIST
-  //
-  // HOOK: listen for 'kaidra:watchlist-add-request' in your Supabase
-  // logic, insert the row, then call window.KaidraWatchlist.addCard(...)
-  // once it succeeds so the UI reflects the confirmed state.
+  // ADD TO WATCHLIST — real Supabase insert, then render for real.
   // ------------------------------------------------------------------
 
-  function requestAddToWatchlist(media) {
-    document.dispatchEvent(new CustomEvent('kaidra:watchlist-add-request', {
-      detail: {
-        animeId: media.id,
-        title: media.title.english || media.title.romaji,
-        coverUrl: media.coverImage.large,
-        totalEpisodes: media.episodes || null,
-        status: activeStatus
-      }
-    }));
+  async function addAnimeToList({ animeId, title, coverUrl, totalEpisodes }) {
+    try {
+      await addToWatchlist(currentUserId, animeId, activeStatus, totalEpisodes);
+      renderCard({ animeId, title, coverUrl, totalEpisodes, progress: 0, status: activeStatus });
+    } catch (err) {
+      console.error('Failed to add to watchlist:', err);
+    }
 
     if (resultsBox) resultsBox.style.display = 'none';
     if (searchInput) searchInput.value = '';
   }
 
-  function addCard(entry) {
-    // entry: { animeId, title, coverUrl, totalEpisodes, currentEpisode, status }
-    if (!cardsContainer) return;
-
-    var existing = cardsContainer.querySelector('[data-anime-id="' + entry.animeId + '"]');
-    if (existing) existing.remove();
-
-    var card = document.createElement('div');
-    card.className = 'anime-card';
-    card.setAttribute('data-anime-id', entry.animeId);
-    card.setAttribute('data-status', entry.status);
-
-    var current = entry.currentEpisode || 0;
-    var total = entry.totalEpisodes ? '/' + entry.totalEpisodes : '';
-
-    card.innerHTML =
-      '<img class="anime-poster" src="' + entry.coverUrl + '" alt="Poster" />' +
-      '<div class="anime-info">' +
-        '<div class="anime-title">' + entry.title + '</div>' +
-        '<div class="ep-counter">' +
-          '<span>Ep <strong class="ep-val">' + current + '</strong>' + total + '</span>' +
-          '<button class="ep-btn" data-action="increment-ep" title="Quick Increment">+1</button>' +
-        '</div>' +
-      '</div>';
-
-    bindEpisodeButton(card);
-    cardsContainer.appendChild(card);
-    applyStatusFilter(activeStatus);
-  }
-
   // ------------------------------------------------------------------
   // STATUS TAB FILTERING
-  // Listens for 'kaidra:watchlist-filter-change', already dispatched
-  // by app.js whenever a status pill is clicked.
   // ------------------------------------------------------------------
 
   function applyStatusFilter(status) {
     activeStatus = status;
     if (!cardsContainer) return;
-
-    cardsContainer.querySelectorAll('.anime-card').forEach(function (card) {
-      var cardStatus = card.getAttribute('data-status') || 'watching';
+    cardsContainer.querySelectorAll('.anime-card').forEach((card) => {
+      const cardStatus = card.getAttribute('data-status') || 'watching';
       card.style.display = (cardStatus === status) ? '' : 'none';
     });
   }
 
-  document.addEventListener('kaidra:watchlist-filter-change', function (e) {
+  document.addEventListener('kaidra:watchlist-filter-change', (e) => {
     applyStatusFilter(e.detail.status);
   });
 
   // ------------------------------------------------------------------
-  // EPISODE PROGRESS
-  //
-  // HOOK: dispatches 'kaidra:watchlist-episode-update' with the new
-  // count so your Supabase logic can persist it. The UI updates
-  // optimistically and does not wait for confirmation.
+  // EPISODE PROGRESS — real persistence, event delegation so it works
+  // for cards added after initial load too.
   // ------------------------------------------------------------------
 
-  function bindEpisodeButton(card) {
-    var btn = card.querySelector('[data-action="increment-ep"]');
+  cardsContainer?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="increment-ep"]');
     if (!btn) return;
 
-    btn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      var valEl = card.querySelector('.ep-val');
-      if (!valEl) return;
+    const card = btn.closest('.anime-card');
+    const valEl = card?.querySelector('.ep-val');
+    const animeId = card?.getAttribute('data-anime-id');
+    if (!valEl || !animeId) return;
 
-      var current = parseInt(valEl.textContent, 10) || 0;
-      var next = current + 1;
-      valEl.textContent = next;
+    const next = (parseInt(valEl.textContent, 10) || 0) + 1;
+    valEl.textContent = next;
 
-      document.dispatchEvent(new CustomEvent('kaidra:watchlist-episode-update', {
-        detail: {
-          animeId: card.getAttribute('data-anime-id'),
-          newEpisodeCount: next
-        }
-      }));
+    updateWatchlistProgress(currentUserId, animeId, next).catch((err) => {
+      console.error('Failed to save episode progress:', err);
+      valEl.textContent = next - 1; // revert on failure
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // RECOMMENDED / TRENDING — browsable without searching first.
+  // ------------------------------------------------------------------
+
+  async function loadRecommended() {
+    if (!recommendedRail) return;
+    const trending = await getTrendingAnime(12);
+    if (trending.length === 0) {
+      recommendedRail.innerHTML = '';
+      return;
+    }
+
+    recommendedRail.innerHTML = trending.map((anime) => `
+      <div class="recommended-card" data-anime-id="${anime.animeId}">
+        <img class="recommended-poster" src="${anime.coverUrl || ''}" alt="${anime.title}" />
+        <div class="recommended-title">${anime.title}</div>
+        <button class="recommended-add-btn" type="button">+ Add</button>
+      </div>
+    `).join('');
+
+    recommendedRail.querySelectorAll('.recommended-add-btn').forEach((btn, i) => {
+      btn.addEventListener('click', () => addAnimeToList(trending[i]));
     });
   }
 
-  // Bind buttons on any cards already in the DOM at load (e.g. seeded/demo cards)
-  if (cardsContainer) {
-    cardsContainer.querySelectorAll('.anime-card').forEach(bindEpisodeButton);
-    applyStatusFilter(activeStatus);
-  }
-
   // ------------------------------------------------------------------
-  // PUBLIC HOOKS — call these from your Supabase logic once a request
-  // (add / episode update / import) resolves successfully.
+  // ANILIST IMPORT — wired from the Settings panel's "Import External
+  // Watchlist" item (app.js's tab router doesn't own this; it's a
+  // self-contained flow here since it needs currentUserId).
   // ------------------------------------------------------------------
 
-  window.KaidraWatchlist = {
-    addCard: addCard,
-    applyStatusFilter: applyStatusFilter
-  };
+  const importBtn = document.getElementById('btn-import-list');
+  importBtn?.addEventListener('click', async () => {
+    const username = window.prompt('Enter your AniList username to import your list:');
+    if (!username) return;
 
+    const badge = importBtn.querySelector('.action-badge');
+    const originalLabel = badge ? badge.textContent : null;
+    if (badge) badge.textContent = 'Importing…';
+
+    try {
+      const result = await importAniListByUsername(currentUserId, username.trim());
+      if (badge) badge.textContent = `Imported ${result.imported}`;
+      await loadWatchlist();
+    } catch (err) {
+      console.error('AniList import failed:', err);
+      if (badge) badge.textContent = 'Failed';
+    } finally {
+      setTimeout(() => { if (badge) badge.textContent = originalLabel; }, 2500);
+    }
+  });
+
+  await loadWatchlist();
+  await loadRecommended();
 });

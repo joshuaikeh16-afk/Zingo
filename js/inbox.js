@@ -16,6 +16,8 @@ import {
   recordFriendInteraction,
   getActiveSotdDetails,
   markSotdViewed,
+  searchUsers,
+  getOrCreateConversation,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -41,8 +43,7 @@ function formatRelativeTime(isoString) {
 
 function buildConversationRow(convo) {
   const row = document.createElement('div');
-  row.className =
-    'conversation-row glass-panel p-3.5 rounded-2xl border border-slate-800 hover:border-violet-500/40 transition-all cursor-pointer flex items-center gap-3.5';
+  row.className = 'conversation-row chat-row';
   row.dataset.conversationId = convo.conversationId;
   row.dataset.otherUserId = convo.otherUserId;
 
@@ -52,19 +53,19 @@ function buildConversationRow(convo) {
   const time = formatRelativeTime(convo.lastMessage?.created_at);
 
   row.innerHTML = `
-    <div class="relative">
-      <img src="${avatarUrl}" alt="${name}" class="conversation-avatar w-12 h-12 rounded-full object-cover border border-slate-700" />
-      ${convo.hasActiveSotd ? '<span class="sotd-indicator absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-violet-600 text-[9px] text-white flex items-center justify-center border border-slate-900">🎵</span>' : ''}
-      ${convo.streak > 0 ? `<span class="streak-badge absolute -top-1 -left-1 px-1 py-0.2 bg-amber-500 text-[9px] font-bold text-slate-950 rounded-full flex items-center gap-0.5 shadow-sm">🔥 ${convo.streak}</span>` : ''}
+    <div class="conversation-avatar-wrap">
+      <img src="${avatarUrl}" alt="${name}" class="avatar" />
+      ${convo.hasActiveSotd ? '<span class="sotd-indicator">🎵</span>' : ''}
+      ${convo.streak > 0 ? `<span class="streak-badge-mini">🔥 ${convo.streak}</span>` : ''}
     </div>
-    <div class="flex-1 min-w-0">
-      <div class="flex items-center justify-between">
-        <h4 class="conversation-username text-sm font-semibold text-white truncate">${name}</h4>
-        <span class="text-[10px] text-slate-500">${time}</span>
+    <div class="chat-meta">
+      <div class="chat-name">
+        <span>${name}</span>
+        <span class="chat-time">${time}</span>
       </div>
-      <p class="conversation-preview text-xs text-slate-400 truncate mt-0.5">${preview}</p>
+      <p class="chat-preview">${preview}</p>
     </div>
-    ${convo.unreadCount > 0 ? `<span class="conversation-unread-badge bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">${convo.unreadCount}</span>` : ''}
+    ${convo.unreadCount > 0 ? `<span class="conversation-unread-badge">${convo.unreadCount}</span>` : ''}
   `;
 
   row.addEventListener('click', (e) => {
@@ -75,7 +76,7 @@ function buildConversationRow(convo) {
       openSotdListenModal(convo.otherUserId, name);
       return;
     }
-    openThread(convo.conversationId, convo.otherUserId, name);
+    openThread(convo.conversationId, convo.otherUserId, name, avatarUrl);
   });
   return row;
 }
@@ -92,7 +93,7 @@ async function openSotdListenModal(senderId, senderName) {
   const artEl = modal.querySelector('#sotd-listen-album-art');
   const embedContainer = modal.querySelector('#sotd-listen-embed-container');
   const openBtn = modal.querySelector('#sotd-listen-open-spotify-btn');
-  const sharedByEl = modal.querySelector('p.text-xs.text-slate-400');
+  const sharedByEl = modal.querySelector('#sotd-listen-shared-by');
 
   if (nameEl) nameEl.textContent = sotd.track_name;
   if (artistEl) artistEl.textContent = sotd.artist_name;
@@ -132,41 +133,35 @@ function buildMessageBubble(message) {
   bubble.dataset.messageType = message.message_type;
 
   if (message.message_type === 'sticker') {
-    bubble.className = `message-bubble ${isMine ? 'self-end' : 'self-start'} text-3xl p-1`;
+    bubble.className = `message-row ${isMine ? 'outgoing' : 'incoming'} sticker-bubble`;
     bubble.textContent = message.content;
     return bubble;
   }
 
   if (message.message_type === 'image') {
-    bubble.className = isMine
-      ? 'message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-1.5 max-w-[80%] space-y-1 relative cursor-pointer'
-      : 'message-bubble self-start bg-slate-800/90 text-slate-200 rounded-2xl rounded-tl-xs p-1.5 max-w-[80%] space-y-1 relative cursor-pointer';
+    bubble.className = `message-row ${isMine ? 'outgoing' : 'incoming'}`;
     const time = new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     bubble.innerHTML = `
-      <img src="${message.media_url}" alt="Shared image" class="w-full h-36 object-cover rounded-xl" />
-      <span class="text-[9px] ${isMine ? 'text-violet-200' : 'text-slate-400'} px-1 py-0.5 block text-right">${time}</span>
+      <div class="message-bubble message-bubble-image">
+        <img src="${message.media_url}" alt="Shared image" />
+      </div>
+      <span class="message-time">${time}</span>
     `;
     return bubble;
   }
 
   if (message.message_type === 'voice_note') {
-    bubble.className = isMine
-      ? 'message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-2.5 max-w-[80%] space-y-1'
-      : 'message-bubble self-start bg-slate-800/90 text-slate-200 rounded-2xl rounded-tl-xs p-2.5 max-w-[80%] space-y-1';
+    bubble.className = `message-row ${isMine ? 'outgoing' : 'incoming'}`;
     const duration = message.media_duration_seconds ?? 0;
     const durationLabel = `0:${String(duration).padStart(2, '0')}`;
-    const btnClasses = isMine ? 'bg-white/20 hover:bg-white/30' : 'bg-violet-600 hover:bg-violet-500';
-    const barBg = isMine ? 'bg-white/30' : 'bg-slate-700';
-    const barFill = isMine ? 'bg-white' : 'bg-violet-400';
-    const timeColor = isMine ? 'text-violet-200' : 'text-slate-400';
     bubble.innerHTML = `
-      <div class="flex items-center gap-2.5">
-        <button type="button" class="voice-play-btn w-8 h-8 rounded-full ${btnClasses} text-white flex items-center justify-center shadow-md cursor-pointer flex-shrink-0">
-          <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <div class="message-bubble voice-note-bubble">
+        <button type="button" class="voice-play-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
-        <div class="flex-1 space-y-1">
-          <div class="h-1.5 ${barBg} rounded-full overflow-hidden w-28"><div class="h-full ${barFill} w-0 rounded-full"></div></div>
-          <div class="flex items-center justify-between text-[9px] ${timeColor}"><span>0:00</span><span>${durationLabel}</span></div>
+        <div class="voice-note-track">
+          <div class="voice-note-bar"><div class="voice-note-fill"></div></div>
+          <div class="voice-note-times"><span>0:00</span><span>${durationLabel}</span></div>
         </div>
       </div>
     `;
@@ -178,17 +173,15 @@ function buildMessageBubble(message) {
     return bubble;
   }
 
-  bubble.className = isMine
-    ? 'message-bubble self-end bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl rounded-tr-xs p-3 text-xs max-w-[85%] space-y-2'
-    : 'message-bubble self-start bg-slate-800/90 text-slate-200 rounded-2xl rounded-tl-xs p-3 text-xs max-w-[80%] space-y-1 relative';
-
-  const p = document.createElement('p');
-  p.textContent = message.content || '';
-  bubble.appendChild(p);
+  bubble.className = `message-row ${isMine ? 'outgoing' : 'incoming'}`;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message-bubble';
+  wrapper.textContent = message.content || '';
+  bubble.appendChild(wrapper);
   return bubble;
 }
 
-async function openThread(conversationId, otherUserId, otherUserName) {
+async function openThread(conversationId, otherUserId, otherUserName, otherUserAvatar) {
   if (activeChannel) {
     supabase.removeChannel(activeChannel);
     activeChannel = null;
@@ -197,8 +190,13 @@ async function openThread(conversationId, otherUserId, otherUserName) {
   openConversationId = conversationId;
   openOtherUserId = otherUserId;
 
-  const headerName = document.querySelector('#view-inbox h4.text-xs.font-semibold.text-white');
+  const headerName = document.getElementById('dm-active-name');
   if (headerName) headerName.textContent = otherUserName;
+
+  const headerAvatar = document.getElementById('dm-active-avatar');
+  if (headerAvatar) headerAvatar.src = otherUserAvatar || `https://placehold.co/80x80/1a1625/f2ede4?text=${otherUserName[0].toUpperCase()}`;
+
+  document.getElementById('chat-view-drawer')?.classList.add('is-active');
 
   if (!threadContainer) return;
   threadContainer.innerHTML = '';
@@ -264,11 +262,86 @@ messageInput?.addEventListener('keydown', (e) => {
     conversations.forEach((c) => conversationList?.appendChild(buildConversationRow(c)));
   }
 
-  if (conversations.length > 0) {
-    const first = conversations[0];
-    const name = first.profile?.display_name || first.profile?.username || 'Unknown';
-    openThread(first.conversationId, first.otherUserId, name);
-  } else if (threadContainer) {
-    threadContainer.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">Follow a mutual friend to start chatting.</p>';
-  }
+  // Note: does NOT auto-open the first conversation on load. The
+  // thread view is a full-screen overlay here (not an inline split
+  // view), so auto-opening would hijack the screen on every page load
+  // regardless of which tab is active. Left closed until a row is tapped.
 })();
+
+document.addEventListener('kaidra:open-conversation', async (e) => {
+  const { conversationId, otherUserId, otherUserName, otherUserAvatar } = e.detail;
+  await openThread(conversationId, otherUserId, otherUserName, otherUserAvatar);
+  await renderConversationList();
+});
+
+// ---------------------------------------------------------------------
+// New Chat: search users, start (or resume) a conversation, open it.
+// ---------------------------------------------------------------------
+
+const newChatBtn = document.getElementById('new-chat-btn');
+const newChatModal = document.getElementById('new-chat-modal');
+const newChatInput = document.getElementById('new-chat-search-input');
+const newChatResults = document.getElementById('new-chat-results');
+const newChatCloseBtn = document.getElementById('new-chat-close-btn');
+
+let newChatDebounceTimer = null;
+
+newChatBtn?.addEventListener('click', () => {
+  newChatModal?.classList.remove('hidden');
+  newChatInput?.focus();
+});
+
+newChatCloseBtn?.addEventListener('click', () => {
+  newChatModal?.classList.add('hidden');
+  if (newChatInput) newChatInput.value = '';
+  if (newChatResults) newChatResults.innerHTML = '';
+});
+
+newChatInput?.addEventListener('input', () => {
+  clearTimeout(newChatDebounceTimer);
+  const query = newChatInput.value;
+  newChatDebounceTimer = setTimeout(() => runNewChatSearch(query), 350);
+});
+
+async function runNewChatSearch(query) {
+  if (!newChatResults) return;
+  if (!query || query.trim().length < 2) {
+    newChatResults.innerHTML = '<p class="find-friends-hint">Type at least 2 characters to search.</p>';
+    return;
+  }
+
+  const results = await searchUsers(query, currentUserId);
+  newChatResults.innerHTML = '';
+
+  if (results.length === 0) {
+    newChatResults.innerHTML = '<p class="find-friends-hint">No users found.</p>';
+    return;
+  }
+
+  results.forEach((user) => {
+    const row = document.createElement('div');
+    row.className = 'find-friend-result-row';
+    const name = user.display_name || user.username;
+    const avatarUrl = user.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
+
+    row.innerHTML = `
+      <img src="${avatarUrl}" alt="${name}" />
+      <div class="find-friend-result-info">
+        <p class="find-friend-result-name">${name}</p>
+        <p class="find-friend-result-handle">@${user.username}</p>
+      </div>
+      <button type="button" class="friend-request-btn is-active-state">Chat</button>
+    `;
+
+    row.querySelector('button').addEventListener('click', async () => {
+      const conversationId = await getOrCreateConversation(user.id);
+      newChatModal?.classList.add('hidden');
+      if (newChatInput) newChatInput.value = '';
+      if (newChatResults) newChatResults.innerHTML = '';
+      await openThread(conversationId, user.id, name, avatarUrl);
+      await renderConversationList();
+    });
+
+    newChatResults.appendChild(row);
+  });
+}

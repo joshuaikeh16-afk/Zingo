@@ -1,0 +1,213 @@
+/* ==========================================================================
+   Kaidra — auth.css
+   Sign In / Sign Up (two separate pages, same visual language).
+   ========================================================================== */
+
+body.auth-body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.auth-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 18px 8px;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  color: var(--ink);
+}
+
+.auth-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 18px;
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.auth-card {
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-stamp);
+  padding: 28px 24px;
+}
+
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1.5px dashed var(--indigo);
+  background: var(--indigo-soft);
+  color: var(--indigo);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.auth-subtitle {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 22px;
+}
+
+.auth-error-message {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--vermillion-soft);
+  border: 1.5px solid var(--vermillion);
+  color: var(--vermillion);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.auth-loading {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--indigo-soft);
+  color: var(--indigo);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.auth-field { margin-bottom: 16px; }
+
+.auth-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.auth-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.auth-field-row a {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--indigo);
+}
+
+.auth-input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--hairline);
+  background: var(--paper);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+}
+
+.auth-input::placeholder { color: var(--ink-faint); }
+.auth-input:focus { border-color: var(--indigo); }
+
+.auth-submit-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.auth-submit-btn:disabled { opacity: 0.6; }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.auth-divider span {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.auth-social-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--hairline);
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.auth-social-btn svg { width: 16px; height: 16px; }
+
+.auth-switch-link {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.auth-switch-link a {
+  color: var(--indigo);
+  font-weight: 700;
+}
+
+.auth-footer {
+  text-align: center;
+  padding: 16px 18px;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}

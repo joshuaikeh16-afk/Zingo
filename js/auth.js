@@ -1,50 +1,34 @@
-// Auth page logic. This file expects a layout (built separately, e.g.
-// in Google AI Studio) that includes the following element IDs:
+// Auth page logic. Sign In (auth.html) and Sign Up (signup.html) are now
+// two separate pages, not a single page with a toggle. Each sets
+// data-auth-mode="signin" or "signup" on <body> -- this file reads that
+// once and never changes it. Expects on the page:
 //
 //   #email-input          <input type="email">
 //   #password-input       <input type="password">
 //   #auth-submit-btn      <button> — triggers sign in or sign up
-//   #auth-toggle-mode     <a> or <button> — switches between sign in / sign up
 //   #auth-error-message   <p> or <div> — shown on failure, hidden otherwise
 //   #auth-loading         optional — shown while a request is in flight
-//
-// The layout does not need to know anything about Supabase — this file
-// owns all of that. It just needs those IDs to exist somewhere on the
-// page for this script to attach to.
 
 import { supabase } from './supabase-client.js';
 
-let mode = 'signin'; // 'signin' | 'signup'
+const mode = document.body.dataset.authMode === 'signup' ? 'signup' : 'signin';
 
 const emailInput = document.getElementById('email-input');
 const passwordInput = document.getElementById('password-input');
 const submitBtn = document.getElementById('auth-submit-btn');
-const toggleBtn = document.getElementById('auth-toggle-mode');
 const errorEl = document.getElementById('auth-error-message');
 const loadingEl = document.getElementById('auth-loading');
 
 function setError(message) {
   if (!errorEl) return;
   errorEl.textContent = message || '';
-  errorEl.style.display = message ? 'block' : 'none';
+  errorEl.classList.toggle('hidden', !message);
 }
 
 function setLoading(isLoading) {
-  if (loadingEl) loadingEl.style.display = isLoading ? 'block' : 'none';
+  if (loadingEl) loadingEl.classList.toggle('hidden', !isLoading);
   if (submitBtn) submitBtn.disabled = isLoading;
 }
-
-toggleBtn?.addEventListener('click', (e) => {
-  e.preventDefault();
-  mode = mode === 'signin' ? 'signup' : 'signin';
-  setError(null);
-  if (submitBtn) {
-    submitBtn.textContent = mode === 'signin' ? 'Sign In' : 'Sign Up';
-  }
-  // Fires a custom event so the layout can react (e.g. swap a heading)
-  // without this file needing to know the layout's exact structure.
-  document.dispatchEvent(new CustomEvent('kaidra:auth-mode-changed', { detail: { mode } }));
-});
 
 submitBtn?.addEventListener('click', async (e) => {
   e.preventDefault();
@@ -69,8 +53,9 @@ submitBtn?.addEventListener('click', async (e) => {
       return;
     }
 
-    // On success, go straight to onboarding -- it will redirect on to
-    // the main app itself if a profile already exists (returning user).
+    // On success, go straight to onboarding -- it shows the
+    // personalization step on every sign-in, prefilled for returning
+    // users (see js/onboarding.js).
     window.location.href = '/onboarding.html';
   } catch (err) {
     setError('Something went wrong. Try again.');

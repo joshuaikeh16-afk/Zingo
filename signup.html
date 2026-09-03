@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign In — Kaidra</title>
+    <title>Sign Up — Kaidra</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/main.css" />
     <link rel="stylesheet" href="/css/auth.css" />
   </head>
-  <body class="auth-body" data-auth-mode="signin">
+  <body class="auth-body" data-auth-mode="signup">
 
     <header class="auth-header">
       <div class="auth-brand">
@@ -26,11 +26,11 @@
 
         <span class="auth-badge">Anime & Social Experience</span>
 
-        <h1 class="auth-title">Welcome Back</h1>
-        <p class="auth-subtitle">Sign in to access your feed &amp; friends</p>
+        <h1 class="auth-title">Create Account</h1>
+        <p class="auth-subtitle">Join Kaidra — anime, news &amp; friends in one place</p>
 
         <div id="auth-error-message" class="auth-error-message hidden" role="alert"></div>
-        <div id="auth-loading" class="auth-loading hidden">Authenticating…</div>
+        <div id="auth-loading" class="auth-loading hidden">Creating account…</div>
 
         <form onsubmit="return false;">
           <div class="auth-field">
@@ -39,14 +39,11 @@
           </div>
 
           <div class="auth-field">
-            <div class="auth-field-row">
-              <label for="password-input" style="margin-bottom:0;">Password</label>
-              <a href="#">Forgot?</a>
-            </div>
-            <input type="password" id="password-input" name="password" placeholder="••••••••" required class="auth-input" />
+            <label for="password-input">Password</label>
+            <input type="password" id="password-input" name="password" placeholder="At least 6 characters" required class="auth-input" />
           </div>
 
-          <button id="auth-submit-btn" type="submit" class="auth-submit-btn">Sign In</button>
+          <button id="auth-submit-btn" type="submit" class="auth-submit-btn">Sign Up</button>
         </form>
 
         <div class="auth-divider"><span>or continue with</span></div>
@@ -62,7 +59,7 @@
           </button>
         </div>
 
-        <p class="auth-switch-link">Don't have an account? <a href="/signup.html">Sign Up</a></p>
+        <p class="auth-switch-link">Already have an account? <a href="/auth.html">Sign In</a></p>
 
       </div>
     </main>

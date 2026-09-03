@@ -1,168 +1,257 @@
-/**
- * Kaidra Web - App Shell & Interactivity JS
- * Controls bottom navigation tab switching, compose modal, status viewer,
- * message thread interactions, and search handlers.
- */
+/* ==========================================================================
+   Kaidra — Core Application & Event Router
+   ========================================================================== */
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Navigation tabs -- Home removed entirely, Inbox (Chats) is the
-  // default/primary tab now, matching WhatsApp's own layout.
-  const navFriends = document.getElementById('nav-friends');
-  const navCompose = document.getElementById('nav-compose');
-  const navInbox = document.getElementById('nav-inbox');
-  const navProfile = document.getElementById('nav-profile');
+document.addEventListener('DOMContentLoaded', function() {
+  
+  var newsViewBtn = document.getElementById('news-view-btn');
+  var viewBtnLabel = document.getElementById('view-btn-label');
+  var currentView = 'grid'; 
+  var hasDefaultPreference = false;
 
-  // Views
-  const viewFriends = document.getElementById('view-friends');
-  const viewInbox = document.getElementById('view-inbox');
-  const viewProfile = document.getElementById('view-profile');
-  const viewDiscover = document.getElementById('view-discover');
+  // Update Gesture Button UI
+  function updateViewButtonState() {
+    if (hasDefaultPreference) {
+      newsViewBtn.classList.add('is-hidden');
+      return;
+    }
 
-  // Tab switching helper
-  function switchTab(targetViewId, activeNavBtn) {
-    const views = [viewFriends, viewInbox, viewProfile, viewDiscover];
-    views.forEach((v) => {
-      if (v) v.classList.add('hidden');
-    });
-
-    const targetView = document.getElementById(targetViewId);
-    if (targetView) targetView.classList.remove('hidden');
-
-    [navFriends, navInbox, navProfile].forEach((btn) => {
-      if (btn) {
-        btn.classList.remove('active', 'text-violet-400');
-        btn.classList.add('text-slate-400');
-      }
-    });
-
-    if (activeNavBtn) {
-      activeNavBtn.classList.add('active', 'text-violet-400');
-      activeNavBtn.classList.remove('text-slate-400');
+    newsViewBtn.classList.remove('is-hidden');
+    if (currentView === 'scroll') {
+      newsViewBtn.classList.add('active-scroll');
+      viewBtnLabel.textContent = 'Grid';
+    } else {
+      newsViewBtn.classList.remove('active-scroll');
+      viewBtnLabel.textContent = 'Scroll';
     }
   }
 
-  if (navFriends) navFriends.addEventListener('click', () => switchTab('view-friends', navFriends));
-  if (navInbox) navInbox.addEventListener('click', () => switchTab('view-inbox', navInbox));
-  if (navProfile) navProfile.addEventListener('click', () => switchTab('view-profile', navProfile));
+  // Toggle Mode on Header Button Tap
+  if (newsViewBtn) {
+    newsViewBtn.addEventListener('click', function() {
+      currentView = (currentView === 'grid') ? 'scroll' : 'grid';
+      updateViewButtonState();
 
-  // Top header Discover button toggle
-  const discoverHeaderBtn = document.getElementById('header-discover-btn');
-  if (discoverHeaderBtn) {
-    discoverHeaderBtn.addEventListener('click', () => {
-      switchTab('view-discover', null);
+      document.dispatchEvent(new CustomEvent('kaidra:news-view-change', { 
+        detail: { view: currentView } 
+      }));
     });
   }
 
-  // Compose Modal Toggle
-  const composeModal = document.getElementById('compose-modal');
-  const composeCloseBtn = document.getElementById('compose-close-btn');
-  const optionStatus = document.getElementById('compose-option-status');
-  const optionSotd = document.getElementById('compose-option-sotd');
-  const statusFlow = document.getElementById('compose-status-flow');
-  const sotdFlow = document.getElementById('compose-sotd-flow');
+  // Bottom Navigation Routing
+  document.querySelectorAll('#app-bottom-nav .nav-item').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#app-bottom-nav .nav-item').forEach(function(b) {
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      
+      var targetTab = btn.getAttribute('data-tab');
 
-  if (navCompose && composeModal) {
-    navCompose.addEventListener('click', () => {
-      composeModal.classList.remove('hidden');
-    });
-  }
-
-  if (composeCloseBtn && composeModal) {
-    composeCloseBtn.addEventListener('click', () => {
-      composeModal.classList.add('hidden');
-    });
-  }
-
-  // Compose Flow Option Switcher
-  if (optionStatus && optionSotd) {
-    optionStatus.addEventListener('click', () => {
-      optionStatus.classList.add('bg-violet-600', 'text-white');
-      optionStatus.classList.remove('bg-slate-800', 'text-slate-400');
-      optionSotd.classList.add('bg-slate-800', 'text-slate-400');
-      optionSotd.classList.remove('bg-violet-600', 'text-white');
-
-      if (statusFlow) statusFlow.classList.remove('hidden');
-      if (sotdFlow) sotdFlow.classList.add('hidden');
-    });
-
-    optionSotd.addEventListener('click', () => {
-      optionSotd.classList.add('bg-violet-600', 'text-white');
-      optionSotd.classList.remove('bg-slate-800', 'text-slate-400');
-      optionStatus.classList.add('bg-slate-800', 'text-slate-400');
-      optionStatus.classList.remove('bg-violet-600', 'text-white');
-
-      if (sotdFlow) sotdFlow.classList.remove('hidden');
-      if (statusFlow) statusFlow.classList.add('hidden');
-    });
-  }
-
-  // Status Viewer Modal
-  const statusModal = document.getElementById('status-viewer-modal');
-  const statusCloseBtn = document.getElementById('status-close-btn');
-  const friendAvatars = document.querySelectorAll('.friend-status-avatar');
-
-  // SOTD Listen Modal
-  const sotdListenModal = document.getElementById('sotd-listen-modal');
-  const sotdListenCloseBtn = document.getElementById('sotd-listen-close-btn');
-
-  friendAvatars.forEach((avatar) => {
-    avatar.addEventListener('click', (e) => {
-      // If user tapped on the SOTD indicator badge specifically, open SOTD modal
-      if (e.target.closest('.sotd-indicator')) {
-        e.stopPropagation();
-        if (sotdListenModal) sotdListenModal.classList.remove('hidden');
-        return;
+      if (targetTab === 'news' && !hasDefaultPreference) {
+        newsViewBtn.classList.remove('is-hidden');
+      } else {
+        newsViewBtn.classList.add('is-hidden');
       }
-      if (statusModal) statusModal.classList.remove('hidden');
-    });
-  });
 
-  if (statusCloseBtn && statusModal) {
-    statusCloseBtn.addEventListener('click', () => {
-      statusModal.classList.add('hidden');
-    });
-  }
-
-  if (sotdListenCloseBtn && sotdListenModal) {
-    sotdListenCloseBtn.addEventListener('click', () => {
-      sotdListenModal.classList.add('hidden');
-    });
-  }
-
-  // Sticker Tray Toggle
-  const stickerBtn = document.getElementById('message-sticker-btn');
-  const stickerTray = document.getElementById('sticker-tray');
-  if (stickerBtn && stickerTray) {
-    stickerBtn.addEventListener('click', () => {
-      stickerTray.classList.toggle('hidden');
-    });
-  }
-
-  // Sticker selection
-  const stickerOptions = document.querySelectorAll('.sticker-option');
-  const messageInput = document.getElementById('message-text-input');
-  stickerOptions.forEach((option) => {
-    option.addEventListener('click', () => {
-      if (messageInput) {
-        messageInput.value += option.textContent.trim();
+      document.querySelectorAll('.tab-pane').forEach(function(pane) {
+        pane.classList.remove('active');
+      });
+      var targetPane = document.getElementById('tab-' + targetTab);
+      if (targetPane) {
+        targetPane.classList.add('active');
       }
-      if (stickerTray) stickerTray.classList.add('hidden');
+
+      document.dispatchEvent(new CustomEvent('kaidra:tab-change', { 
+        detail: { tab: targetTab } 
+      }));
     });
   });
 
-  // Real message sending is handled by inbox.js, not here -- see that
-  // file for the actual Supabase-backed send logic.
+  // Settings Slide-Over Controls
+  var settingsOverlay = document.getElementById('settings-overlay');
+  var openSettingsBtn = document.getElementById('open-settings-btn');
+  var closeSettingsBtn = document.getElementById('close-settings-btn');
 
-  // SOTD recipient select toggle
-  const friendOptions = document.querySelectorAll('.friend-option');
-  friendOptions.forEach((opt) => {
-    opt.addEventListener('click', () => {
-      opt.classList.toggle('bg-violet-600/30');
-      opt.classList.toggle('border-violet-500');
+  function openSettings() {
+    if (settingsOverlay) settingsOverlay.classList.add('is-open');
+  }
+
+  function closeSettings() {
+    if (settingsOverlay) settingsOverlay.classList.remove('is-open');
+  }
+
+  if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettings);
+  if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettings);
+
+  // Direct Message Drawer Controls
+  var chatDrawer = document.getElementById('chat-view-drawer');
+  var closeChatBtn = document.getElementById('close-chat-btn');
+
+  function openDirectMessage(chatId, username, avatarUrl) {
+    if (username) document.getElementById('dm-active-name').textContent = username;
+    if (avatarUrl) document.getElementById('dm-active-avatar').src = avatarUrl;
+    if (chatDrawer) chatDrawer.classList.add('is-active');
+  }
+
+  function closeDirectMessage() {
+    if (chatDrawer) chatDrawer.classList.remove('is-active');
+  }
+
+  if (closeChatBtn) closeChatBtn.addEventListener('click', closeDirectMessage);
+
+  // Bind Inbox Row Clicks to Open DM Drawer
+  document.querySelectorAll('#chats-container .chat-row').forEach(function(row) {
+    row.addEventListener('click', function() {
+      var chatId = row.getAttribute('data-chat-id');
+      var username = row.getAttribute('data-username');
+      var avatarUrl = row.getAttribute('data-avatar');
+      openDirectMessage(chatId, username, avatarUrl);
     });
   });
 
-  // Note: real like/bookmark logic previously lived in home.js/news.js
-  // -- both removed entirely along with the Home tab (News + Videos),
-  // per the pivot to a chat-first app matching WhatsApp's structure.
+  // News View Switcher Listener
+  document.addEventListener('kaidra:news-view-change', function(e) {
+    var mode = e.detail.view;
+    var gridView = document.getElementById('news-grid-view');
+    var scrollView = document.getElementById('news-scroll-view');
+
+    if (mode === 'scroll') {
+      if (gridView) gridView.style.display = 'none';
+      if (scrollView) scrollView.style.display = 'flex';
+    } else {
+      if (gridView) gridView.style.display = 'flex';
+      if (scrollView) scrollView.style.display = 'none';
+    }
+  });
+
+  // Watchlist Filter Pill Switcher
+  document.querySelectorAll('#watchlist-filters .status-pill').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#watchlist-filters .status-pill').forEach(function(b) {
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+
+      var status = btn.getAttribute('data-status');
+      document.dispatchEvent(new CustomEvent('kaidra:watchlist-filter-change', { 
+        detail: { status: status } 
+      }));
+    });
+  });
+
+  // News Category Filter Chip Switcher
+  document.querySelectorAll('#news-category-filters .filter-chip').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#news-category-filters .filter-chip').forEach(function(b) {
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+
+      var category = btn.getAttribute('data-category');
+      document.dispatchEvent(new CustomEvent('kaidra:news-filter-change', { 
+        detail: { category: category } 
+      }));
+    });
+  });
+
+  // Forward-to-DM Picker
+  // Listens for 'kaidra:news-forward-request' (dispatched by news-data.js)
+  // and lets the user pick an existing Inbox contact to forward the story to.
+  // HOOK: listen for 'kaidra:dm-forward-send' to persist the forwarded
+  // message via Supabase.
+  var forwardOverlay = document.getElementById('forward-picker-overlay');
+  var forwardList = document.getElementById('forward-picker-list');
+  var closeForwardBtn = document.getElementById('close-forward-picker-btn');
+
+  function openForwardPicker(article) {
+    if (!forwardOverlay || !forwardList) return;
+    forwardList.innerHTML = '';
+
+    document.querySelectorAll('#chats-container .chat-row').forEach(function(row) {
+      var username = row.getAttribute('data-username');
+      var avatarUrl = row.getAttribute('data-avatar');
+      var chatId = row.getAttribute('data-chat-id');
+
+      var pickRow = document.createElement('div');
+      pickRow.className = 'forward-pick-row';
+      pickRow.innerHTML =
+        '<img class="avatar" src="' + avatarUrl + '" alt="' + username + '" />' +
+        '<span>' + username + '</span>';
+
+      pickRow.addEventListener('click', function() {
+        forwardArticleToChat(chatId, username, avatarUrl, article);
+      });
+
+      forwardList.appendChild(pickRow);
+    });
+
+    forwardOverlay.classList.add('is-open');
+  }
+
+  function closeForwardPicker() {
+    if (forwardOverlay) forwardOverlay.classList.remove('is-open');
+  }
+
+  function forwardArticleToChat(chatId, username, avatarUrl, article) {
+    openDirectMessage(chatId, username, avatarUrl);
+
+    var messagesBody = document.getElementById('dm-messages-container');
+    if (messagesBody) {
+      var row = document.createElement('div');
+      row.className = 'message-row outgoing';
+      row.innerHTML =
+        '<div class="message-bubble">' +
+          'Check out this news:' +
+          '<div class="shared-news-card">' +
+            '<img class="shared-news-thumb" src="' + article.coverImage + '" alt="News" />' +
+            '<div class="shared-news-meta">' +
+              '<span class="shared-news-title">' + article.title + '</span>' +
+              (article.relatedAnimeTitle ? '<span class="shared-news-anime">About: ' + article.relatedAnimeTitle + '</span>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<span class="message-time">Now</span>';
+      messagesBody.appendChild(row);
+    }
+
+    document.dispatchEvent(new CustomEvent('kaidra:dm-forward-send', {
+      detail: { chatId: chatId, article: article }
+    }));
+
+    closeForwardPicker();
+  }
+
+  document.addEventListener('kaidra:news-forward-request', function(e) {
+    openForwardPicker(e.detail);
+  });
+
+  if (closeForwardBtn) closeForwardBtn.addEventListener('click', closeForwardPicker);
+
+  // Anime Tag → Watchlist Jump
+  // Lets a user verify what a news story is actually about by jumping
+  // straight to a search for the real anime on the Watchlist tab.
+  document.addEventListener('kaidra:news-view-anime', function(e) {
+    var title = e.detail.title;
+    if (!title) return;
+
+    var watchlistNavBtn = document.querySelector('#app-bottom-nav .nav-item[data-tab="watchlist"]');
+    if (watchlistNavBtn) watchlistNavBtn.click();
+
+    var searchInput = document.getElementById('anilist-search-input');
+    if (searchInput) {
+      searchInput.value = title;
+      searchInput.dispatchEvent(new Event('input'));
+    }
+  });
+
+  // Settings Preference Toggle Listener
+  var settingLockScroll = document.getElementById('setting-lock-scroll');
+  if (settingLockScroll) {
+    settingLockScroll.addEventListener('change', function(e) {
+      hasDefaultPreference = e.target.checked;
+      updateViewButtonState();
+    });
+  }
+
 });

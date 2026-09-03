@@ -151,7 +151,7 @@ submitBtn?.addEventListener('click', async (e) => {
       return;
     }
 
-    window.location.href = '/app.html';
+    window.location.replace('/app.html');
   } catch (err) {
     setError('Something went wrong. Try again.');
     console.error(err);
@@ -173,6 +173,6 @@ submitBtn?.addEventListener('click', async (e) => {
     .maybeSingle();
 
   if (existingProfile) {
-    window.location.href = '/app.html';
+    window.location.replace('/app.html');
   }
 })();

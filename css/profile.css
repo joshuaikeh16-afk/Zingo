@@ -441,4 +441,51 @@
   cursor: pointer;
 }
 
-.edit-profile-bio-input { resize: none; font-family: var(--font-body); }
+.editp-field { margin-bottom: 16px; }
+
+.editp-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.editp-input {
+  width: 100%;
+  padding: 12px 15px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--hairline);
+  background: var(--paper);
+  font-size: 13.5px;
+  font-family: var(--font-body);
+  color: var(--ink);
+  outline: none;
+}
+
+.editp-input:focus { border-color: var(--indigo); }
+.editp-input::placeholder { color: var(--ink-faint); }
+.editp-bio-input { resize: none; }
+
+.editp-error {
+  padding: 10px 13px;
+  border-radius: var(--radius-md);
+  background: var(--vermillion-soft);
+  border: 1.5px solid var(--vermillion);
+  color: var(--vermillion);
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.editp-save-btn {
+  width: 100%;
+  padding: 13px;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13.5px;
+}

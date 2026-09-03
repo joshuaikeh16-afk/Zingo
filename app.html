@@ -262,6 +262,33 @@
       <button type="button" id="aotd-share-close-btn">Cancel</button>
     </div>
     <div id="aotd-share-results" class="find-friends-results"></div>
+
+    <!-- Step 2: confirm + optional note, shown after picking a result -->
+    <div id="aotd-share-confirm-step" class="aotd-share-confirm hidden">
+      <img id="aotd-share-confirm-cover" class="aotd-share-confirm-cover" src="" alt="" />
+      <h4 id="aotd-share-confirm-title" class="aotd-share-confirm-title"></h4>
+      <textarea id="aotd-share-note-input" class="editp-input editp-bio-input" placeholder="Add a note (optional)" rows="2"></textarea>
+      <div class="aotd-share-confirm-actions">
+        <button type="button" id="aotd-share-back-btn" class="aotd-share-back-btn">Back</button>
+        <button type="button" id="aotd-share-confirm-btn" class="editp-save-btn">Share with Friends</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANILIST IMPORT MODAL (Hook: #anilist-import-modal) -->
+  <div class="find-friends-modal hidden" id="anilist-import-modal">
+    <div class="find-friends-search-bar">
+      <span style="font-family:var(--font-display); font-weight:700; color:var(--ink);">Import AniList</span>
+      <button type="button" id="anilist-import-close-btn">Cancel</button>
+    </div>
+    <div class="edit-profile-form">
+      <div class="editp-field">
+        <label for="anilist-import-username">AniList Username</label>
+        <input type="text" id="anilist-import-username" class="editp-input" placeholder="e.g. Josuke_Higashikata" />
+      </div>
+      <div id="anilist-import-error" class="editp-error hidden"></div>
+      <button type="button" id="anilist-import-submit-btn" class="editp-save-btn">Import My List</button>
+    </div>
   </div>
 
   <!-- EDIT PROFILE MODAL (Hook: #edit-profile-modal) -->
@@ -277,23 +304,23 @@
         <input type="file" id="edit-profile-avatar-input" accept="image/*" class="hidden" />
       </div>
 
-      <div class="auth-field">
+      <div class="editp-field">
         <label for="edit-profile-display-name">Display Name</label>
-        <input type="text" id="edit-profile-display-name" class="auth-input" placeholder="Your display name" />
+        <input type="text" id="edit-profile-display-name" class="editp-input" placeholder="Your display name" />
       </div>
 
-      <div class="auth-field">
+      <div class="editp-field">
         <label for="edit-profile-status">Status</label>
-        <input type="text" id="edit-profile-status" class="auth-input" placeholder="What's on your mind?" maxlength="60" />
+        <input type="text" id="edit-profile-status" class="editp-input" placeholder="What's on your mind?" maxlength="60" />
       </div>
 
-      <div class="auth-field">
+      <div class="editp-field">
         <label for="edit-profile-bio">Bio</label>
-        <textarea id="edit-profile-bio" class="auth-input edit-profile-bio-input" placeholder="Tell people about yourself" maxlength="160" rows="3"></textarea>
+        <textarea id="edit-profile-bio" class="editp-input editp-bio-input" placeholder="Tell people about yourself" maxlength="160" rows="3"></textarea>
       </div>
 
-      <div id="edit-profile-error" class="auth-error-message hidden"></div>
-      <button type="button" id="edit-profile-save-btn" class="auth-submit-btn">Save Changes</button>
+      <div id="edit-profile-error" class="editp-error hidden"></div>
+      <button type="button" id="edit-profile-save-btn" class="editp-save-btn">Save Changes</button>
     </div>
   </div>
 

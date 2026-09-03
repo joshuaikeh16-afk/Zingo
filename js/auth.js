@@ -95,7 +95,7 @@ submitBtn?.addEventListener('click', async (e) => {
 
     if (mode === 'signup') {
       // Always onboard a brand-new account.
-      window.location.href = '/onboarding.html';
+      window.location.replace('/onboarding.html');
       return;
     }
 
@@ -109,7 +109,7 @@ submitBtn?.addEventListener('click', async (e) => {
       .eq('id', session.user.id)
       .maybeSingle();
 
-    window.location.href = existingProfile ? '/app.html' : '/onboarding.html';
+    window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
   } catch (err) {
     setError('Something went wrong. Try again.');
     console.error(err);
@@ -122,6 +122,6 @@ submitBtn?.addEventListener('click', async (e) => {
 (async () => {
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
-    window.location.href = '/onboarding.html';
+    window.location.replace('/onboarding.html');
   }
 })();

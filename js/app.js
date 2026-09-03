@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   logoutBtn?.addEventListener('click', async () => {
     logoutBtn.disabled = true;
     await supabase.auth.signOut();
-    window.location.href = '/auth.html';
+    window.location.replace('/auth.html');
   });
 
   // Bottom Navigation Routing

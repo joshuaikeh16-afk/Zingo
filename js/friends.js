@@ -345,8 +345,7 @@ shareAotdBtn?.addEventListener('click', () => {
 
 aotdShareCloseBtn?.addEventListener('click', () => {
   aotdShareModal?.classList.add('hidden');
-  if (aotdShareInput) aotdShareInput.value = '';
-  if (aotdShareResults) aotdShareResults.innerHTML = '';
+  resetAotdShareModal();
 });
 
 aotdShareInput?.addEventListener('input', () => {
@@ -354,6 +353,15 @@ aotdShareInput?.addEventListener('input', () => {
   const term = aotdShareInput.value.trim();
   aotdShareDebounce = setTimeout(() => runAotdSearch(term), 350);
 });
+
+const aotdShareConfirmStep = document.getElementById('aotd-share-confirm-step');
+const aotdShareConfirmCover = document.getElementById('aotd-share-confirm-cover');
+const aotdShareConfirmTitle = document.getElementById('aotd-share-confirm-title');
+const aotdShareNoteInput = document.getElementById('aotd-share-note-input');
+const aotdShareBackBtn = document.getElementById('aotd-share-back-btn');
+const aotdShareConfirmBtn = document.getElementById('aotd-share-confirm-btn');
+
+let pendingAotdAnime = null;
 
 async function runAotdSearch(term) {
   if (!aotdShareResults) return;
@@ -391,7 +399,7 @@ async function runAotdSearch(term) {
         </div>
         <button type="button" class="friend-request-btn is-active-state">Share</button>
       `;
-      row.querySelector('button').addEventListener('click', () => promptAndShare(anime, title));
+      row.querySelector('button').addEventListener('click', () => showAotdConfirmStep(anime, title));
       aotdShareResults.appendChild(row);
     });
   } catch (err) {
@@ -400,9 +408,32 @@ async function runAotdSearch(term) {
   }
 }
 
-async function promptAndShare(anime, title) {
-  const note = window.prompt(`Add a note to share with "${title}"? (optional)`) || '';
+function showAotdConfirmStep(anime, title) {
+  pendingAotdAnime = { anime, title };
+  if (aotdShareConfirmCover) aotdShareConfirmCover.src = anime.coverImage.medium;
+  if (aotdShareConfirmTitle) aotdShareConfirmTitle.textContent = title;
+  if (aotdShareNoteInput) aotdShareNoteInput.value = '';
 
+  aotdShareResults?.classList.add('hidden');
+  if (aotdShareInput) aotdShareInput.parentElement.classList.add('hidden');
+  aotdShareConfirmStep?.classList.remove('hidden');
+}
+
+function resetAotdShareModal() {
+  pendingAotdAnime = null;
+  if (aotdShareInput) { aotdShareInput.value = ''; aotdShareInput.parentElement.classList.remove('hidden'); }
+  if (aotdShareResults) { aotdShareResults.innerHTML = ''; aotdShareResults.classList.remove('hidden'); }
+  aotdShareConfirmStep?.classList.add('hidden');
+}
+
+aotdShareBackBtn?.addEventListener('click', resetAotdShareModal);
+
+aotdShareConfirmBtn?.addEventListener('click', async () => {
+  if (!pendingAotdAnime) return;
+  const { anime, title } = pendingAotdAnime;
+  const note = aotdShareNoteInput?.value.trim() || '';
+
+  aotdShareConfirmBtn.disabled = true;
   try {
     await shareAnimeOfTheDay(currentUserId, {
       animeId: anime.id,
@@ -411,11 +442,12 @@ async function promptAndShare(anime, title) {
       note,
     });
     aotdShareModal?.classList.add('hidden');
-    if (aotdShareInput) aotdShareInput.value = '';
-    if (aotdShareResults) aotdShareResults.innerHTML = '';
+    resetAotdShareModal();
     await renderFriendsStatuses();
   } catch (err) {
     console.error('Failed to share Anime of the Day:', err);
-    alert(err.message || 'Failed to share.');
+    if (aotdShareConfirmTitle) aotdShareConfirmTitle.textContent = (err.message || 'Failed to share.') + ' — try again';
+  } finally {
+    aotdShareConfirmBtn.disabled = false;
   }
-}
+});

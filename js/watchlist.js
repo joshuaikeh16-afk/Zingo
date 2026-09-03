@@ -255,23 +255,53 @@ document.addEventListener('DOMContentLoaded', async function () {
   // ------------------------------------------------------------------
 
   const importBtn = document.getElementById('btn-import-list');
-  importBtn?.addEventListener('click', async () => {
-    const username = window.prompt('Enter your AniList username to import your list:');
-    if (!username) return;
+  const importModal = document.getElementById('anilist-import-modal');
+  const importCloseBtn = document.getElementById('anilist-import-close-btn');
+  const importUsernameInput = document.getElementById('anilist-import-username');
+  const importSubmitBtn = document.getElementById('anilist-import-submit-btn');
+  const importErrorEl = document.getElementById('anilist-import-error');
 
-    const badge = importBtn.querySelector('.action-badge');
-    const originalLabel = badge ? badge.textContent : null;
-    if (badge) badge.textContent = 'Importing…';
+  function setImportError(message) {
+    if (!importErrorEl) return;
+    importErrorEl.textContent = message || '';
+    importErrorEl.classList.toggle('hidden', !message);
+  }
+
+  importBtn?.addEventListener('click', () => {
+    if (importUsernameInput) importUsernameInput.value = '';
+    setImportError(null);
+    importModal?.classList.remove('hidden');
+    importUsernameInput?.focus();
+  });
+
+  importCloseBtn?.addEventListener('click', () => {
+    importModal?.classList.add('hidden');
+  });
+
+  importSubmitBtn?.addEventListener('click', async () => {
+    const username = importUsernameInput?.value.trim();
+    if (!username) {
+      setImportError('Enter your AniList username.');
+      return;
+    }
+
+    setImportError(null);
+    importSubmitBtn.disabled = true;
+    importSubmitBtn.textContent = 'Importing…';
 
     try {
-      const result = await importAniListByUsername(currentUserId, username.trim());
-      if (badge) badge.textContent = `Imported ${result.imported}`;
+      const result = await importAniListByUsername(currentUserId, username);
+      importModal?.classList.add('hidden');
       await loadWatchlist();
+      if (result.imported === 0) {
+        setImportError('No entries found for that username.');
+      }
     } catch (err) {
       console.error('AniList import failed:', err);
-      if (badge) badge.textContent = 'Failed';
+      setImportError('Import failed. Check the username and try again.');
     } finally {
-      setTimeout(() => { if (badge) badge.textContent = originalLabel; }, 2500);
+      importSubmitBtn.disabled = false;
+      importSubmitBtn.textContent = 'Import My List';
     }
   });
 

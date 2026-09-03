@@ -73,7 +73,7 @@ form?.addEventListener('submit', async (e) => {
     if (subtitleEl) subtitleEl.textContent = 'Password updated. Redirecting to sign in…';
     form.classList.add('hidden');
     await supabase.auth.signOut();
-    setTimeout(() => { window.location.href = '/auth.html'; }, 1500);
+    setTimeout(() => { window.location.replace('/auth.html'); }, 1500);
   } catch (err) {
     setError('Something went wrong. Try again.');
     console.error(err);

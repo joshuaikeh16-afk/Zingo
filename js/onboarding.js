@@ -159,27 +159,20 @@ submitBtn?.addEventListener('click', async (e) => {
   }
 });
 
-// --- Init: require auth. Personalization is shown on every sign-in now
-// (not just the first) -- if a profile already exists, prefill the form
-// with it instead of redirecting straight to the app. ---
+// --- Init: require auth, and skip straight to the app if a profile
+// already exists (this page is only meant to be reached from sign-up,
+// or as a fallback if a session somehow has no profile yet). ---
 (async () => {
   session = await requireAuth();
   if (!session) return;
 
   const { data: existingProfile } = await supabase
     .from('profiles')
-    .select('username, birthdate, interests, avatar_url')
+    .select('id')
     .eq('id', session.user.id)
     .maybeSingle();
 
   if (existingProfile) {
-    if (usernameInput) usernameInput.value = existingProfile.username || '';
-    if (birthdateInput) birthdateInput.value = existingProfile.birthdate || '';
-    (existingProfile.interests || []).forEach((interest) => {
-      document
-        .querySelector(`.interest-chip[data-interest="${interest}"]`)
-        ?.classList.add('selected');
-    });
-    if (submitBtn) submitBtn.textContent = 'Save & Continue';
+    window.location.href = '/app.html';
   }
 })();

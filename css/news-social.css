@@ -1,43 +1,8 @@
 /* ==========================================================================
    Kaidra — news-social.css
-   Like / forward mini-actions, anime-tag badges, forward-to-DM picker,
-   and the shared-news-card that appears inside a forwarded DM.
+   Forward-to-DM, anime-tag badges, forward-to-DM picker, and the
+   shared-news-card that appears inside a forwarded DM.
    ========================================================================== */
-
-.news-card-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.rail-btn-mini {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1.5px solid var(--hairline);
-  background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s ease, transform 0.1s ease;
-}
-
-.rail-btn-mini:active { transform: scale(0.92); }
-
-.rail-btn-mini svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: var(--ink-soft);
-  stroke-width: 1.8;
-}
-
-.rail-btn-mini.like-btn.liked { border-color: var(--vermillion); }
-.rail-btn-mini.like-btn.liked svg,
-.scroll-actions-rail .rail-btn.active .heart-icon {
-  fill: var(--vermillion);
-  stroke: var(--vermillion);
-}
 
 .anime-tag-badge {
   display: inline-flex;

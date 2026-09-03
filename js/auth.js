@@ -53,10 +53,23 @@ submitBtn?.addEventListener('click', async (e) => {
       return;
     }
 
-    // On success, go straight to onboarding -- it shows the
-    // personalization step on every sign-in, prefilled for returning
-    // users (see js/onboarding.js).
-    window.location.href = '/onboarding.html';
+    if (mode === 'signup') {
+      // Always onboard a brand-new account.
+      window.location.href = '/onboarding.html';
+      return;
+    }
+
+    // Signing in (returning user): skip personalization and go straight
+    // to the app if a profile already exists. Only an edge case -- a
+    // session with no profile yet -- falls through to onboarding.
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    window.location.href = existingProfile ? '/app.html' : '/onboarding.html';
   } catch (err) {
     setError('Something went wrong. Try again.');
     console.error(err);

@@ -1,38 +1,69 @@
 /* ==========================================================================
    Kaidra — news.css
-   News tab: single full-bleed scroll feed (grid mode removed).
+   News tab: one card fills the screen at a time, scroll-snap to move
+   to the next. Light system throughout -- no dark full-bleed overlay.
    ========================================================================== */
 
-.news-mode-scroll { padding-top: 4px; }
+.news-view-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 78px - 82px); /* header height, bottom nav height */
+}
+
+.news-filter-bar { flex-shrink: 0; }
+
+.news-mode-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+#scroll-feed-container {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  border-radius: var(--radius-lg);
+}
+
+#scroll-feed-container::-webkit-scrollbar { display: none; }
 
 .scroll-card {
-  position: relative;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--ink);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 2px solid var(--ink);
-  background: var(--ink);
-  min-height: 70vh;
-  margin-bottom: 16px;
+  background: var(--surface);
   box-shadow: var(--shadow-stamp);
+  margin-bottom: 16px;
 }
 
 .scroll-media {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   background-size: cover;
   background-position: center;
 }
 
-.scroll-overlay {
+.scroll-media::after {
+  content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(27, 29, 34, 0.88) 0%, rgba(27, 29, 34, 0.2) 55%, transparent 75%);
+  background-image: radial-gradient(var(--surface) 1px, transparent 1.5px);
+  background-size: 7px 7px;
+  opacity: 0.25;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
 }
 
 .scroll-actions-rail {
   position: absolute;
   right: 12px;
-  bottom: 110px;
+  bottom: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -43,57 +74,49 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .rail-btn svg {
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
   stroke: var(--ink);
   fill: none;
   stroke-width: 1.8;
 }
 
-.rail-btn.active svg,
-.rail-btn.active .heart-icon {
-  fill: var(--vermillion);
-  stroke: var(--vermillion);
-}
+.rail-btn.active svg { fill: var(--gold); stroke: var(--gold); }
 
-.scroll-card .featured-content {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 20px 18px 26px;
-  z-index: 2;
+.scroll-card-content {
+  flex-shrink: 0;
+  padding: 16px 18px 20px;
+  background: var(--surface);
 }
 
 .article-title-lg {
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.35;
   margin: 8px 0 6px;
-  color: #fff;
+  color: var(--ink);
 }
 
-.article-meta { font-size: 11.5px; color: rgba(255, 255, 255, 0.75); }
-.article-meta span, .article-meta time { color: rgba(255, 255, 255, 0.75); }
-
-.scroll-card .anime-tag-badge {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
+.article-meta { font-size: 11.5px; color: var(--ink-soft); }
+.article-meta span, .article-meta time { color: var(--ink-soft); }
 
 .news-empty-state,
 .news-loading-state {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 60px 20px;
+  padding: 40px 24px;
   color: var(--ink-soft);
   font-size: 13px;
 }

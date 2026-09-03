@@ -1,13 +1,17 @@
 /* ==========================================================================
    Kaidra — News Feed Controller
-   Scroll-only feed. Categories match the real interest taxonomy from
-   onboarding (anime, news, gaming, idols_music, art_manga, vtubers) so
-   personalization actually maps onto what shows here.
+   Scroll-snap, one card at a time. Categories match the real interest
+   taxonomy from onboarding. Defaults to the signed-in user's own
+   selected interests (that's what they're for) rather than showing
+   everything -- "All" means "all of your interests," not "all news."
+   No like button: it was never wired to persist anywhere, so it
+   shouldn't be there pretending to do something.
    ========================================================================== */
 
+import { supabase } from './supabase-client.js';
+
 // ------------------------------------------------------------------
-// Fallback dataset — used only if the real /api/news fetch fails
-// (e.g. offline, or every upstream RSS source down at once).
+// Fallback dataset — used only if the real /api/news fetch fails.
 // ------------------------------------------------------------------
 const KAIDRA_NEWS_FALLBACK = [
   {
@@ -73,13 +77,18 @@ const KAIDRA_NEWS_FALLBACK = [
 // ------------------------------------------------------------------
 let currentNewsData = [];
 let activeCategory = 'all';
+let userInterests = null; // null = unknown/not logged in -> no personalization filter
 let bookmarkedArticleIds = new Set();
-let likedArticleIds = new Set();
 
 function getFilteredData() {
-  return activeCategory === 'all'
-    ? currentNewsData
-    : currentNewsData.filter(item => item.category === activeCategory);
+  // "All" respects the user's own interests, if we know them. This is
+  // the actual point of asking for interests at onboarding -- it's not
+  // just decoration on the filter bar.
+  let base = currentNewsData;
+  if (userInterests && userInterests.length > 0) {
+    base = base.filter(item => userInterests.includes(item.category));
+  }
+  return activeCategory === 'all' ? base : base.filter(item => item.category === activeCategory);
 }
 
 function findArticleById(id) {
@@ -95,48 +104,41 @@ function animeTagMarkup(item) {
 }
 
 // ------------------------------------------------------------------
-// Render — scroll feed only
+// Render — one card per screen, scroll-snap
 // ------------------------------------------------------------------
 function renderNewsScroll(filteredData) {
   const scrollContainer = document.getElementById('scroll-feed-container');
   if (!scrollContainer) return;
 
   if (filteredData.length === 0) {
-    scrollContainer.innerHTML = '<div class="news-empty-state">Nothing in this category yet.</div>';
+    scrollContainer.innerHTML = '<div class="news-empty-state">Nothing here yet. Try a different category, or add more interests in your profile.</div>';
     return;
   }
 
-  scrollContainer.innerHTML = filteredData.map(item => {
-    const liked = likedArticleIds.has(item.id);
-    return `
+  scrollContainer.innerHTML = filteredData.map(item => `
     <article class="scroll-card" data-article-id="${item.id}">
-      <div class="scroll-media" style="background-image: url('${item.coverImage}');"></div>
-      <div class="scroll-overlay"></div>
-
-      <div class="scroll-actions-rail">
-        <button class="rail-btn ${bookmarkedArticleIds.has(item.id) ? 'active' : ''}" data-action="bookmark" data-article-id="${item.id}" title="Save Story">
-          <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-        </button>
-        <button class="rail-btn ${liked ? 'active' : ''}" data-action="like" data-article-id="${item.id}" title="Like">
-          <svg class="heart-icon" viewBox="0 0 24 24"><path d="M20.8 4.6c-1.7-1.6-4.4-1.6-6.1 0L12 7.2 9.3 4.6c-1.7-1.6-4.4-1.6-6.1 0-1.8 1.7-1.8 4.5 0 6.2L12 19l8.8-8.2c1.8-1.7 1.8-4.5 0-6.2z"></path></svg>
-        </button>
-        <button class="rail-btn" data-action="forward" data-article-id="${item.id}" title="Forward to DM">
-          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-        </button>
-        ${item.sourceUrl ? `<a class="rail-btn" href="${item.sourceUrl}" target="_blank" rel="noopener" title="Read Original">
-          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-        </a>` : ''}
+      <div class="scroll-media" style="background-image: url('${item.coverImage}');">
+        <div class="scroll-actions-rail">
+          <button class="rail-btn ${bookmarkedArticleIds.has(item.id) ? 'active' : ''}" data-action="bookmark" data-article-id="${item.id}" title="Save Story">
+            <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          </button>
+          <button class="rail-btn" data-action="forward" data-article-id="${item.id}" title="Forward to DM">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+          ${item.sourceUrl ? `<a class="rail-btn" href="${item.sourceUrl}" target="_blank" rel="noopener" title="Read Original">
+            <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </a>` : ''}
+        </div>
       </div>
 
-      <div class="featured-content">
+      <div class="scroll-card-content">
         <span class="article-badge ${item.badgeColor}">${item.categoryLabel}</span>
         <h3 class="article-title-lg">${item.title}</h3>
         <div class="article-meta"><span>${item.author}</span> • <time>${item.timeAgo}</time></div>
         ${animeTagMarkup(item)}
       </div>
     </article>
-  `;
-  }).join('');
+  `).join('');
 }
 
 function renderAll() {
@@ -152,7 +154,7 @@ document.addEventListener('kaidra:news-filter-change', function(e) {
 });
 
 // ------------------------------------------------------------------
-// Delegated Click Handlers — bookmark, like, forward, anime tag
+// Delegated Click Handlers — bookmark, forward, anime tag
 // ------------------------------------------------------------------
 document.addEventListener('click', function(e) {
 
@@ -168,29 +170,6 @@ document.addEventListener('click', function(e) {
         bookmarkBtn.classList.add('active');
       }
     }
-    return;
-  }
-
-  // Like — internal signal only, no public count shown anywhere.
-  // HOOK: listen for 'kaidra:news-like-toggle' to persist to news_likes
-  // and use it to bias future ranking/recommendations.
-  const likeBtn = e.target.closest('[data-action="like"]');
-  if (likeBtn) {
-    const articleId = likeBtn.getAttribute('data-article-id');
-    if (!articleId) return;
-
-    const nowLiked = !likedArticleIds.has(articleId);
-    if (nowLiked) {
-      likedArticleIds.add(articleId);
-      likeBtn.classList.add('active');
-    } else {
-      likedArticleIds.delete(articleId);
-      likeBtn.classList.remove('active');
-    }
-
-    document.dispatchEvent(new CustomEvent('kaidra:news-like-toggle', {
-      detail: { articleId: articleId, liked: nowLiked }
-    }));
     return;
   }
 
@@ -218,10 +197,25 @@ document.addEventListener('click', function(e) {
 });
 
 // ------------------------------------------------------------------
-// Real fetch — hits the /api/news serverless function (server-side RSS
-// aggregation, avoids CORS). Falls back to the small bundled dataset
-// above only if that request fails outright.
+// Load the signed-in user's interests, then load the news itself.
 // ------------------------------------------------------------------
+async function loadUserInterests() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('interests')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    userInterests = profile?.interests ?? null;
+  } catch (err) {
+    console.warn('Could not load interests for personalization:', err);
+  }
+}
+
 async function loadRealNews() {
   const scrollContainer = document.getElementById('scroll-feed-container');
   if (scrollContainer) {
@@ -246,10 +240,6 @@ async function loadRealNews() {
   renderAll();
 }
 
-// ------------------------------------------------------------------
-// Public hook — for manually pushing a fresh article set (e.g. from a
-// future personalization-aware refetch) without reloading the page.
-// ------------------------------------------------------------------
 window.KaidraNews = {
   setArticles: function(articles) {
     currentNewsData = articles;
@@ -257,4 +247,7 @@ window.KaidraNews = {
   }
 };
 
-document.addEventListener('DOMContentLoaded', loadRealNews);
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadUserInterests();
+  await loadRealNews();
+});

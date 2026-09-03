@@ -25,101 +25,29 @@
       </div>
       <span>Kaidra</span>
     </div>
-
-    <!-- PHONE GESTURE MODE TOGGLE BUTTON (Hook point: #news-view-btn) -->
-    <button class="view-toggle-btn" id="news-view-btn" aria-label="Switch News Mode">
-      <div class="phone-icon-wrapper">
-        <svg class="phone-frame" viewBox="0 0 24 24">
-          <rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect>
-          <line x1="12" y1="18" x2="12.01" y2="18"></line>
-        </svg>
-        <svg class="scroll-arrow" viewBox="0 0 24 24">
-          <polyline points="7 10 12 15 17 10"></polyline>
-        </svg>
-      </div>
-      <span id="view-btn-label">Scroll</span>
-    </button>
   </header>
 
   <!-- MAIN TAB PANES VIEWPORT -->
   <main class="main-content">
 
-    <!-- TAB 1: NEWS & DISCOVERY (Hook: #tab-news) -->
+    <!-- TAB 1: NEWS & DISCOVERY (Hook: #tab-news) — scroll-only, general audience -->
     <section class="tab-pane active" id="tab-news">
       <div class="news-view-container">
 
-        <!-- Category Filters -->
+        <!-- Category Filters — matches the interest tags from onboarding,
+             so a user's personalization actually drives this feed. -->
         <div class="news-filter-bar" id="news-category-filters">
-          <button class="filter-chip active" data-category="all">All News</button>
-          <button class="filter-chip" data-category="announcements">Announcements</button>
-          <button class="filter-chip" data-category="manga">Manga & LNs</button>
-          <button class="filter-chip" data-category="industry">Industry & Studios</button>
-          <button class="filter-chip" data-category="release-dates">Release Dates</button>
+          <button class="filter-chip active" data-category="all">All</button>
+          <button class="filter-chip" data-category="news">World News</button>
+          <button class="filter-chip" data-category="anime">Anime</button>
+          <button class="filter-chip" data-category="gaming">Gaming</button>
+          <button class="filter-chip" data-category="idols_music">Idols & Music</button>
+          <button class="filter-chip" data-category="art_manga">Art & Manga</button>
+          <button class="filter-chip" data-category="vtubers">VTubers</button>
         </div>
 
-        <!-- MODE A: GRID LAYOUT -->
-        <div class="news-mode-grid" id="news-grid-view">
-          <div class="grid-featured-layout">
-            
-            <article class="featured-card" id="hero-article" data-article-id="art-101">
-              <div class="featured-bg" style="background-image: url('https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1000&q=80');"></div>
-              <div class="featured-gradient"></div>
-              <button class="card-bookmark-btn" data-action="bookmark" aria-label="Bookmark Story">
-                <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-              </button>
-              <div class="featured-content">
-                <span class="article-badge pink">Breaking News</span>
-                <h3 class="article-title-lg">Studio MAPPA Unveils Original Sci-Fi Anime Project Scheduled for Late 2026</h3>
-                <div class="article-meta">
-                  <span>By Kaidra Editorial</span> • <time datetime="2026-08-06">2 hours ago</time> • <span>4 min read</span>
-                </div>
-              </div>
-            </article>
-
-            <div class="side-news-stack" id="side-news-container">
-              <article class="side-card" data-article-id="art-102">
-                <img class="side-thumb" src="https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=300&q=80" alt="Cover" />
-                <div class="side-content">
-                  <span class="article-badge cyan">Teaser</span>
-                  <h4 class="side-title">Chainsaw Man Sequel Movie Confirmed</h4>
-                  <div class="article-meta"><time>4h ago</time> • <span>News</span></div>
-                </div>
-              </article>
-              <article class="side-card" data-article-id="art-103">
-                <img class="side-thumb" src="https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=300&q=80" alt="Cover" />
-                <div class="side-content">
-                  <span class="article-badge pink">Industry</span>
-                  <h4 class="side-title">Inside Key Animation Pipeline & Digital Compositing</h4>
-                  <div class="article-meta"><time>7h ago</time> • <span>Feature</span></div>
-                </div>
-              </article>
-            </div>
-
-          </div>
-          <div class="news-cards-grid" id="secondary-news-grid"></div>
-        </div>
-
-        <!-- MODE B: SCROLL LAYOUT -->
-        <div class="news-mode-scroll" id="news-scroll-view" style="display: none;">
-          <div id="scroll-feed-container">
-            <article class="scroll-card" data-article-id="art-101">
-              <div class="scroll-media" style="background-image: url('https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80');"></div>
-              <div class="scroll-overlay"></div>
-              <div class="scroll-actions-rail">
-                <button class="rail-btn" data-action="bookmark" title="Save Story">
-                  <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-                </button>
-                <button class="rail-btn" data-action="share" title="Share Story">
-                  <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-                </button>
-              </div>
-              <div class="featured-content">
-                <span class="article-badge pink">Breaking News</span>
-                <h3 class="article-title-lg">Studio MAPPA Unveils Original Sci-Fi Anime Project Scheduled for Late 2026</h3>
-                <div class="article-meta"><span>By Kaidra Editorial</span> • <time>2 hours ago</time></div>
-              </div>
-            </article>
-          </div>
+        <div class="news-mode-scroll" id="news-scroll-view">
+          <div id="scroll-feed-container"></div>
         </div>
 
       </div>
@@ -455,22 +383,6 @@
           <div class="settings-section-title">System Preferences</div>
           
           <div class="settings-card-grid">
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group">
-                <div class="icon-box cyan">
-                  <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Lock Fullscreen Scroll</span>
-                  <span class="subtext">Force Scroll Feed mode on launch</span>
-                </div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="setting-lock-scroll" />
-                <span class="slider"></span>
-              </label>
-            </div>
-
             <div class="setting-card-item non-interactive">
               <div class="item-left-group">
                 <div class="icon-box pink">

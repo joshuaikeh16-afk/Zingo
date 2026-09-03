@@ -1,76 +1,68 @@
 /* ==========================================================================
    Kaidra — News Feed Controller
+   Scroll-only feed. Categories match the real interest taxonomy from
+   onboarding (anime, news, gaming, idols_music, art_manga, vtubers) so
+   personalization actually maps onto what shows here.
    ========================================================================== */
 
 // ------------------------------------------------------------------
-// Mock Dataset (Simulating Supabase Rows / RSS Output)
-// Once your RSS-fetch function is live, call:
-//   window.KaidraNews.setArticles(realArticlesArray)
-// with objects shaped exactly like these, and everything below —
-// filtering, likes, forwarding, anime tags — works unchanged.
+// Fallback dataset — used only if the real /api/news fetch fails
+// (e.g. offline, or every upstream RSS source down at once).
 // ------------------------------------------------------------------
-const KAIDRA_NEWS_DATA = [
+const KAIDRA_NEWS_FALLBACK = [
   {
     id: "art-101",
     title: "Studio MAPPA Unveils Original Sci-Fi Anime Project Scheduled for Late 2026",
-    category: "announcements",
-    categoryLabel: "Breaking News",
+    category: "anime",
+    categoryLabel: "Anime",
     badgeColor: "pink",
-    author: "Kaidra Editorial",
+    author: "Kaidra",
     sourceUrl: "",
     timeAgo: "2 hours ago",
-    readTime: "4 min read",
     coverImage: "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1000&q=80",
-    snippet: "The studio behind major hits has revealed an ambitious original space drama project coming later this year...",
-    content: "Studio MAPPA officially announced an ambitious original sci-fi anime project set in a futuristic deep-space colony. The upcoming title boasts an all-star production team, revolutionary composite animation techniques, and an original soundtrack. Further cast details and production stills are expected during next month's livestream.",
+    snippet: "The studio behind major hits has revealed an ambitious original space drama project coming later this year.",
     relatedAnimeId: null,
     relatedAnimeTitle: null
   },
   {
     id: "art-102",
     title: "Chainsaw Man Sequel Movie Confirmed",
-    category: "announcements",
-    categoryLabel: "Teaser",
-    badgeColor: "cyan",
-    author: "News Desk",
+    category: "anime",
+    categoryLabel: "Anime",
+    badgeColor: "pink",
+    author: "Kaidra",
     sourceUrl: "",
     timeAgo: "4 hours ago",
-    readTime: "2 min read",
     coverImage: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80",
-    snippet: "Official teaser visuals confirming the upcoming theatrical continuation have been released online...",
-    content: "Following massive theatrical box office success, the next arc of Chainsaw Man has been greenlit for a feature film release. Key staff will return to handle animation production.",
+    snippet: "Official teaser visuals confirming the upcoming theatrical continuation have been released online.",
     relatedAnimeId: 105778,
     relatedAnimeTitle: "Chainsaw Man"
   },
   {
-    id: "art-103",
-    title: "Inside Key Animation Pipeline & Digital Compositing",
-    category: "industry",
-    categoryLabel: "Industry",
-    badgeColor: "pink",
-    author: "Tech & Animation",
+    id: "art-105",
+    title: "Global Markets Steady as Central Banks Hold Rates",
+    category: "news",
+    categoryLabel: "World News",
+    badgeColor: "cyan",
+    author: "Kaidra",
     sourceUrl: "",
-    timeAgo: "7 hours ago",
-    readTime: "6 min read",
-    coverImage: "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80",
-    snippet: "An in-depth look into how modern studios blend traditional 2D keyframes with advanced 3D lighting...",
-    content: "Modern digital animation pipelines are shifting rapidly toward unified compositing tools. In this feature, lead compositors discuss how 2D line-art integrates with hybrid lighting shaders.",
+    timeAgo: "1 hour ago",
+    coverImage: "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80",
+    snippet: "A general news placeholder story -- this category is meant for everyone, not just anime fans.",
     relatedAnimeId: null,
     relatedAnimeTitle: null
   },
   {
     id: "art-104",
     title: "Top 10 Highly Anticipated Manga Adaptations Coming Soon",
-    category: "manga",
-    categoryLabel: "Manga & LNs",
-    badgeColor: "cyan",
-    author: "Community Staff",
+    category: "art_manga",
+    categoryLabel: "Art & Manga",
+    badgeColor: "purple",
+    author: "Kaidra",
     sourceUrl: "",
     timeAgo: "12 hours ago",
-    readTime: "5 min read",
     coverImage: "https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=600&q=80",
-    snippet: "From dark fantasy epics to cozy slice-of-life titles, here are the top adaptations to keep on your watchlist...",
-    content: "With dozens of serialized manga receiving greenlight announcements this season, we rank the ten most promising upcoming releases based on studio backing and source material quality.",
+    snippet: "From dark fantasy epics to cozy slice-of-life titles, here are the top adaptations to keep on your radar.",
     relatedAnimeId: null,
     relatedAnimeTitle: null
   }
@@ -79,7 +71,7 @@ const KAIDRA_NEWS_DATA = [
 // ------------------------------------------------------------------
 // State
 // ------------------------------------------------------------------
-let currentNewsData = KAIDRA_NEWS_DATA.slice();
+let currentNewsData = [];
 let activeCategory = 'all';
 let bookmarkedArticleIds = new Set();
 let likedArticleIds = new Set();
@@ -102,60 +94,17 @@ function animeTagMarkup(item) {
   return `<button class="anime-tag-badge" data-action="view-anime" data-anime-id="${item.relatedAnimeId || ''}" data-anime-title="${item.relatedAnimeTitle}">About: ${item.relatedAnimeTitle}</button>`;
 }
 
-function cardActionsMarkup(item) {
-  const liked = likedArticleIds.has(item.id);
-  return `
-    <div class="news-card-actions">
-      <button class="rail-btn-mini like-btn ${liked ? 'liked' : ''}" data-action="like" data-article-id="${item.id}" title="Like">
-        <svg class="heart-icon" viewBox="0 0 24 24"><path d="M20.8 4.6c-1.7-1.6-4.4-1.6-6.1 0L12 7.2 9.3 4.6c-1.7-1.6-4.4-1.6-6.1 0-1.8 1.7-1.8 4.5 0 6.2L12 19l8.8-8.2c1.8-1.7 1.8-4.5 0-6.2z"></path></svg>
-      </button>
-      <button class="rail-btn-mini forward-btn" data-action="forward" data-article-id="${item.id}" title="Forward to DM">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-      </button>
-    </div>
-  `;
-}
-
 // ------------------------------------------------------------------
-// Render Functions
+// Render — scroll feed only
 // ------------------------------------------------------------------
-function renderNewsGrid(filteredData) {
-  const secondaryGrid = document.getElementById('secondary-news-grid');
-  const sideNewsStack = document.getElementById('side-news-container');
-  if (!secondaryGrid || !sideNewsStack) return;
-
-  const sideItems = filteredData.slice(1, 3);
-  sideNewsStack.innerHTML = sideItems.map(item => `
-    <article class="side-card" data-article-id="${item.id}">
-      <img class="side-thumb" src="${item.coverImage}" alt="Cover" />
-      <div class="side-content">
-        <span class="article-badge ${item.badgeColor}">${item.categoryLabel}</span>
-        <h4 class="side-title">${item.title}</h4>
-        <div class="article-meta"><time>${item.timeAgo}</time> • <span>${item.readTime}</span></div>
-        ${animeTagMarkup(item)}
-      </div>
-      ${cardActionsMarkup(item)}
-    </article>
-  `).join('');
-
-  const secondaryItems = filteredData.slice(3);
-  secondaryGrid.innerHTML = secondaryItems.map(item => `
-    <article class="side-card" data-article-id="${item.id}">
-      <img class="side-thumb" src="${item.coverImage}" alt="Cover" />
-      <div class="side-content">
-        <span class="article-badge ${item.badgeColor}">${item.categoryLabel}</span>
-        <h4 class="side-title">${item.title}</h4>
-        <div class="article-meta"><time>${item.timeAgo}</time> • <span>${item.readTime}</span></div>
-        ${animeTagMarkup(item)}
-      </div>
-      ${cardActionsMarkup(item)}
-    </article>
-  `).join('');
-}
-
 function renderNewsScroll(filteredData) {
   const scrollContainer = document.getElementById('scroll-feed-container');
   if (!scrollContainer) return;
+
+  if (filteredData.length === 0) {
+    scrollContainer.innerHTML = '<div class="news-empty-state">Nothing in this category yet.</div>';
+    return;
+  }
 
   scrollContainer.innerHTML = filteredData.map(item => {
     const liked = likedArticleIds.has(item.id);
@@ -174,9 +123,9 @@ function renderNewsScroll(filteredData) {
         <button class="rail-btn" data-action="forward" data-article-id="${item.id}" title="Forward to DM">
           <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         </button>
-        <button class="rail-btn" data-action="share" title="Share Story">
-          <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-        </button>
+        ${item.sourceUrl ? `<a class="rail-btn" href="${item.sourceUrl}" target="_blank" rel="noopener" title="Read Original">
+          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </a>` : ''}
       </div>
 
       <div class="featured-content">
@@ -191,9 +140,7 @@ function renderNewsScroll(filteredData) {
 }
 
 function renderAll() {
-  const filtered = getFilteredData();
-  renderNewsGrid(filtered);
-  renderNewsScroll(filtered);
+  renderNewsScroll(getFilteredData());
 }
 
 // ------------------------------------------------------------------
@@ -209,17 +156,16 @@ document.addEventListener('kaidra:news-filter-change', function(e) {
 // ------------------------------------------------------------------
 document.addEventListener('click', function(e) {
 
-  // Bookmark
   const bookmarkBtn = e.target.closest('[data-action="bookmark"]');
   if (bookmarkBtn) {
-    const articleId = bookmarkBtn.getAttribute('data-article-id') || bookmarkBtn.closest('[data-article-id]')?.getAttribute('data-article-id');
+    const articleId = bookmarkBtn.getAttribute('data-article-id');
     if (articleId) {
       if (bookmarkedArticleIds.has(articleId)) {
         bookmarkedArticleIds.delete(articleId);
-        bookmarkBtn.classList.remove('bookmarked', 'active');
+        bookmarkBtn.classList.remove('active');
       } else {
         bookmarkedArticleIds.add(articleId);
-        bookmarkBtn.classList.add('bookmarked', 'active');
+        bookmarkBtn.classList.add('active');
       }
     }
     return;
@@ -236,10 +182,10 @@ document.addEventListener('click', function(e) {
     const nowLiked = !likedArticleIds.has(articleId);
     if (nowLiked) {
       likedArticleIds.add(articleId);
-      likeBtn.classList.add('liked', 'active');
+      likeBtn.classList.add('active');
     } else {
       likedArticleIds.delete(articleId);
-      likeBtn.classList.remove('liked', 'active');
+      likeBtn.classList.remove('active');
     }
 
     document.dispatchEvent(new CustomEvent('kaidra:news-like-toggle', {
@@ -248,7 +194,6 @@ document.addEventListener('click', function(e) {
     return;
   }
 
-  // Forward to DM — hands off to app.js, which owns the chat drawer.
   const forwardBtn = e.target.closest('[data-action="forward"]');
   if (forwardBtn) {
     const articleId = forwardBtn.getAttribute('data-article-id');
@@ -261,8 +206,6 @@ document.addEventListener('click', function(e) {
     return;
   }
 
-  // Anime tag — jump to Watchlist and search for the real title, so a
-  // user can check what a story is actually about vs. a misleading thumbnail.
   const tagBtn = e.target.closest('[data-action="view-anime"]');
   if (tagBtn) {
     document.dispatchEvent(new CustomEvent('kaidra:news-view-anime', {
@@ -275,8 +218,37 @@ document.addEventListener('click', function(e) {
 });
 
 // ------------------------------------------------------------------
-// Public hook — call this once your RSS-fetch function returns real
-// articles (shaped like KAIDRA_NEWS_DATA entries).
+// Real fetch — hits the /api/news serverless function (server-side RSS
+// aggregation, avoids CORS). Falls back to the small bundled dataset
+// above only if that request fails outright.
+// ------------------------------------------------------------------
+async function loadRealNews() {
+  const scrollContainer = document.getElementById('scroll-feed-container');
+  if (scrollContainer) {
+    scrollContainer.innerHTML = '<div class="news-loading-state">Loading news…</div>';
+  }
+
+  try {
+    const res = await fetch('/api/news');
+    if (!res.ok) throw new Error('news API responded ' + res.status);
+    const data = await res.json();
+    if (!data.articles || data.articles.length === 0) throw new Error('no articles returned');
+
+    currentNewsData = data.articles;
+    if (data.failedFeeds && data.failedFeeds.length) {
+      console.warn('Some news sources failed to fetch:', data.failedFeeds);
+    }
+  } catch (err) {
+    console.warn('Live news fetch failed, using fallback dataset:', err);
+    currentNewsData = KAIDRA_NEWS_FALLBACK;
+  }
+
+  renderAll();
+}
+
+// ------------------------------------------------------------------
+// Public hook — for manually pushing a fresh article set (e.g. from a
+// future personalization-aware refetch) without reloading the page.
 // ------------------------------------------------------------------
 window.KaidraNews = {
   setArticles: function(articles) {
@@ -285,7 +257,4 @@ window.KaidraNews = {
   }
 };
 
-// Initial Load
-document.addEventListener('DOMContentLoaded', function() {
-  renderAll();
-});
+document.addEventListener('DOMContentLoaded', loadRealNews);

@@ -3,40 +3,6 @@
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', function() {
-  
-  var newsViewBtn = document.getElementById('news-view-btn');
-  var viewBtnLabel = document.getElementById('view-btn-label');
-  var currentView = 'grid'; 
-  var hasDefaultPreference = false;
-
-  // Update Gesture Button UI
-  function updateViewButtonState() {
-    if (hasDefaultPreference) {
-      newsViewBtn.classList.add('is-hidden');
-      return;
-    }
-
-    newsViewBtn.classList.remove('is-hidden');
-    if (currentView === 'scroll') {
-      newsViewBtn.classList.add('active-scroll');
-      viewBtnLabel.textContent = 'Grid';
-    } else {
-      newsViewBtn.classList.remove('active-scroll');
-      viewBtnLabel.textContent = 'Scroll';
-    }
-  }
-
-  // Toggle Mode on Header Button Tap
-  if (newsViewBtn) {
-    newsViewBtn.addEventListener('click', function() {
-      currentView = (currentView === 'grid') ? 'scroll' : 'grid';
-      updateViewButtonState();
-
-      document.dispatchEvent(new CustomEvent('kaidra:news-view-change', { 
-        detail: { view: currentView } 
-      }));
-    });
-  }
 
   // Bottom Navigation Routing
   document.querySelectorAll('#app-bottom-nav .nav-item').forEach(function(btn) {
@@ -47,12 +13,6 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.classList.add('active');
       
       var targetTab = btn.getAttribute('data-tab');
-
-      if (targetTab === 'news' && !hasDefaultPreference) {
-        newsViewBtn.classList.remove('is-hidden');
-      } else {
-        newsViewBtn.classList.add('is-hidden');
-      }
 
       document.querySelectorAll('.tab-pane').forEach(function(pane) {
         pane.classList.remove('active');
@@ -108,21 +68,6 @@ document.addEventListener('DOMContentLoaded', function() {
       var avatarUrl = row.getAttribute('data-avatar');
       openDirectMessage(chatId, username, avatarUrl);
     });
-  });
-
-  // News View Switcher Listener
-  document.addEventListener('kaidra:news-view-change', function(e) {
-    var mode = e.detail.view;
-    var gridView = document.getElementById('news-grid-view');
-    var scrollView = document.getElementById('news-scroll-view');
-
-    if (mode === 'scroll') {
-      if (gridView) gridView.style.display = 'none';
-      if (scrollView) scrollView.style.display = 'flex';
-    } else {
-      if (gridView) gridView.style.display = 'flex';
-      if (scrollView) scrollView.style.display = 'none';
-    }
   });
 
   // Watchlist Filter Pill Switcher
@@ -244,14 +189,5 @@ document.addEventListener('DOMContentLoaded', function() {
       searchInput.dispatchEvent(new Event('input'));
     }
   });
-
-  // Settings Preference Toggle Listener
-  var settingLockScroll = document.getElementById('setting-lock-scroll');
-  if (settingLockScroll) {
-    settingLockScroll.addEventListener('change', function(e) {
-      hasDefaultPreference = e.target.checked;
-      updateViewButtonState();
-    });
-  }
 
 });

@@ -130,7 +130,10 @@ submitBtn?.addEventListener('click', async (e) => {
       avatarUrl = urlData.publicUrl;
     }
 
-    const { error: insertError } = await supabase.from('profiles').insert({
+    // Upsert, not insert -- this page now shows on every sign-in (not
+    // just the first), so returning users re-submitting their existing
+    // profile row must update it rather than fail on a duplicate id.
+    const { error: upsertError } = await supabase.from('profiles').upsert({
       id: session.user.id,
       username,
       birthdate,
@@ -138,11 +141,11 @@ submitBtn?.addEventListener('click', async (e) => {
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     });
 
-    if (insertError) {
+    if (upsertError) {
       setError(
-        insertError.code === '23505'
+        upsertError.code === '23505'
           ? 'That username is already taken.'
-          : insertError.message
+          : upsertError.message
       );
       submitBtn.disabled = false;
       return;
@@ -156,20 +159,27 @@ submitBtn?.addEventListener('click', async (e) => {
   }
 });
 
-// --- Init: require auth, and skip straight to the app if a profile
-// already exists (returning user landing here by mistake, e.g. via
-// back button) ---
+// --- Init: require auth. Personalization is shown on every sign-in now
+// (not just the first) -- if a profile already exists, prefill the form
+// with it instead of redirecting straight to the app. ---
 (async () => {
   session = await requireAuth();
   if (!session) return;
 
   const { data: existingProfile } = await supabase
     .from('profiles')
-    .select('id')
+    .select('username, birthdate, interests, avatar_url')
     .eq('id', session.user.id)
     .maybeSingle();
 
   if (existingProfile) {
-    window.location.href = '/app.html';
+    if (usernameInput) usernameInput.value = existingProfile.username || '';
+    if (birthdateInput) birthdateInput.value = existingProfile.birthdate || '';
+    (existingProfile.interests || []).forEach((interest) => {
+      document
+        .querySelector(`.interest-chip[data-interest="${interest}"]`)
+        ?.classList.add('selected');
+    });
+    if (submitBtn) submitBtn.textContent = 'Save & Continue';
   }
 })();

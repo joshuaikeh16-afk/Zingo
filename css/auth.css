@@ -85,6 +85,17 @@ body.auth-body {
   margin-bottom: 16px;
 }
 
+.auth-success-message {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--matcha-soft);
+  border: 1.5px solid var(--matcha);
+  color: var(--matcha);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
 .auth-loading {
   padding: 12px 14px;
   border-radius: var(--radius-md);

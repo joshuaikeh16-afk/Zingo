@@ -23,12 +23,52 @@ function setError(message) {
   if (!errorEl) return;
   errorEl.textContent = message || '';
   errorEl.classList.toggle('hidden', !message);
+  errorEl.classList.remove('auth-success-message');
+  errorEl.classList.add('auth-error-message');
 }
 
 function setLoading(isLoading) {
   if (loadingEl) loadingEl.classList.toggle('hidden', !isLoading);
   if (submitBtn) submitBtn.disabled = isLoading;
 }
+
+const forgotLink = document.getElementById('forgot-password-link');
+
+function setSuccess(message) {
+  if (!errorEl) return;
+  errorEl.textContent = message || '';
+  errorEl.classList.toggle('hidden', !message);
+  errorEl.classList.toggle('auth-success-message', !!message);
+  errorEl.classList.toggle('auth-error-message', !message);
+}
+
+forgotLink?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  setError(null);
+
+  const email = emailInput?.value?.trim();
+  if (!email) {
+    setError('Enter your email above first, then tap Forgot?');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password.html',
+    });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setSuccess('Check your email for a password reset link.');
+  } catch (err) {
+    setError('Something went wrong. Try again.');
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+});
 
 submitBtn?.addEventListener('click', async (e) => {
   e.preventDefault();

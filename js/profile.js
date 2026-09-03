@@ -252,7 +252,10 @@ editSaveBtn?.addEventListener('click', async () => {
         return;
       }
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      avatarUrl = urlData.publicUrl;
+      // Cache-bust: the path is deterministic (same user, same extension
+      // reuploads to the same URL), so without this the browser/CDN just
+      // keeps serving the old cached image even though the file changed.
+      avatarUrl = urlData.publicUrl + '?v=' + Date.now();
     }
 
     const { error: updateError } = await supabase.from('profiles').update({

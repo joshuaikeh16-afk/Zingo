@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="refresh" content="0; url=/auth.html" />
   <title>Kaidra</title>
+  <!-- JS redirect with replace() instead of meta-refresh: meta-refresh
+       pushes a new history entry every time it fires, which is part of
+       why "back" from the app used to bounce through the auth pages.
+       replace() means this page's own history slot gets overwritten by
+       the redirect target instead of sitting in the stack. -->
+  <script>window.location.replace('/auth.html');</script>
+  <noscript><meta http-equiv="refresh" content="0; url=/auth.html" /></noscript>
 </head>
 <body></body>
 </html>

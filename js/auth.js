@@ -118,10 +118,19 @@ submitBtn?.addEventListener('click', async (e) => {
   }
 });
 
-// If already signed in, skip the auth page entirely.
-(async () => {
+// If already signed in, skip the auth page entirely. Also re-checked on
+// pageshow with persisted=true -- that fires when the browser restores
+// this page from bfcache (e.g. tapping back from the app), which does
+// NOT re-run this script normally, so without this a signed-in user
+// could land back on a stale, unredirected auth page.
+async function redirectIfSignedIn() {
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
     window.location.replace('/onboarding.html');
   }
-})();
+}
+
+redirectIfSignedIn();
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) redirectIfSignedIn();
+});

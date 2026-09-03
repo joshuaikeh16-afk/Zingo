@@ -127,7 +127,7 @@ submitBtn?.addEventListener('click', async (e) => {
         return;
       }
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      avatarUrl = urlData.publicUrl;
+      avatarUrl = urlData.publicUrl + '?v=' + Date.now();
     }
 
     // Upsert, not insert -- this page now shows on every sign-in (not
@@ -161,8 +161,10 @@ submitBtn?.addEventListener('click', async (e) => {
 
 // --- Init: require auth, and skip straight to the app if a profile
 // already exists (this page is only meant to be reached from sign-up,
-// or as a fallback if a session somehow has no profile yet). ---
-(async () => {
+// or as a fallback if a session somehow has no profile yet). Also
+// re-checked on bfcache restore (pageshow persisted) -- see auth.js
+// for why that matters. ---
+async function checkAuthAndExistingProfile() {
   session = await requireAuth();
   if (!session) return;
 
@@ -175,4 +177,9 @@ submitBtn?.addEventListener('click', async (e) => {
   if (existingProfile) {
     window.location.replace('/app.html');
   }
-})();
+}
+
+checkAuthAndExistingProfile();
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) checkAuthAndExistingProfile();
+});

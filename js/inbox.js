@@ -12,6 +12,7 @@ import {
   getMessages,
   sendMessage,
   subscribeToMessages,
+  subscribeToInboxUpdates,
   markConversationRead,
   recordFriendInteraction,
   getActiveAotdDetails,
@@ -255,6 +256,14 @@ messageInput?.addEventListener('keydown', (e) => {
 
   currentUserId = session.user.id;
   await renderConversationList();
+
+  // Keeps the conversation list itself live (previews, unread badges,
+  // ordering) even for messages arriving in a conversation that isn't
+  // the currently-open thread -- that's handled separately by the
+  // per-thread subscription in openThread().
+  subscribeToInboxUpdates(currentUserId, () => {
+    renderConversationList();
+  });
 
   // Note: does NOT auto-open a thread on load. The thread view is a
   // full-screen overlay here (not an inline split view), so

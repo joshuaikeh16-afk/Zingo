@@ -333,6 +333,27 @@ export function subscribeToMessages(conversationId, onNewMessage) {
   return channel;
 }
 
+/**
+ * Inbox-wide realtime subscription (not scoped to one open thread).
+ * Unfiltered on purpose -- RLS on messages ("Participants can view
+ * messages") means Realtime only ever delivers rows for conversations
+ * this user is actually in, so this is safe. Used to keep the
+ * conversation list itself (previews, unread badges, ordering) live
+ * without requiring a manual refresh, even for conversations that
+ * aren't currently open.
+ */
+export function subscribeToInboxUpdates(userId, onNewMessage) {
+  const channel = supabase
+    .channel(`inbox:${userId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'messages' },
+      (payload) => onNewMessage(payload.new)
+    )
+    .subscribe();
+  return channel;
+}
+
 export async function sendMessage({ conversationId, senderId, content, messageType = 'text', externalRefId = null, mediaUrl = null, mediaDurationSeconds = null }) {
   const { error } = await supabase.from('messages').insert({
     conversation_id: conversationId,

@@ -88,8 +88,7 @@
 
       <div class="search-results-dropdown" id="anilist-results" style="display:none;"></div>
 
-      <div class="watchlist-section-label">Recommended for you</div>
-      <div class="recommended-rail" id="watchlist-recommended-rail"></div>
+      <div id="watchlist-genre-rows"></div>
 
       <div class="watchlist-section-label">Your List</div>
       <div class="status-filters" id="watchlist-filters">
@@ -272,6 +271,25 @@
         <button type="button" id="aotd-share-back-btn" class="aotd-share-back-btn">Back</button>
         <button type="button" id="aotd-share-confirm-btn" class="editp-save-btn">Share with Friends</button>
       </div>
+    </div>
+  </div>
+
+  <!-- WATCHLIST STATUS PICKER (Hook: #watchlist-status-picker) -->
+  <div class="status-picker-overlay hidden" id="watchlist-status-picker">
+    <div class="status-picker-sheet">
+      <div class="status-picker-header">
+        <img id="status-picker-cover" class="status-picker-cover" src="" alt="" />
+        <span id="status-picker-title" class="status-picker-title"></span>
+      </div>
+      <p class="status-picker-prompt">Add to which list?</p>
+      <div class="status-picker-options">
+        <button type="button" class="status-picker-option" data-status="watching">Currently Watching</button>
+        <button type="button" class="status-picker-option" data-status="planned">About to Watch</button>
+        <button type="button" class="status-picker-option" data-status="completed">Watched</button>
+        <button type="button" class="status-picker-option" data-status="favourite">Favourite</button>
+        <button type="button" class="status-picker-option" data-status="worst">Worst</button>
+      </div>
+      <button type="button" id="status-picker-cancel-btn" class="status-picker-cancel">Cancel</button>
     </div>
   </div>
 

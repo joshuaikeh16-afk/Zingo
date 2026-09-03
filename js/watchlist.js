@@ -1,8 +1,8 @@
 /* ==========================================================================
    Kaidra — Watchlist Tab Logic
    Real persistence via user_watchlist (add, episode progress, status),
-   trending recommendations so browsing doesn't require searching first,
-   and AniList list import.
+   genre-based recommendation rows, AniList list import, and a status
+   picker so adding an anime always asks which list it goes to.
    ========================================================================== */
 
 import {
@@ -11,18 +11,19 @@ import {
   addToWatchlist,
   updateWatchlistProgress,
   getUserWatchlist,
-  getTrendingAnime,
+  getTrendingAnimeByGenre,
   importAniListByUsername,
 } from './supabase-client.js';
 
 document.addEventListener('DOMContentLoaded', async function () {
 
   const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
+  const GENRE_ROWS = ['Action', 'Fantasy', 'Romance', 'Comedy'];
 
   const searchInput = document.getElementById('anilist-search-input');
   const resultsBox = document.getElementById('anilist-results');
   const cardsContainer = document.getElementById('watchlist-cards-container');
-  const recommendedRail = document.getElementById('watchlist-recommended-rail');
+  const genreRowsContainer = document.getElementById('watchlist-genre-rows');
 
   let searchDebounceTimer = null;
   let activeStatus = 'watching';
@@ -123,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         '<button class="result-add-btn" type="button">Add</button>';
 
       row.querySelector('.result-add-btn').addEventListener('click', () => {
-        addAnimeToList({
+        openStatusPicker({
           animeId: media.id,
           title,
           coverUrl: media.coverImage.large,
@@ -168,13 +169,49 @@ document.addEventListener('DOMContentLoaded', async function () {
   }
 
   // ------------------------------------------------------------------
+  // STATUS PICKER — shown every time "Add" is tapped (from search or
+  // from a recommended card), so which list it goes into is always a
+  // deliberate choice, not whatever tab happened to be selected.
+  // ------------------------------------------------------------------
+
+  const statusPicker = document.getElementById('watchlist-status-picker');
+  const statusPickerCover = document.getElementById('status-picker-cover');
+  const statusPickerTitle = document.getElementById('status-picker-title');
+  const statusPickerCancelBtn = document.getElementById('status-picker-cancel-btn');
+
+  let pendingAnime = null;
+
+  function openStatusPicker(anime) {
+    pendingAnime = anime;
+    if (statusPickerCover) statusPickerCover.src = anime.coverUrl || '';
+    if (statusPickerTitle) statusPickerTitle.textContent = anime.title;
+    statusPicker?.classList.remove('hidden');
+  }
+
+  function closeStatusPicker() {
+    pendingAnime = null;
+    statusPicker?.classList.add('hidden');
+  }
+
+  statusPickerCancelBtn?.addEventListener('click', closeStatusPicker);
+
+  statusPicker?.querySelectorAll('.status-picker-option').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!pendingAnime) return;
+      const status = btn.getAttribute('data-status');
+      await addAnimeToList(pendingAnime, status);
+      closeStatusPicker();
+    });
+  });
+
+  // ------------------------------------------------------------------
   // ADD TO WATCHLIST — real Supabase insert, then render for real.
   // ------------------------------------------------------------------
 
-  async function addAnimeToList({ animeId, title, coverUrl, totalEpisodes }) {
+  async function addAnimeToList({ animeId, title, coverUrl, totalEpisodes }, status) {
     try {
-      await addToWatchlist(currentUserId, animeId, activeStatus, totalEpisodes);
-      renderCard({ animeId, title, coverUrl, totalEpisodes, progress: 0, status: activeStatus });
+      await addToWatchlist(currentUserId, animeId, status, totalEpisodes);
+      renderCard({ animeId, title, coverUrl, totalEpisodes, progress: 0, status });
     } catch (err) {
       console.error('Failed to add to watchlist:', err);
     }
@@ -184,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   }
 
   // ------------------------------------------------------------------
-  // STATUS TAB FILTERING
+  // STATUS TAB FILTERING (for "Your List" only)
   // ------------------------------------------------------------------
 
   function applyStatusFilter(status) {
@@ -224,28 +261,47 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
 
   // ------------------------------------------------------------------
-  // RECOMMENDED / TRENDING — browsable without searching first.
+  // RECOMMENDED — one horizontally-sliding row per genre, instead of
+  // one mixed row. The page itself only scrolls vertically; each row
+  // scrolls sideways independently.
   // ------------------------------------------------------------------
 
-  async function loadRecommended() {
-    if (!recommendedRail) return;
-    const trending = await getTrendingAnime(12);
-    if (trending.length === 0) {
-      recommendedRail.innerHTML = '';
-      return;
-    }
+  async function loadGenreRows() {
+    if (!genreRowsContainer) return;
+    genreRowsContainer.innerHTML = '<div class="watchlist-loading">Loading recommendations…</div>';
 
-    recommendedRail.innerHTML = trending.map((anime) => `
-      <div class="recommended-card" data-anime-id="${anime.animeId}">
-        <img class="recommended-poster" src="${anime.coverUrl || ''}" alt="${anime.title}" />
-        <div class="recommended-title">${anime.title}</div>
-        <button class="recommended-add-btn" type="button">+ Add</button>
-      </div>
-    `).join('');
+    const results = await Promise.all(GENRE_ROWS.map((genre) => getTrendingAnimeByGenre(genre, 10)));
 
-    recommendedRail.querySelectorAll('.recommended-add-btn').forEach((btn, i) => {
-      btn.addEventListener('click', () => addAnimeToList(trending[i]));
+    genreRowsContainer.innerHTML = '';
+    GENRE_ROWS.forEach((genre, i) => {
+      const list = results[i];
+      if (!list || list.length === 0) return;
+
+      const section = document.createElement('div');
+      section.className = 'genre-row-section';
+      section.innerHTML = `
+        <div class="genre-row-title">${genre}</div>
+        <div class="recommended-rail" data-genre="${genre}"></div>
+      `;
+      genreRowsContainer.appendChild(section);
+
+      const rail = section.querySelector('.recommended-rail');
+      rail.innerHTML = list.map((anime) => `
+        <div class="recommended-card" data-anime-id="${anime.animeId}">
+          <img class="recommended-poster" src="${anime.coverUrl || ''}" alt="${anime.title}" />
+          <div class="recommended-title">${anime.title}</div>
+          <button class="recommended-add-btn" type="button">+ Add</button>
+        </div>
+      `).join('');
+
+      rail.querySelectorAll('.recommended-add-btn').forEach((btn, idx) => {
+        btn.addEventListener('click', () => openStatusPicker(list[idx]));
+      });
     });
+
+    if (!genreRowsContainer.children.length) {
+      genreRowsContainer.innerHTML = '<div class="watchlist-empty">Recommendations unavailable right now.</div>';
+    }
   }
 
   // ------------------------------------------------------------------
@@ -306,5 +362,5 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
 
   await loadWatchlist();
-  await loadRecommended();
+  await loadGenreRows();
 });

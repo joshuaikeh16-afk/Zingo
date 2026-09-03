@@ -890,6 +890,25 @@ export async function getTrendingAnime(limit = 12) {
   }
 }
 
+/** Trending anime within one genre -- powers the Watchlist tab's per-genre sliding rows. */
+export async function getTrendingAnimeByGenre(genre, limit = 12) {
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($perPage: Int, $genre: String) { Page(perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME, genre: $genre) { id title { userPreferred } coverImage { large } episodes } } }`,
+        variables: { perPage: limit, genre },
+      }),
+    });
+    const json = await res.json();
+    const list = json?.data?.Page?.media ?? [];
+    return list.map((m) => ({ animeId: m.id, title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }));
+  } catch {
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------
 // User Preferences (Settings toggles)
 // ---------------------------------------------------------------------

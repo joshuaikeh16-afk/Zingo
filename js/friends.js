@@ -9,9 +9,12 @@ import {
   sendStatusReply,
   addStatusQuickReact,
   searchUsers,
-  isFollowing,
-  followUser,
-  unfollowUser,
+  getFriendshipStatus,
+  sendFriendRequest,
+  cancelFriendRequest,
+  respondToFriendRequest,
+  removeFriend,
+  getIncomingRequests,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -27,9 +30,9 @@ const replyInput = document.getElementById('status-reply-input');
 const replySubmitBtn = document.getElementById('status-reply-submit-btn');
 const quickReactBtn = document.getElementById('status-quick-react-btn');
 const statusCloseBtn = document.getElementById('status-close-btn');
-const statusTopBarName = statusModal?.querySelector('span.text-xs.font-bold.text-white');
-const statusTopBarTime = statusModal?.querySelector('span.text-\\[10px\\].text-slate-400');
-const statusTopBarAvatar = statusModal?.querySelector('img');
+const statusTopBarName = statusModal?.querySelector('.status-viewer-name');
+const statusTopBarTime = statusModal?.querySelector('.status-viewer-time');
+const statusTopBarAvatar = statusModal?.querySelector('.status-viewer-user img');
 
 function formatRelativeTime(isoString) {
   const diffMs = Date.now() - new Date(isoString).getTime();
@@ -93,11 +96,11 @@ function openStatusViewer(friend, post) {
 
   if (statusMediaEl) {
     if (post.post_type === 'text_only' || !post.media_url) {
-      statusMediaEl.innerHTML = `<div class="w-full h-full flex items-center justify-center p-8 text-center text-lg font-semibold text-white bg-gradient-to-br from-violet-900 to-slate-900">${post.caption ?? ''}</div>`;
+      statusMediaEl.innerHTML = `<div class="status-text-post">${post.caption ?? ''}</div>`;
     } else {
       statusMediaEl.innerHTML = `
-        <img src="${post.media_url}" alt="Status" class="w-full h-full object-cover" />
-        ${post.caption ? `<div class="absolute bottom-4 left-4 right-4 p-3 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-xs text-white"><span>${post.caption}</span></div>` : ''}
+        <img src="${post.media_url}" alt="Status" class="status-media-img" />
+        ${post.caption ? `<div class="status-caption-overlay"><span>${post.caption}</span></div>` : ''}
       `;
     }
   }
@@ -158,6 +161,7 @@ quickReactBtn?.addEventListener('click', async () => {
 
   currentUserId = session.user.id;
   await renderFriendsStatuses();
+  await renderIncomingRequests();
 })();
 
 // ---------------------------------------------------------------------
@@ -194,7 +198,7 @@ findFriendsInput?.addEventListener('input', () => {
 async function runUserSearch(query) {
   if (!findFriendsResults) return;
   if (!query || query.trim().length < 2) {
-    findFriendsResults.innerHTML = '<p class="text-xs text-slate-500 text-center py-6">Type at least 2 characters to search.</p>';
+    findFriendsResults.innerHTML = '<p class="find-friends-hint">Type at least 2 characters to search.</p>';
     return;
   }
 
@@ -202,7 +206,7 @@ async function runUserSearch(query) {
   findFriendsResults.innerHTML = '';
 
   if (results.length === 0) {
-    findFriendsResults.innerHTML = '<p class="text-xs text-slate-500 text-center py-6">No users found.</p>';
+    findFriendsResults.innerHTML = '<p class="find-friends-hint">No users found.</p>';
     return;
   }
 
@@ -211,36 +215,40 @@ async function runUserSearch(query) {
 
 function buildUserSearchRow(user) {
   const row = document.createElement('div');
-  row.className = 'flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5';
+  row.className = 'find-friend-result-row';
   const name = user.display_name || user.username;
   const avatarUrl = user.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
 
   row.innerHTML = `
-    <img src="${avatarUrl}" alt="${name}" class="w-11 h-11 rounded-full object-cover" />
-    <div class="flex-1 min-w-0">
-      <p class="text-sm font-semibold text-white truncate">${name}</p>
-      <p class="text-xs text-slate-500 truncate">@${user.username}</p>
+    <img src="${avatarUrl}" alt="${name}" />
+    <div class="find-friend-result-info">
+      <p class="find-friend-result-name">${name}</p>
+      <p class="find-friend-result-handle">@${user.username}</p>
     </div>
-    <button type="button" class="follow-toggle-btn text-xs font-semibold px-4 py-1.5 rounded-full bg-violet-600 text-white">Follow</button>
+    <button type="button" class="friend-request-btn">Add Friend</button>
   `;
 
-  const btn = row.querySelector('.follow-toggle-btn');
+  const btn = row.querySelector('.friend-request-btn');
 
-  isFollowing(currentUserId, user.id).then((already) => {
-    setFollowBtnState(btn, already);
+  getFriendshipStatus(currentUserId, user.id).then((status) => {
+    setFriendBtnState(btn, status);
   });
 
   btn?.addEventListener('click', async () => {
-    const currentlyFollowing = btn.textContent.trim() === 'Following';
+    const state = btn.dataset.state;
     btn.disabled = true;
     try {
-      if (currentlyFollowing) {
-        await unfollowUser(currentUserId, user.id);
-        setFollowBtnState(btn, false);
-      } else {
-        await followUser(currentUserId, user.id);
-        setFollowBtnState(btn, true);
+      if (state === 'none') {
+        await sendFriendRequest(currentUserId, user.id);
+        setFriendBtnState(btn, await getFriendshipStatus(currentUserId, user.id));
+      } else if (state === 'pending_sent') {
+        await cancelFriendRequest(currentUserId, user.id);
+        setFriendBtnState(btn, 'none');
+      } else if (state === 'friends') {
+        await removeFriend(currentUserId, user.id);
+        setFriendBtnState(btn, 'none');
       }
+      // pending_received is handled from the incoming-requests bar, not here.
     } finally {
       btn.disabled = false;
     }
@@ -249,11 +257,68 @@ function buildUserSearchRow(user) {
   return row;
 }
 
-function setFollowBtnState(btn, following) {
+function setFriendBtnState(btn, status) {
   if (!btn) return;
-  btn.textContent = following ? 'Following' : 'Follow';
-  btn.classList.toggle('bg-violet-600', !following);
-  btn.classList.toggle('bg-slate-800', following);
-  btn.classList.toggle('text-white', !following);
-  btn.classList.toggle('text-slate-300', following);
+  btn.dataset.state = status;
+
+  const labels = {
+    none: 'Add Friend',
+    pending_sent: 'Requested',
+    pending_received: 'Respond Below',
+    friends: 'Friends',
+  };
+  btn.textContent = labels[status] || 'Add Friend';
+  btn.disabled = status === 'pending_received';
+  btn.classList.toggle('is-active-state', status === 'none');
+}
+
+// ---------------------------------------------------------------------
+// Incoming Friend Requests — shown as a small bar above the statuses.
+// ---------------------------------------------------------------------
+
+const requestsBar = document.getElementById('friend-requests-bar');
+const requestsList = document.getElementById('friend-requests-list');
+const requestsCount = document.getElementById('friend-requests-count');
+
+async function renderIncomingRequests() {
+  if (!requestsBar || !requestsList) return;
+  const requests = await getIncomingRequests(currentUserId);
+
+  if (requests.length === 0) {
+    requestsBar.classList.add('hidden');
+    return;
+  }
+
+  requestsBar.classList.remove('hidden');
+  if (requestsCount) requestsCount.textContent = String(requests.length);
+
+  requestsList.innerHTML = '';
+  requests.forEach((req) => {
+    const person = req.requester;
+    const name = person.display_name || person.username;
+    const avatarUrl = person.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
+
+    const row = document.createElement('div');
+    row.className = 'friend-request-row';
+    row.innerHTML = `
+      <img src="${avatarUrl}" alt="${name}" />
+      <div class="friend-request-info">
+        <p class="friend-request-name">${name}</p>
+        <p class="friend-request-handle">@${person.username}</p>
+      </div>
+      <button type="button" class="request-accept-btn" data-request-id="${req.id}">Accept</button>
+      <button type="button" class="request-decline-btn" data-request-id="${req.id}">Decline</button>
+    `;
+
+    row.querySelector('.request-accept-btn').addEventListener('click', async () => {
+      await respondToFriendRequest(req.id, true);
+      await renderIncomingRequests();
+    });
+    row.querySelector('.request-decline-btn').addEventListener('click', async () => {
+      await respondToFriendRequest(req.id, false);
+      await renderIncomingRequests();
+    });
+
+    requestsList.appendChild(row);
+  });
 }

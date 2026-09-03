@@ -134,29 +134,21 @@ async function hasActiveSotdFrom(senderId, recipientId) {
 
 export { hasActiveSotdFrom };
 
-/** All users who are mutual friends (both follow each other) with `userId`. */
+/** All users who are accepted friends with `userId`. */
 export async function getMutualFriends(userId) {
-  const { data: followingRows } = await supabase
-    .from('follows')
-    .select('followed_id')
-    .eq('follower_id', userId);
+  const { data: rows } = await supabase
+    .from('friend_requests')
+    .select('requester_id, target_id')
+    .eq('status', 'accepted')
+    .or(`requester_id.eq.${userId},target_id.eq.${userId}`);
 
-  const followingIds = (followingRows ?? []).map((r) => r.followed_id);
-  if (followingIds.length === 0) return [];
-
-  const { data: followBackRows } = await supabase
-    .from('follows')
-    .select('follower_id')
-    .eq('followed_id', userId)
-    .in('follower_id', followingIds);
-
-  const mutualIds = (followBackRows ?? []).map((r) => r.follower_id);
-  if (mutualIds.length === 0) return [];
+  const friendIds = (rows ?? []).map((r) => (r.requester_id === userId ? r.target_id : r.requester_id));
+  if (friendIds.length === 0) return [];
 
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, username, display_name, avatar_url')
-    .in('id', mutualIds);
+    .in('id', friendIds);
 
   return profiles ?? [];
 }
@@ -424,30 +416,93 @@ export async function searchUsers(query, currentUserId) {
   return data ?? [];
 }
 
-export async function isFollowing(followerId, followedId) {
+/**
+ * Friendship state between two users, from currentUserId's perspective:
+ * 'none' | 'pending_sent' | 'pending_received' | 'friends'
+ */
+export async function getFriendshipStatus(currentUserId, otherUserId) {
   const { data } = await supabase
-    .from('follows')
-    .select('follower_id')
-    .eq('follower_id', followerId)
-    .eq('followed_id', followedId)
+    .from('friend_requests')
+    .select('requester_id, target_id, status')
+    .or(`and(requester_id.eq.${currentUserId},target_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},target_id.eq.${currentUserId})`)
     .maybeSingle();
-  return !!data;
+
+  if (!data) return 'none';
+  if (data.status === 'accepted') return 'friends';
+  if (data.status === 'declined') return 'none';
+  // pending
+  return data.requester_id === currentUserId ? 'pending_sent' : 'pending_received';
 }
 
-export async function followUser(followerId, followedId) {
-  await supabase.from('follows').insert({ follower_id: followerId, followed_id: followedId });
+/**
+ * Sends a friend request. If the other person already sent one to you
+ * (a pending row the other direction), this accepts it instead of
+ * creating a duplicate -- mirrors how most apps handle a mutual add.
+ */
+export async function sendFriendRequest(requesterId, targetId) {
+  const { data: reverseRequest } = await supabase
+    .from('friend_requests')
+    .select('id, status')
+    .eq('requester_id', targetId)
+    .eq('target_id', requesterId)
+    .maybeSingle();
+
+  if (reverseRequest && reverseRequest.status === 'pending') {
+    return respondToFriendRequest(reverseRequest.id, true);
+  }
+
+  await supabase.from('friend_requests').insert({ requester_id: requesterId, target_id: targetId });
 }
 
-export async function unfollowUser(followerId, followedId) {
-  await supabase.from('follows').delete().eq('follower_id', followerId).eq('followed_id', followedId);
+/** Cancels a request you sent that's still pending. */
+export async function cancelFriendRequest(requesterId, targetId) {
+  await supabase
+    .from('friend_requests')
+    .delete()
+    .eq('requester_id', requesterId)
+    .eq('target_id', targetId)
+    .eq('status', 'pending');
 }
 
-export async function getFollowCounts(userId) {
-  const [{ count: following }, { count: followers }] = await Promise.all([
-    supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('follower_id', userId),
-    supabase.from('follows').select('followed_id', { count: 'exact', head: true }).eq('followed_id', userId),
-  ]);
-  return { following: following ?? 0, followers: followers ?? 0 };
+/** Accepts or declines a request sent to you. */
+export async function respondToFriendRequest(requestId, accept) {
+  await supabase
+    .from('friend_requests')
+    .update({ status: accept ? 'accepted' : 'declined', responded_at: new Date().toISOString() })
+    .eq('id', requestId);
+}
+
+/** Removes an existing friendship (either party can do this). */
+export async function removeFriend(userId, otherId) {
+  await supabase
+    .from('friend_requests')
+    .delete()
+    .eq('status', 'accepted')
+    .or(`and(requester_id.eq.${userId},target_id.eq.${otherId}),and(requester_id.eq.${otherId},target_id.eq.${userId})`);
+}
+
+/** Pending requests sent TO userId, with the requester's profile attached. */
+export async function getIncomingRequests(userId) {
+  const { data: rows } = await supabase
+    .from('friend_requests')
+    .select('id, created_at, requester_id')
+    .eq('target_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (!rows || rows.length === 0) return [];
+
+  const requesterIds = rows.map((r) => r.requester_id);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', requesterIds);
+
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  return rows
+    .map((r) => ({ id: r.id, created_at: r.created_at, requester: profileById.get(r.requester_id) }))
+    .filter((r) => r.requester);
 }
 
 export async function getTotalLikesForUser(userId) {

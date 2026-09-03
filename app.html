@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/main.css">
 <link rel="stylesheet" href="/css/news.css">
+<link rel="stylesheet" href="/css/friends.css">
 <link rel="stylesheet" href="/css/profile.css">
 <link rel="stylesheet" href="/css/chat.css">
 <link rel="stylesheet" href="/css/watchlist.css">
@@ -50,6 +51,33 @@
           <div id="scroll-feed-container"></div>
         </div>
 
+      </div>
+    </section>
+
+    <!-- TAB: FRIENDS (Hook: #tab-friends) — restored real feature: mutual
+         24hr statuses + Song of the Day. Follow model replaced below with
+         friend requests (search -> request -> accept). -->
+    <section class="tab-pane" id="tab-friends">
+      <div class="section-header">
+        <div>
+          <h2>Friends</h2>
+          <p id="friends-active-count"></p>
+        </div>
+        <button type="button" id="find-friends-btn" class="status-pill active" style="padding: 6px 12px; font-size:12px;">Find Friends</button>
+      </div>
+
+      <!-- Incoming Friend Requests -->
+      <div id="friend-requests-bar" class="friend-requests-bar hidden">
+        <div class="friend-requests-header">Friend Requests (<span id="friend-requests-count">0</span>)</div>
+        <div id="friend-requests-list" class="friend-requests-list"></div>
+      </div>
+
+      <div id="friends-status-container" class="friends-status-container"></div>
+
+      <div id="friends-empty-state" class="empty-state hidden">
+        <div class="empty-state-icon">👥</div>
+        <h4>No active statuses</h4>
+        <p>When friends post a status or share music, it'll appear here.</p>
       </div>
     </section>
 
@@ -224,6 +252,35 @@
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
     </form>
+  </div>
+
+  <!-- STATUS VIEWER MODAL (Hook: #status-viewer-modal) -->
+  <div class="status-viewer-modal hidden" id="status-viewer-modal">
+    <div class="status-viewer-topbar">
+      <div class="status-viewer-user">
+        <img src="" alt="" />
+        <span class="status-viewer-name"></span>
+        <span class="status-viewer-time"></span>
+      </div>
+      <button type="button" id="status-close-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="status-media"></div>
+    <div class="status-viewer-actions">
+      <input type="text" id="status-reply-input" placeholder="Reply privately..." />
+      <button type="button" id="status-quick-react-btn" title="Quick react">🔥</button>
+      <button type="button" id="status-reply-submit-btn">Send</button>
+    </div>
+  </div>
+
+  <!-- FIND FRIENDS MODAL (Hook: #find-friends-modal) -->
+  <div class="find-friends-modal hidden" id="find-friends-modal">
+    <div class="find-friends-search-bar">
+      <input type="text" id="find-friends-input" placeholder="Search by username..." />
+      <button type="button" id="find-friends-close-btn">Cancel</button>
+    </div>
+    <div id="find-friends-results" class="find-friends-results"></div>
   </div>
 
   <!-- FORWARD-TO-DM PICKER (Hook: #forward-picker-overlay) -->
@@ -422,6 +479,11 @@
         <span>News</span>
       </button>
 
+      <button class="nav-item" data-tab="friends">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>Friends</span>
+      </button>
+
       <button class="nav-item" data-tab="watchlist">
         <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
         <span>Watchlist</span>
@@ -442,6 +504,7 @@
 
   <script src="/js/news-data.js"></script>
   <script src="/js/watchlist.js"></script>
+  <script type="module" src="/js/friends.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

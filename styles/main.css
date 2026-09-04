@@ -1,0 +1,358 @@
+/* ==========================================================================
+   Kaidra — main.css
+   Design tokens + global shell. Loaded first — every other stylesheet
+   references these CSS variables.
+   ========================================================================== */
+
+:root {
+  /* Color */
+  --paper: #F5F6F8;
+  --surface: #FFFFFF;
+  --ink: #1B1D22;
+  --ink-soft: #6B6F76;
+  --ink-faint: #9A9DA6;
+  --hairline: #E2E4E9;
+  --hairline-strong: #C9CCD3;
+
+  --indigo: #5B5FEF;
+  --indigo-soft: #EEF0FE;
+  --vermillion: #E24A3A;
+  --vermillion-soft: #FDECEA;
+  --matcha: #4F8B5B;
+  --matcha-soft: #EAF3EC;
+  --gold: #C98A1E;
+  --gold-soft: #FBF1DE;
+
+  /* Type */
+  --font-display: 'Zen Kaku Gothic New', sans-serif;
+  --font-body: 'Plus Jakarta Sans', sans-serif;
+
+  /* Radius */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  /* Shadow — used sparingly, one flat offset, no soft blur */
+  --shadow-stamp: 3px 4px 0 rgba(27, 29, 34, 0.08);
+}
+
+/* ------------------------------------------------------------------
+   Reset
+   ------------------------------------------------------------------ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
+}
+
+img { max-width: 100%; display: block; }
+a { color: inherit; text-decoration: none; }
+input { font-family: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Shared card treatment: hairline border, not a shadow */
+.hairline-card {
+  background: var(--surface);
+  border: 1.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+/* ------------------------------------------------------------------
+   Header
+   ------------------------------------------------------------------ */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  color: var(--ink);
+}
+
+.logo-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--indigo);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-icon svg {
+  width: 17px;
+  height: 17px;
+  stroke: #fff;
+  fill: none;
+  stroke-width: 2;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px 7px 9px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.view-toggle-btn.is-hidden { display: none; }
+
+.phone-icon-wrapper {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-frame {
+  width: 14px;
+  height: 16px;
+  stroke: var(--ink);
+  fill: none;
+  stroke-width: 1.6;
+}
+
+.scroll-arrow { display: none; }
+
+.view-toggle-btn.active-scroll {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.view-toggle-btn.active-scroll .phone-frame { stroke: #fff; }
+
+/* ------------------------------------------------------------------
+   Tab Panes
+   ------------------------------------------------------------------ */
+
+.main-content { padding: 4px 18px 104px; }
+
+.tab-pane { display: none; }
+.tab-pane.active { display: block; animation: kaidraFadeIn 0.25s ease; }
+
+@keyframes kaidraFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 8px 0 18px;
+}
+
+.section-header h2 {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.section-header p {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: 3px;
+}
+
+/* ------------------------------------------------------------------
+   Pills — filter chips & status pills
+   ------------------------------------------------------------------ */
+
+.news-filter-bar,
+.status-filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 16px;
+  scrollbar-width: none;
+}
+
+.news-filter-bar::-webkit-scrollbar,
+.status-filters::-webkit-scrollbar { display: none; }
+
+.filter-chip,
+.status-pill {
+  flex-shrink: 0;
+  padding: 8px 15px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--hairline);
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-chip.active,
+.status-pill.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------
+   Article Badge — the "hanko stamp" motif, reused wherever a category
+   or label appears. Dashed border + slight rotation + tint.
+   ------------------------------------------------------------------ */
+
+.article-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 700;
+  transform: rotate(-2deg);
+  border: 1.5px dashed currentColor;
+}
+
+.article-badge.pink { color: var(--vermillion); background: var(--vermillion-soft); }
+.article-badge.cyan { color: var(--indigo); background: var(--indigo-soft); }
+.article-badge.purple { color: var(--gold); background: var(--gold-soft); }
+
+/* ------------------------------------------------------------------
+   Toggle Switches
+   ------------------------------------------------------------------ */
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: var(--hairline-strong);
+  border-radius: var(--radius-pill);
+  transition: 0.2s;
+  cursor: pointer;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.2s;
+  box-shadow: 0 1px 2px rgba(27, 29, 34, 0.2);
+}
+
+.switch input:checked + .slider { background: var(--indigo); }
+.switch input:checked + .slider::before { transform: translateX(16px); }
+
+/* ------------------------------------------------------------------
+   Bottom Navigation
+   ------------------------------------------------------------------ */
+
+.bottom-nav-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1.5px solid var(--hairline);
+  z-index: 30;
+}
+
+.bottom-nav {
+  display: flex;
+  justify-content: space-around;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 14px;
+  border-radius: 12px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.nav-item svg {
+  width: 21px;
+  height: 21px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+}
+
+.nav-item.active { color: var(--indigo); }
+
+.nav-item .unread-dot {
+  position: absolute;
+  top: 2px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vermillion);
+  display: none;
+}
+
+.nav-item[data-tab="inbox"] .unread-dot { display: block; }

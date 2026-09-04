@@ -24,6 +24,7 @@ let currentUserId = null;
 let openConversationId = null;
 let openOtherUserId = null;
 let activeChannel = null;
+let renderedMessageIds = new Set();
 
 const conversationList = document.getElementById('conversation-list');
 const threadContainer = document.getElementById('message-thread-container');
@@ -188,6 +189,16 @@ function buildMessageBubble(message) {
   return bubble;
 }
 
+// Realtime will echo messages sent by this browser. Keeping a small set of
+// rendered database IDs makes the UI feel instant without showing that echo
+// twice when it arrives over the websocket a moment later.
+function appendMessageOnce(message) {
+  if (!threadContainer || !message?.id || renderedMessageIds.has(message.id)) return;
+  renderedMessageIds.add(message.id);
+  threadContainer.appendChild(buildMessageBubble(message));
+  threadContainer.scrollTop = threadContainer.scrollHeight;
+}
+
 async function openThread(conversationId, otherUserId, otherUserName, otherUserAvatar) {
   if (activeChannel) {
     supabase.removeChannel(activeChannel);
@@ -207,16 +218,16 @@ async function openThread(conversationId, otherUserId, otherUserName, otherUserA
 
   if (!threadContainer) return;
   threadContainer.innerHTML = '';
+  renderedMessageIds = new Set();
 
   const messages = await getMessages(conversationId);
-  messages.forEach((m) => threadContainer.appendChild(buildMessageBubble(m)));
+  messages.forEach(appendMessageOnce);
   threadContainer.scrollTop = threadContainer.scrollHeight;
 
   await markConversationRead(conversationId, currentUserId);
 
   activeChannel = subscribeToMessages(conversationId, (newMessage) => {
-    threadContainer.appendChild(buildMessageBubble(newMessage));
-    threadContainer.scrollTop = threadContainer.scrollHeight;
+    appendMessageOnce(newMessage);
     if (newMessage.sender_id !== currentUserId) {
       markConversationRead(conversationId, currentUserId);
     }
@@ -229,14 +240,16 @@ async function handleSend() {
 
   messageInput.value = '';
   try {
-    await sendMessage({
+    const sentMessage = await sendMessage({
       conversationId: openConversationId,
       senderId: currentUserId,
       content: text,
     });
     await recordFriendInteraction(openOtherUserId);
-    // No manual DOM append here -- the realtime subscription above
-    // handles rendering the sent message when it echoes back.
+    // Render the confirmed row immediately. Its Realtime echo is ignored by
+    // appendMessageOnce, so neither sender nor receiver needs a page reload.
+    appendMessageOnce(sentMessage);
+    renderConversationList();
   } catch (err) {
     console.error('Send failed:', err);
     messageInput.value = text; // restore on failure

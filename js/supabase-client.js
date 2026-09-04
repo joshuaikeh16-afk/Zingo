@@ -221,6 +221,7 @@ export async function getFriendsActiveStatuses(userId) {
         .from('posts')
         .select('*')
         .eq('user_id', friend.id)
+        .neq('post_type', 'video')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
@@ -355,7 +356,7 @@ export function subscribeToInboxUpdates(userId, onNewMessage) {
 }
 
 export async function sendMessage({ conversationId, senderId, content, messageType = 'text', externalRefId = null, mediaUrl = null, mediaDurationSeconds = null }) {
-  const { error } = await supabase.from('messages').insert({
+  const { data, error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
     sender_id: senderId,
     content,
@@ -363,8 +364,9 @@ export async function sendMessage({ conversationId, senderId, content, messageTy
     ...(externalRefId ? { external_ref_id: externalRefId } : {}),
     ...(mediaUrl ? { media_url: mediaUrl } : {}),
     ...(mediaDurationSeconds != null ? { media_duration_seconds: mediaDurationSeconds } : {}),
-  });
+  }).select().single();
   if (error) throw error;
+  return data;
 }
 
 /**
@@ -650,6 +652,59 @@ export async function getFriendsVideoPosts(userId) {
   return data ?? [];
 }
 
+/**
+ * Uploads one user's short-form video. The object is private; callers store
+ * the returned path on posts.media_url and resolve it to a signed URL only
+ * when rendering a feed.
+ */
+export async function uploadVideoPost(userId, file) {
+  const extension = (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const path = `${userId}/${crypto.randomUUID()}.${extension || 'mp4'}`;
+  const { error } = await supabase.storage.from('post-videos').upload(path, file, {
+    contentType: file.type || 'video/mp4',
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+export async function deleteVideoPostUpload(path) {
+  if (!path) return;
+  await supabase.storage.from('post-videos').remove([path]);
+}
+
+/** Deletes an author's video post and its private object. */
+export async function deleteVideoPost(userId, postId, mediaPath) {
+  const { error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId)
+    .eq('user_id', userId)
+    .eq('post_type', 'video');
+  if (error) throw error;
+  // A failed cleanup leaves only an inaccessible orphan, never a visible post.
+  await deleteVideoPostUpload(mediaPath).catch((cleanupError) => console.warn('Video file cleanup failed:', cleanupError));
+}
+
+/** Creates a 24-hour user video post after its media has uploaded. */
+export async function createVideoPost(userId, { mediaPath, caption = '', durationSeconds = null }) {
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('posts')
+    .insert({
+      user_id: userId,
+      post_type: 'video',
+      media_url: mediaPath,
+      caption: caption || null,
+      expires_at: expiresAt,
+      ...(durationSeconds != null ? { media_duration_seconds: durationSeconds } : {}),
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------------
 // Comments -- only relevant now that Videos means real user-posted
 // content with an actual author, not YouTube-sourced videos.
@@ -679,6 +734,59 @@ export async function getCommentCount(postId) {
     .select('id', { count: 'exact', head: true })
     .eq('post_id', postId);
   return count ?? 0;
+}
+
+// ---------------------------------------------------------------------
+// Video engagement — likes, private saves, comments, and share events.
+// ---------------------------------------------------------------------
+
+export async function getVideoEngagement(postId, userId) {
+  const [{ count: likeCount }, { count: commentCount }, { data: liked }, { data: saved }] = await Promise.all([
+    supabase.from('post_likes').select('post_id', { count: 'exact', head: true }).eq('post_id', postId),
+    supabase.from('post_comments').select('post_id', { count: 'exact', head: true }).eq('post_id', postId),
+    supabase.from('post_likes').select('post_id').eq('post_id', postId).eq('user_id', userId).maybeSingle(),
+    supabase.from('video_saves').select('post_id').eq('post_id', postId).eq('user_id', userId).maybeSingle(),
+  ]);
+  return { likeCount: likeCount ?? 0, commentCount: commentCount ?? 0, liked: !!liked, saved: !!saved };
+}
+
+export async function togglePostLike(postId, userId) {
+  const { data: existing } = await supabase.from('post_likes').select('post_id').eq('post_id', postId).eq('user_id', userId).maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userId);
+    if (error) throw error;
+    return false;
+  }
+  const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
+  if (error) throw error;
+  return true;
+}
+
+export async function toggleVideoSave(postId, userId) {
+  const { data: existing } = await supabase.from('video_saves').select('post_id').eq('post_id', postId).eq('user_id', userId).maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('video_saves').delete().eq('post_id', postId).eq('user_id', userId);
+    if (error) throw error;
+    return false;
+  }
+  const { error } = await supabase.from('video_saves').insert({ post_id: postId, user_id: userId });
+  if (error) throw error;
+  return true;
+}
+
+export async function recordVideoShare(postId, userId, destination = 'native') {
+  const { error } = await supabase.from('video_shares').insert({ post_id: postId, user_id: userId, destination });
+  if (error) throw error;
+}
+
+export async function getUserVideoActivity(userId) {
+  const [likes, saves, comments, shares] = await Promise.all([
+    supabase.from('post_likes').select('created_at, posts!inner(id, caption)').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+    supabase.from('video_saves').select('created_at, posts!inner(id, caption)').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+    supabase.from('post_comments').select('created_at, content, posts!inner(id, caption)').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+    supabase.from('video_shares').select('created_at, destination, posts!inner(id, caption)').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+  ]);
+  return { likes: likes.data ?? [], saves: saves.data ?? [], comments: comments.data ?? [], shares: shares.data ?? [] };
 }
 
 // ---------------------------------------------------------------------

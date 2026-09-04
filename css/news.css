@@ -20,6 +20,8 @@
   height: 100%;
   overflow-y: auto;
   scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
   scrollbar-width: none;
   border-radius: var(--radius-lg);
 }
@@ -37,7 +39,7 @@
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow-stamp);
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .scroll-media {

@@ -18,6 +18,7 @@ import {
   sendFriendRequest,
   cancelFriendRequest,
   removeFriend,
+  getSignedMediaUrl,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -43,12 +44,17 @@ function formatCount(n) {
   return String(n);
 }
 
-function buildPostTile(post) {
+async function buildPostTile(post) {
   const tile = document.createElement('div');
   tile.dataset.postId = post.id;
 
-  const badge = post.post_type === 'aotd' ? '🎬 AOTD' : post.post_type === 'text_only' ? '📝' : '❤️';
-  const mediaHtml = post.media_url
+  const badge = post.post_type === 'video' ? '🎥' : post.post_type === 'aotd' ? '🎬 AOTD' : post.post_type === 'text_only' ? '📝' : '❤️';
+  const videoUrl = post.post_type === 'video' && post.media_url
+    ? (post.media_url.startsWith('http') ? post.media_url : await getSignedMediaUrl('post-videos', post.media_url))
+    : null;
+  const mediaHtml = videoUrl
+    ? `<video src="${videoUrl}" muted playsinline preload="metadata"></video>`
+    : post.media_url
     ? `<img src="${post.media_url}" alt="Post" />`
     : `<div class="post-tile-text">${post.caption ?? ''}</div>`;
 
@@ -69,7 +75,8 @@ async function renderPosts() {
     postsEmptyState?.classList.add('hidden');
     postsEmptyState?.classList.remove('flex');
     postsGrid.classList.remove('hidden');
-    posts.forEach((p) => postsGrid.appendChild(buildPostTile(p)));
+    const tiles = await Promise.all(posts.map(buildPostTile));
+    tiles.forEach((tile) => postsGrid.appendChild(tile));
   }
 }
 

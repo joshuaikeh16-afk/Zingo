@@ -78,6 +78,27 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   });
 
+  // Home has two deliberately separate surfaces: the full-screen video FYP
+  // is the default, while News remains available without mixing cards into
+  // the vertical video gesture.
+  const homeModeButtons = document.querySelectorAll('.home-mode-btn');
+  const fypView = document.getElementById('fyp-video-view');
+  const newsView = document.getElementById('news-scroll-view');
+  homeModeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.homeMode;
+      homeModeButtons.forEach((item) => {
+        const active = item === button;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+      });
+      fypView?.classList.toggle('hidden', mode !== 'fyp');
+      newsView?.classList.toggle('hidden', mode !== 'news');
+      if (mode === 'news') document.querySelectorAll('#fyp-video-feed video').forEach((video) => video.pause());
+      document.dispatchEvent(new CustomEvent('kaidra:home-mode-change', { detail: { mode } }));
+    });
+  });
+
   // Settings Slide-Over Controls
   var settingsOverlay = document.getElementById('settings-overlay');
   var openSettingsBtn = document.getElementById('open-settings-btn');

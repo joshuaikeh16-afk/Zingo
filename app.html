@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="/css/chat.css">
 <link rel="stylesheet" href="/css/watchlist.css">
 <link rel="stylesheet" href="/css/news-social.css">
+<link rel="stylesheet" href="/css/videos.css">
 </head>
 <body>
 
@@ -31,14 +32,24 @@
   <!-- MAIN TAB PANES VIEWPORT -->
   <main class="main-content">
 
-    <!-- TAB 1: NEWS & DISCOVERY (Hook: #tab-news) — scroll-only, general audience -->
+    <!-- HOME: full-screen friend-video FYP, with News as a separate mode. -->
     <section class="tab-pane active" id="tab-news">
-      <div class="news-view-container">
-
-        <div class="news-mode-scroll" id="news-scroll-view">
+      <div class="home-mode-switch" role="tablist" aria-label="Home content">
+        <button type="button" class="home-mode-btn active" data-home-mode="fyp" role="tab" aria-selected="true">For You</button>
+        <button type="button" class="home-mode-btn" data-home-mode="news" role="tab" aria-selected="false">News</button>
+      </div>
+      <div id="fyp-video-view" class="fyp-video-view">
+        <div id="fyp-video-feed" class="fyp-video-feed" aria-live="polite"></div>
+        <div id="fyp-video-empty-state" class="fyp-video-empty-state hidden">
+          <span>🎥</span>
+          <h2>Your video feed starts here</h2>
+          <p>Post a video from your profile, then invite friends to share theirs.</p>
+        </div>
+      </div>
+      <div class="news-view-container hidden" id="news-scroll-view">
+        <div class="news-mode-scroll">
           <div id="scroll-feed-container"></div>
         </div>
-
       </div>
     </section>
 
@@ -70,6 +81,7 @@
         <h4>No active statuses</h4>
         <p>When friends post a status or share music, it'll appear here.</p>
       </div>
+
     </section>
 
     <!-- TAB 2: WATCHLIST (Hook: #tab-watchlist) -->
@@ -162,6 +174,10 @@
             </div>
           </div>
 
+          <button type="button" id="open-video-post-btn" class="profile-post-video-btn">
+            <span>＋</span> Post a video
+          </button>
+
           <button type="button" class="friend-request-btn hidden" id="friend-action-btn" style="margin-top:14px;">Add Friend</button>
         </div>
 
@@ -207,6 +223,49 @@
       <button type="button" class="chat-send-btn" id="message-send-btn" aria-label="Send Message">
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- VIDEO POST COMPOSER -->
+  <div class="video-post-modal hidden" id="video-post-modal" role="dialog" aria-modal="true" aria-labelledby="video-post-title">
+    <div class="video-post-sheet">
+      <div class="video-post-header">
+        <div>
+          <h3 id="video-post-title">Post a video</h3>
+          <p>Visible to your friends for 24 hours.</p>
+        </div>
+        <button type="button" id="close-video-post-btn" class="video-post-close" aria-label="Close">×</button>
+      </div>
+      <label for="video-post-input" class="video-file-picker" id="video-file-picker">
+        <span class="video-file-icon">🎥</span>
+        <strong>Choose a video</strong>
+        <small>MP4, WebM, or MOV · up to 100 MB</small>
+      </label>
+      <input class="hidden" type="file" id="video-post-input" accept="video/mp4,video/webm,video/quicktime,video/*" />
+      <video id="video-post-preview" class="video-post-preview hidden" controls playsinline></video>
+      <p id="video-post-file-name" class="video-post-file-name hidden"></p>
+      <label class="video-caption-label" for="video-post-caption">Caption <span>optional</span></label>
+      <textarea id="video-post-caption" class="video-caption-input" maxlength="280" rows="3" placeholder="Tell your friends about it…"></textarea>
+      <p id="video-post-error" class="video-post-error hidden" role="alert"></p>
+      <button type="button" id="submit-video-post-btn" class="video-post-submit" disabled>Post video</button>
+    </div>
+  </div>
+
+  <div class="video-comments-modal hidden" id="video-comments-modal" role="dialog" aria-modal="true" aria-labelledby="video-comments-title">
+    <div class="video-comments-sheet">
+      <div class="video-comments-header"><h3 id="video-comments-title">Comments</h3><button type="button" id="close-video-comments-btn" aria-label="Close">×</button></div>
+      <div id="video-comments-list" class="video-comments-list"></div>
+      <form id="video-comment-form" class="video-comment-form">
+        <input id="video-comment-input" maxlength="280" placeholder="Add a comment…" autocomplete="off" />
+        <button type="submit">Post</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="video-comments-modal hidden" id="video-activity-modal" role="dialog" aria-modal="true" aria-labelledby="video-activity-title">
+    <div class="video-comments-sheet">
+      <div class="video-comments-header"><h3 id="video-activity-title">Your video activity</h3><button type="button" id="close-video-activity-btn" aria-label="Close">×</button></div>
+      <div id="video-activity-list" class="video-comments-list"></div>
     </div>
   </div>
 
@@ -493,6 +552,18 @@
           </div>
         </div>
 
+        <!-- VIDEO ACTIVITY -->
+        <div class="settings-section">
+          <div class="settings-section-title">Video Activity</div>
+          <button type="button" class="setting-card-item" id="open-video-activity-btn">
+            <div class="item-left-group">
+              <div class="icon-box pink">♥</div>
+              <div class="item-text"><span class="heading">Likes, saves &amp; comments</span><span class="subtext">View your saved videos and activity</span></div>
+            </div>
+            <svg class="arrow-icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+
         <!-- CATEGORY 5: SYSTEM PREFERENCES -->
         <div class="settings-section">
           <div class="settings-section-title">System Preferences</div>
@@ -534,7 +605,7 @@
     <nav class="bottom-nav" id="app-bottom-nav">
       <button class="nav-item active" data-tab="news">
         <svg viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"></path></svg>
-        <span>News</span>
+        <span>Home</span>
       </button>
 
       <button class="nav-item" data-tab="friends">
@@ -565,6 +636,7 @@
   <script type="module" src="/js/friends.js"></script>
   <script type="module" src="/js/inbox.js"></script>
   <script type="module" src="/js/profile.js"></script>
+  <script type="module" src="/js/video-posts.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

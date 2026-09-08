@@ -17,6 +17,7 @@ import {
   getIncomingRequests,
   shareAnimeOfTheDay,
 } from './supabase-client.js';
+import { searchMAL } from './mal-client.js';
 
 let currentUserId = null;
 let openStatus = null; // { friend, post } currently shown in the viewer
@@ -325,11 +326,10 @@ async function renderIncomingRequests() {
 }
 
 // ---------------------------------------------------------------------
-// Share Anime of the Day: search AniList, pick one, optional note,
+// Share Anime of the Day: search MyAnimeList, pick one, optional note,
 // share with every mutual friend at once.
 // ---------------------------------------------------------------------
 
-const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
 const shareAotdBtn = document.getElementById('share-aotd-btn');
 const aotdShareModal = document.getElementById('aotd-share-modal');
 const aotdShareInput = document.getElementById('aotd-share-search-input');
@@ -371,16 +371,8 @@ async function runAotdSearch(term) {
   }
 
   try {
-    const res = await fetch(ANILIST_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query ($search: String) { Page(perPage: 8) { media(search: $search, type: ANIME) { id title { romaji english } coverImage { medium } } } }`,
-        variables: { search: term },
-      }),
-    });
-    const json = await res.json();
-    const media = json?.data?.Page?.media ?? [];
+    const payload = await searchMAL(term, 'anime', 8);
+    const media = (payload?.data ?? []).map((entry) => entry.node || entry);
     aotdShareResults.innerHTML = '';
 
     if (media.length === 0) {
@@ -389,11 +381,11 @@ async function runAotdSearch(term) {
     }
 
     media.forEach((anime) => {
-      const title = anime.title.english || anime.title.romaji;
+      const title = anime.title || 'Unknown title';
       const row = document.createElement('div');
       row.className = 'find-friend-result-row';
       row.innerHTML = `
-        <img src="${anime.coverImage.medium}" alt="${title}" />
+        <img src="${anime.main_picture?.medium || anime.main_picture?.large || ''}" alt="${title}" />
         <div class="find-friend-result-info">
           <p class="find-friend-result-name">${title}</p>
         </div>
@@ -403,14 +395,14 @@ async function runAotdSearch(term) {
       aotdShareResults.appendChild(row);
     });
   } catch (err) {
-    console.error('AniList search failed:', err);
+    console.error('MyAnimeList search failed:', err);
     aotdShareResults.innerHTML = '<p class="find-friends-hint">Search failed — try again.</p>';
   }
 }
 
 function showAotdConfirmStep(anime, title) {
   pendingAotdAnime = { anime, title };
-  if (aotdShareConfirmCover) aotdShareConfirmCover.src = anime.coverImage.medium;
+  if (aotdShareConfirmCover) aotdShareConfirmCover.src = anime.main_picture?.medium || anime.main_picture?.large || '';
   if (aotdShareConfirmTitle) aotdShareConfirmTitle.textContent = title;
   if (aotdShareNoteInput) aotdShareNoteInput.value = '';
 
@@ -438,7 +430,7 @@ aotdShareConfirmBtn?.addEventListener('click', async () => {
     await shareAnimeOfTheDay(currentUserId, {
       animeId: anime.id,
       animeTitle: title,
-      coverImageUrl: anime.coverImage.medium,
+      coverImageUrl: anime.main_picture?.medium || anime.main_picture?.large || '',
       note,
     });
     aotdShareModal?.classList.add('hidden');

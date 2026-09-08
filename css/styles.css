@@ -2139,7 +2139,7 @@ h1, h2, h3, h4, .font-heading {
    =================================================================== */
 
 #video-feed-container {
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   height: 100vh;
@@ -2161,7 +2161,7 @@ h1, h2, h3, h4, .font-heading {
 
 .video-card {
   scroll-snap-align: start;
-  scroll-snap-stop: always;
+  scroll-snap-stop: normal;
   height: 100vh;
   height: 100dvh;
   width: 100%;
@@ -2279,7 +2279,7 @@ h1, h2, h3, h4, .font-heading {
 }
 
 #home-panel-videos #video-feed-container {
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   height: calc(100vh - 170px);

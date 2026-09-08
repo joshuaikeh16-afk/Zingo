@@ -79,11 +79,29 @@ let currentNewsData = [];
 let userInterests = null; // null = unknown/not logged in -> no personalization filter
 let bookmarkedArticleIds = new Set();
 
+// Onboarding uses specific interests; the news provider still returns its
+// broader feed categories. Keep the personalization useful for both.
+const INTEREST_CATEGORY_MAP = {
+  shonen_action: ['anime'],
+  slice_of_life: ['anime'],
+  fantasy_romance: ['anime'],
+  manga_comics: ['anime', 'art_manga'],
+  gaming_esports: ['gaming'],
+  music_idols: ['idols_music'],
+  vtubers_creators: ['vtubers'],
+  world_news: ['news'],
+  football: ['football', 'sports'],
+  movies_tv: ['movies', 'tv'],
+  cartoons_family: ['cartoons', 'animation'],
+  kdrama: ['kdrama', 'tv'],
+};
+
 function getFilteredData() {
   // Feed is filtered to the user's own selected interests, if known.
   // No manual category chips -- this is the whole feed, personalized.
   if (userInterests && userInterests.length > 0) {
-    return currentNewsData.filter(item => userInterests.includes(item.category));
+    const categories = new Set(userInterests.flatMap((interest) => INTEREST_CATEGORY_MAP[interest] ?? [interest]));
+    return currentNewsData.filter(item => categories.has(item.category));
   }
   return currentNewsData;
 }

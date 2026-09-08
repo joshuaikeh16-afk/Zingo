@@ -19,4 +19,17 @@ Vanilla HTML/CSS/JS + Supabase. Static site, no build step required — deploy a
 
 ## Backend
 
-Supabase project `skmlktywdmsbjyybtmhm` — full schema, RLS, storage buckets, and two Edge Functions (`youtube-feed`, `spotify-search`) already live.
+Supabase project `skmlktywdmsbjyybtmhm` — full schema, RLS, storage buckets, and Edge Functions.
+
+### MyAnimeList integration
+
+The app now uses MyAnimeList for anime/manga metadata, search, rankings, seasonal/upcoming discovery, recommendations, and optional authenticated list sync. Discussions, comments, DMs, friends, notifications, and Kaidra reviews remain local Supabase data.
+
+Deploy the `mal-api` Edge Function and configure the MAL client ID as a secret before enabling OAuth:
+
+```sh
+supabase secrets set MAL_CLIENT_ID=your_mal_client_id
+supabase functions deploy mal-api
+```
+
+Apply `supabase/migrations/20260916_mal_integration.sql`. In the MyAnimeList developer console, register the exact Kaidra app URL as the OAuth redirect URI (for local development, use the URL serving `app.html`).

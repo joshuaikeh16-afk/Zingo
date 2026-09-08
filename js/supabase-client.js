@@ -355,6 +355,25 @@ export function subscribeToInboxUpdates(userId, onNewMessage) {
   return channel;
 }
 
+export async function getCreatorNotifications(userId) {
+  const { data, error } = await supabase
+    .from('creator_notifications')
+    .select('*')
+    .eq('recipient_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (error?.code === 'PGRST205') return null;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export function subscribeToCreatorNotifications(userId, onNotification) {
+  return supabase
+    .channel(`creator-notifications:${userId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'creator_notifications', filter: `recipient_id=eq.${userId}` }, (payload) => onNotification(payload.new))
+    .subscribe();
+}
+
 export async function sendMessage({ conversationId, senderId, content, messageType = 'text', externalRefId = null, mediaUrl = null, mediaDurationSeconds = null }) {
   const { data, error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
@@ -426,6 +445,27 @@ export async function searchYoutubeVideos({ query = 'anime amv', maxResults = 10
   });
   if (error) throw error;
   return data; // { videos: [...], nextPageToken }
+}
+
+// Audio search is proxied through Supabase so a Freesound/API token never
+// ships to the browser. The local fallback keeps the picker usable while the
+// optional `audio-search` Edge Function is being deployed.
+const KAIDRA_AUDIO_FALLBACK = [
+  { id: 'original', title: 'Original sound', artist: 'Your video', source: 'original', previewUrl: null },
+  { id: 'kaidra-pulse', title: 'Kaidra Pulse', artist: 'Kaidra Sounds', source: 'Kaidra library', previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+  { id: 'kaidra-dream', title: 'Midnight Dream', artist: 'Kaidra Sounds', source: 'Kaidra library', previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3' },
+];
+
+export async function searchAudioTracks(query = '') {
+  const term = query.trim().toLowerCase();
+  try {
+    const { data, error } = await supabase.functions.invoke('audio-search', { body: { query: term, limit: 12 } });
+    if (!error && Array.isArray(data?.tracks)) return data.tracks;
+  } catch (error) {
+    console.warn('Audio search function unavailable; using local catalog.', error);
+  }
+  if (!term) return KAIDRA_AUDIO_FALLBACK;
+  return KAIDRA_AUDIO_FALLBACK.filter((track) => `${track.title} ${track.artist}`.toLowerCase().includes(term));
 }
 
 export async function fetchNewsFeed() {
@@ -627,6 +667,60 @@ export async function getUserPosts(userId) {
   return data ?? [];
 }
 
+export async function getFollowCounts(userId) {
+  const results = await Promise.all([
+    supabase.from('profile_follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', userId),
+    supabase.from('profile_follows').select('following_id', { count: 'exact', head: true }).eq('follower_id', userId),
+  ]);
+  if (results.some((result) => result.error?.code === 'PGRST205')) return { followers: 0, following: 0 };
+  return { followers: results[0].count ?? 0, following: results[1].count ?? 0 };
+}
+
+export async function getFollowState(followerId, followingId) {
+  if (!followerId || !followingId || followerId === followingId) return false;
+  const { data, error } = await supabase
+    .from('profile_follows')
+    .select('following_id')
+    .eq('follower_id', followerId)
+    .eq('following_id', followingId)
+    .maybeSingle();
+  if (error?.code === 'PGRST205') return false;
+  if (error) throw error;
+  return !!data;
+}
+
+export async function toggleFollow(followerId, followingId) {
+  const following = await getFollowState(followerId, followingId);
+  if (following) {
+    const { error } = await supabase.from('profile_follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
+    if (error) throw error;
+    return false;
+  }
+  const { error } = await supabase.from('profile_follows').insert({ follower_id: followerId, following_id: followingId });
+  if (error) throw error;
+  return true;
+}
+
+export async function getCreatorProfilePosts(userId, section = 'posted', savedSection = 'videos') {
+  if (section === 'reposted') {
+    const { data, error } = await supabase.from('video_reposts').select('posts(*)').eq('user_id', userId).order('created_at', { ascending: false });
+    if (error?.code === 'PGRST205') return [];
+    return (data ?? []).map((row) => row.posts).filter(Boolean);
+  }
+  if (section === 'saved' && savedSection === 'videos') {
+    const { data } = await supabase.from('video_saves').select('posts(*)').eq('user_id', userId).order('created_at', { ascending: false });
+    return (data ?? []).map((row) => row.posts).filter(Boolean);
+  }
+  if (section === 'locked') return [];
+  return getUserPosts(userId);
+}
+
+export async function getPinnedVideoIds(userId) {
+  const { data, error } = await supabase.from('video_pins').select('post_id, pin_order').eq('user_id', userId).order('pin_order');
+  if (error?.code === 'PGRST205') return [];
+  return data ?? [];
+}
+
 /**
  * Real user-posted videos from mutual friends (Videos sub-tab is no
  * longer YouTube-sourced -- this replaces that entirely). Same
@@ -637,8 +731,11 @@ export async function getUserPosts(userId) {
 export async function getFriendsVideoPosts(userId) {
   const friends = await getMutualFriends(userId);
   const friendIds = friends.map((f) => f.id);
-  // Include the current user's own video posts too, not just friends'.
-  const authorIds = [...friendIds, userId];
+  // Include the current user's own video posts and followed creators so
+  // repost visibility can distinguish Friends from Followers.
+  const { data: followingRows } = await supabase.from('profile_follows').select('following_id').eq('follower_id', userId);
+  const followingIds = (followingRows ?? []).map((row) => row.following_id);
+  const authorIds = [...new Set([...friendIds, ...followingIds, userId])];
   if (authorIds.length === 0) return [];
 
   const { data } = await supabase
@@ -649,7 +746,20 @@ export async function getFriendsVideoPosts(userId) {
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 
-  return data ?? [];
+  const basePosts = data ?? [];
+  const { data: repostRows, error: repostError } = await supabase
+    .from('video_reposts')
+    .select('user_id, visibility, posts(*)')
+    .in('user_id', authorIds);
+  if (repostError?.code === 'PGRST205') return basePosts;
+  if (repostError) return basePosts;
+  const friendSet = new Set(friendIds);
+  const followingSet = new Set(followingIds);
+  const visibleReposts = (repostRows ?? [])
+    .filter((row) => row.posts && ((friendSet.has(row.user_id) && ['friends', 'both'].includes(row.visibility)) || (followingSet.has(row.user_id) && ['followers', 'both'].includes(row.visibility)) || row.user_id === userId))
+    .map((row) => ({ ...row.posts, reposted_by: row.user_id }));
+  return [...new Map([...basePosts, ...visibleReposts].map((post) => [post.id, post])).values()]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
 /**
@@ -687,20 +797,35 @@ export async function deleteVideoPost(userId, postId, mediaPath) {
 }
 
 /** Creates a 24-hour user video post after its media has uploaded. */
-export async function createVideoPost(userId, { mediaPath, caption = '', durationSeconds = null }) {
+export async function createVideoPost(userId, { mediaPath, mediaType = 'video', caption = '', overlayText = '', overlayLayers = [], allowDownload = true, musicTitle = '', musicArtist = '', musicUrl = '', tags = [], sticker = '', filterName = 'none', trimStartSeconds = null, trimEndSeconds = null, durationSeconds = null }) {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('posts')
-    .insert({
+  const payload = {
       user_id: userId,
       post_type: 'video',
+      media_type: mediaType,
       media_url: mediaPath,
       caption: caption || null,
+      overlay_text: overlayText || null,
+      overlay_layers: Array.isArray(overlayLayers) ? overlayLayers : [],
+      allow_download: allowDownload !== false,
+      music_title: musicTitle || null,
+      music_artist: musicArtist || null,
+      music_url: musicUrl || null,
+      tags: Array.isArray(tags) ? tags : [],
+      sticker: sticker || null,
+      filter_name: filterName || 'none',
+      trim_start_seconds: trimStartSeconds,
+      trim_end_seconds: trimEndSeconds,
       expires_at: expiresAt,
       ...(durationSeconds != null ? { media_duration_seconds: durationSeconds } : {}),
-    })
-    .select('*')
-    .single();
+  };
+  let { data, error } = await supabase.from('posts').insert(payload).select('*').single();
+  if (error?.code === 'PGRST204' && /allow_download|overlay_layers/.test(error.message || '')) {
+    const legacyPayload = { ...payload };
+    delete legacyPayload.allow_download;
+    delete legacyPayload.overlay_layers;
+    ({ data, error } = await supabase.from('posts').insert(legacyPayload).select('*').single());
+  }
   if (error) throw error;
   return data;
 }
@@ -711,12 +836,25 @@ export async function createVideoPost(userId, { mediaPath, caption = '', duratio
 // ---------------------------------------------------------------------
 
 export async function getComments(postId) {
-  const { data } = await supabase
+  // Do not depend on a generated relationship name here. Existing projects
+  // can have a different FK constraint name, which makes the nested select
+  // fail with a 400 even though post_comments itself is healthy.
+  const { data: comments, error } = await supabase
     .from('post_comments')
-    .select('*, profiles!post_comments_user_id_fkey(username, display_name, avatar_url)')
+    .select('*')
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
-  return data ?? [];
+  if (error) throw error;
+
+  const userIds = [...new Set((comments ?? []).map((comment) => comment.user_id).filter(Boolean))];
+  if (!userIds.length) return comments ?? [];
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', userIds);
+  if (profilesError) throw profilesError;
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+  return (comments ?? []).map((comment) => ({ ...comment, profiles: byId.get(comment.user_id) ?? null }));
 }
 
 export async function addComment(postId, userId, content) {
@@ -741,13 +879,23 @@ export async function getCommentCount(postId) {
 // ---------------------------------------------------------------------
 
 export async function getVideoEngagement(postId, userId) {
-  const [{ count: likeCount }, { count: commentCount }, { data: liked }, { data: saved }] = await Promise.all([
+  const results = await Promise.all([
     supabase.from('post_likes').select('post_id', { count: 'exact', head: true }).eq('post_id', postId),
     supabase.from('post_comments').select('post_id', { count: 'exact', head: true }).eq('post_id', postId),
     supabase.from('post_likes').select('post_id').eq('post_id', postId).eq('user_id', userId).maybeSingle(),
     supabase.from('video_saves').select('post_id').eq('post_id', postId).eq('user_id', userId).maybeSingle(),
   ]);
-  return { likeCount: likeCount ?? 0, commentCount: commentCount ?? 0, liked: !!liked, saved: !!saved };
+  const [likes, comments, liked, saved] = results;
+  const requiredError = [likes, comments, liked].find((result) => result.error)?.error;
+  if (requiredError) throw requiredError;
+  // Keep the feed usable while an older deployment is missing the optional
+  // video_saves migration. The save action itself still surfaces the error.
+  return {
+    likeCount: likes.count ?? 0,
+    commentCount: comments.count ?? 0,
+    liked: !!liked.data,
+    saved: !saved.error && !!saved.data,
+  };
 }
 
 export async function togglePostLike(postId, userId) {
@@ -795,28 +943,11 @@ export async function getUserVideoActivity(userId) {
 
 const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
 
-async function fetchAnimeTitle(anilistId) {
-  try {
-    const res = await fetch(ANILIST_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query ($id: Int) { Media(id: $id) { title { userPreferred } } }`,
-        variables: { id: anilistId },
-      }),
-    });
-    const json = await res.json();
-    return json?.data?.Media?.title?.userPreferred ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Most recently added 'watching' entry, with a real title from AniList. Null if none. */
+/** Most recently added 'watching' entry, with the locally cached MAL title. */
 export async function getCurrentlyWatching(userId) {
   const { data } = await supabase
     .from('user_watchlist')
-    .select('anime_id, updated_at')
+    .select('anime_id, mal_id, title, updated_at')
     .eq('user_id', userId)
     .eq('status', 'watching')
     .order('updated_at', { ascending: false })
@@ -824,8 +955,7 @@ export async function getCurrentlyWatching(userId) {
     .maybeSingle();
 
   if (!data) return null;
-  const title = await fetchAnimeTitle(data.anime_id);
-  return title ? { animeId: data.anime_id, title } : null;
+  return data.title ? { animeId: data.mal_id ?? data.anime_id, title: data.title } : null;
 }
 
 /**
@@ -858,13 +988,13 @@ async function fetchAnimeDetails(anilistId) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `query ($id: Int) { Media(id: $id) { title { userPreferred } coverImage { large } episodes } }`,
+        query: `query ($id: Int) { Media(id: $id) { isAdult title { userPreferred } coverImage { large } episodes } }`,
         variables: { id: anilistId },
       }),
     });
     const json = await res.json();
     const m = json?.data?.Media;
-    if (!m) return null;
+    if (!m || m.isAdult === true) return null;
     return { title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null };
   } catch {
     return null;
@@ -872,29 +1002,39 @@ async function fetchAnimeDetails(anilistId) {
 }
 
 /** Batch-fetch title/cover/episodes for many AniList ids in one request. */
-async function fetchAnimeDetailsBatch(ids) {
+async function fetchAnimeDetailsBatch(ids, includeAdult = false) {
   if (!ids || ids.length === 0) return new Map();
   try {
     const res = await fetch(ANILIST_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids) { id title { userPreferred } coverImage { large } episodes } } }`,
+        query: `query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids, type: ANIME) { id isAdult title { userPreferred } coverImage { large } episodes } } }`,
         variables: { ids },
       }),
     });
     const json = await res.json();
     const list = json?.data?.Page?.media ?? [];
-    return new Map(list.map((m) => [m.id, { title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }]));
+    return new Map(list.filter((m) => includeAdult || m.isAdult !== true).map((m) => [m.id, { title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }]));
   } catch {
     return new Map();
   }
 }
 
-/** Adds an anime to the user's watchlist, or updates its status if it's already there. */
-export async function addToWatchlist(userId, animeId, status, totalEpisodes) {
+/** Adds a MAL anime/manga entry to the local watchlist. */
+export async function addToWatchlist(userId, animeId, status, totalEpisodes, metadata = {}) {
   const { error } = await supabase.from('user_watchlist').upsert(
-    { user_id: userId, anime_id: animeId, status, total_episodes: totalEpisodes, updated_at: new Date().toISOString() },
+    {
+      user_id: userId,
+      anime_id: animeId,
+      mal_id: animeId,
+      media_type: metadata.mediaType || 'anime',
+      title: metadata.title || null,
+      cover_url: metadata.coverUrl || null,
+      score: metadata.score ?? null,
+      total_episodes: totalEpisodes,
+      updated_at: new Date().toISOString(),
+    },
     { onConflict: 'user_id,anime_id' }
   );
   if (error) throw error;
@@ -922,48 +1062,53 @@ export async function removeFromWatchlist(userId, animeId) {
   await supabase.from('user_watchlist').delete().eq('user_id', userId).eq('anime_id', animeId);
 }
 
-/** Full watchlist for a user, with real AniList title/cover/episodes attached. */
-export async function getUserWatchlist(userId) {
+/** Full watchlist for a user, using locally cached MAL metadata. */
+export async function getUserWatchlist(userId, includeAdult = false) {
   const { data: rows } = await supabase
     .from('user_watchlist')
-    .select('anime_id, status, progress, total_episodes')
+    .select('anime_id, mal_id, media_type, status, progress, total_episodes, title, cover_url, score, tags, notes, times_rewatched, is_rewatching')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
 
   if (!rows || rows.length === 0) return [];
-
-  const details = await fetchAnimeDetailsBatch(rows.map((r) => r.anime_id));
   return rows.map((r) => ({
-    animeId: r.anime_id,
-    status: r.status,
+    animeId: r.mal_id ?? r.anime_id,
+    mediaType: r.media_type || 'anime',
+    status: r.status === 'planned' ? 'plan_to_watch' : r.status === 'favourite' ? 'completed' : r.status,
     progress: r.progress,
-    totalEpisodes: r.total_episodes ?? details.get(r.anime_id)?.totalEpisodes ?? null,
-    title: details.get(r.anime_id)?.title ?? `Anime #${r.anime_id}`,
-    coverUrl: details.get(r.anime_id)?.coverUrl ?? null,
+    totalEpisodes: r.total_episodes ?? null,
+    title: r.title ?? `MAL #${r.mal_id ?? r.anime_id}`,
+    coverUrl: r.cover_url ?? null,
+    score: r.score,
+    tags: r.tags || [],
+    notes: r.notes || '',
+    timesRewatched: r.times_rewatched || 0,
+    isRewatching: !!r.is_rewatching,
   }));
 }
 
 /** Bulk-imports a public AniList username's list into the user's own watchlist. */
-export async function importAniListByUsername(userId, aniListUsername) {
+export async function importAniListByUsername(userId, aniListUsername, includeAdult = false) {
   const res = await fetch(ANILIST_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       query: `query ($name: String) {
         MediaListCollection(userName: $name, type: ANIME) {
-          lists { entries { status progress media { id episodes } } }
+          lists { entries { status progress media { id isAdult episodes } } }
         }
       }`,
       variables: { name: aniListUsername },
     }),
   });
   const json = await res.json();
+  if (json.errors?.length) throw new Error(json.errors[0].message || 'AniList import failed.');
   const lists = json?.data?.MediaListCollection?.lists ?? [];
   if (lists.length === 0) return { imported: 0 };
 
   const statusMap = { CURRENT: 'watching', PLANNING: 'planned', COMPLETED: 'completed', DROPPED: 'dropped', PAUSED: 'watching', REPEATING: 'watching' };
 
-  const rows = lists.flatMap((list) => list.entries).map((entry) => ({
+  const rows = lists.flatMap((list) => list.entries).filter((entry) => includeAdult || entry.media?.isAdult !== true).map((entry) => ({
     user_id: userId,
     anime_id: entry.media.id,
     status: statusMap[entry.status] || 'planned',
@@ -986,32 +1131,32 @@ export async function getTrendingAnime(limit = 12) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `query ($perPage: Int) { Page(perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME) { id title { userPreferred } coverImage { large } episodes } } }`,
+        query: `query ($perPage: Int) { Page(perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME) { id isAdult title { userPreferred } coverImage { large } episodes } } }`,
         variables: { perPage: limit },
       }),
     });
     const json = await res.json();
     const list = json?.data?.Page?.media ?? [];
-    return list.map((m) => ({ animeId: m.id, title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }));
+    return list.filter((m) => m.isAdult !== true).map((m) => ({ animeId: m.id, title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }));
   } catch {
     return [];
   }
 }
 
 /** Trending anime within one genre -- powers the Watchlist tab's per-genre sliding rows. */
-export async function getTrendingAnimeByGenre(genre, limit = 12) {
+export async function getTrendingAnimeByGenre(genre, limit = 12, includeAdult = false) {
   try {
     const res = await fetch(ANILIST_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `query ($perPage: Int, $genre: String) { Page(perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME, genre: $genre) { id title { userPreferred } coverImage { large } episodes } } }`,
+        query: `query ($perPage: Int, $genre: String) { Page(perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME, genre: $genre) { id isAdult title { userPreferred } coverImage { large } episodes } } }`,
         variables: { perPage: limit, genre },
       }),
     });
     const json = await res.json();
     const list = json?.data?.Page?.media ?? [];
-    return list.map((m) => ({ animeId: m.id, title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }));
+    return list.filter((m) => includeAdult || m.isAdult !== true).map((m) => ({ animeId: m.id, title: m.title?.userPreferred ?? 'Unknown', coverUrl: m.coverImage?.large ?? null, totalEpisodes: m.episodes ?? null }));
   } catch {
     return [];
   }
@@ -1024,13 +1169,12 @@ export async function getTrendingAnimeByGenre(genre, limit = 12) {
 export async function getUserPreferences(userId) {
   const { data } = await supabase
     .from('user_preferences')
-    .select('allow_dms, public_watchlist, nsfw_filter, notify_dm')
+    .select('allow_dms, allow_nonfriend_dms, allow_follower_dms, public_watchlist, nsfw_filter, notify_dm, notify_likes, notify_comments')
     .eq('user_id', userId)
     .maybeSingle();
 
-  // Row may not exist yet for a user -- defaults match the table's own
-  // column defaults (all true) rather than silently showing everything off.
-  return data ?? { allow_dms: true, public_watchlist: true, nsfw_filter: true, notify_dm: true };
+  // Row may not exist yet for a user. Mature content stays off by default.
+  return data ?? { allow_dms: true, allow_nonfriend_dms: false, allow_follower_dms: false, public_watchlist: true, nsfw_filter: false, notify_dm: true, notify_likes: true, notify_comments: true };
 }
 
 export async function updateUserPreferences(userId, patch) {

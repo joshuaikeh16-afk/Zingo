@@ -146,6 +146,19 @@ body.auth-body {
 .auth-input::placeholder { color: var(--ink-faint); }
 .auth-input:focus { border-color: var(--indigo); }
 
+.password-input-wrap { position: relative; }
+.password-input-wrap .auth-input { padding-right: 62px; }
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  padding: 4px 5px;
+  transform: translateY(-50%);
+  color: var(--indigo);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .auth-submit-btn {
   width: 100%;
   padding: 14px;

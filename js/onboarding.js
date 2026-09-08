@@ -1,9 +1,7 @@
-// Onboarding page logic (username, birthdate/DOB gate, interests,
-// optional avatar). Expects a layout with these element IDs:
+// Onboarding page logic (username, interests, optional avatar).
 //
 //   #username-input          <input type="text">
 //   #username-availability   shown/hidden + text updated as the user types
-//   #birthdate-input         <input type="date">
 //   #interest-chip           class (not id) on each selectable interest
 //                             chip — must have data-interest="anime" etc.
 //                             and toggle a class like .selected on click;
@@ -18,11 +16,10 @@
 // `.interest-chip` and toggles `.selected` on click — the layout
 // controls what "selected" looks like visually.
 
-import { supabase, requireAuth } from './supabase-client.js';
+import { supabase, requireAuth, updateUserPreferences } from './supabase-client.js';
 
 const usernameInput = document.getElementById('username-input');
 const usernameAvailability = document.getElementById('username-availability');
-const birthdateInput = document.getElementById('birthdate-input');
 const avatarInput = document.getElementById('avatar-input');
 const submitBtn = document.getElementById('onboarding-submit-btn');
 const errorEl = document.getElementById('onboarding-error');
@@ -78,17 +75,16 @@ function getSelectedInterests() {
     .filter(Boolean);
 }
 
-// --- 13+ DOB gate check ---
-function isOldEnough(birthdateStr) {
-  const birthdate = new Date(birthdateStr);
-  const today = new Date();
-  let age = today.getFullYear() - birthdate.getFullYear();
-  const monthDiff = today.getMonth() - birthdate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthdate.getDate())) {
-    age--;
-  }
-  return age >= 13;
-}
+// --- Avatar preview ---
+avatarInput?.addEventListener('change', () => {
+  const file = avatarInput.files?.[0];
+  const preview = document.getElementById('avatar-preview');
+  const placeholder = document.getElementById('avatar-placeholder');
+  if (!file || !preview) return;
+  preview.src = URL.createObjectURL(file);
+  preview.classList.remove('hidden');
+  placeholder?.classList.add('hidden');
+});
 
 // --- Submit ---
 submitBtn?.addEventListener('click', async (e) => {
@@ -96,24 +92,25 @@ submitBtn?.addEventListener('click', async (e) => {
   setError(null);
 
   const username = usernameInput?.value?.trim();
-  const birthdate = birthdateInput?.value;
   const interests = getSelectedInterests();
 
   if (!username || username.length < 3) {
     setError('Pick a username (at least 3 characters).');
     return;
   }
-  if (!birthdate) {
-    setError('Enter your birthdate.');
-    return;
-  }
-  if (!isOldEnough(birthdate)) {
-    setError('You must be 13 or older to use Kaidra.');
-    return;
-  }
-
   submitBtn.disabled = true;
   try {
+    // Re-read the user from Supabase before writing the profile. This is
+    // important after an OAuth callback: a cached session can exist in the
+    // browser before the Auth user has been fully confirmed by the API.
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      setError('Your sign-in session is not ready. Please sign in again.');
+      submitBtn.disabled = false;
+      return;
+    }
+    session = { ...session, user };
+
     let avatarUrl = null;
     const file = avatarInput?.files?.[0];
     if (file) {
@@ -136,7 +133,6 @@ submitBtn?.addEventListener('click', async (e) => {
     const { error: upsertError } = await supabase.from('profiles').upsert({
       id: session.user.id,
       username,
-      birthdate,
       interests,
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     });
@@ -150,6 +146,10 @@ submitBtn?.addEventListener('click', async (e) => {
       submitBtn.disabled = false;
       return;
     }
+
+    // New accounts start in the safer under-18 content mode. Users can
+    // explicitly change this later from Profile > Settings.
+    await updateUserPreferences(session.user.id, { nsfw_filter: false });
 
     window.location.replace('/app.html');
   } catch (err) {

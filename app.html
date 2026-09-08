@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kaidra — Anime News & Watchlist</title>
+<title>Kaidra — Anime Community</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,19 +32,20 @@
   <!-- MAIN TAB PANES VIEWPORT -->
   <main class="main-content">
 
-    <!-- HOME: full-screen friend-video FYP, with News as a separate mode. -->
+    <!-- HOME: anime recommendations and news. -->
     <section class="tab-pane active" id="tab-news">
       <div class="home-mode-switch" role="tablist" aria-label="Home content">
-        <button type="button" class="home-mode-btn active" data-home-mode="fyp" role="tab" aria-selected="true">For You</button>
-        <button type="button" class="home-mode-btn" data-home-mode="news" role="tab" aria-selected="false">News</button>
+        <button type="button" class="home-mode-btn active" data-home-mode="recommendations" role="tab" aria-selected="true">Recommendations</button>
+        <button type="button" class="home-mode-btn" data-home-mode="news" role="tab" aria-selected="false">Anime News</button>
       </div>
-      <div id="fyp-video-view" class="fyp-video-view">
-        <div id="fyp-video-feed" class="fyp-video-feed" aria-live="polite"></div>
-        <div id="fyp-video-empty-state" class="fyp-video-empty-state hidden">
-          <span>🎥</span>
-          <h2>Your video feed starts here</h2>
-          <p>Post a video from your profile, then invite friends to share theirs.</p>
+      <div id="recommendations-view" class="recommendations-view" aria-live="polite">
+        <div class="community-welcome">
+          <span class="community-kicker">ANIME COMMUNITY</span>
+          <h1>Find your next favorite.</h1>
+          <p>Discover anime, trade recommendations, and talk with people who get it.</p>
         </div>
+        <div class="discovery-tabs" role="tablist" aria-label="Anime discovery"><button type="button" class="discovery-tab active" data-discovery="recommendations">Recommendations</button><button type="button" class="discovery-tab" data-discovery="ranking">Top ranked</button><button type="button" class="discovery-tab" data-discovery="seasonal">This season</button><button type="button" class="discovery-tab" data-discovery="upcoming">Upcoming</button><button type="button" class="discovery-tab" data-discovery="manga">Manga</button></div>
+        <div id="discovery-grid" class="recommendation-grid" aria-live="polite"></div>
       </div>
       <div class="news-view-container hidden" id="news-scroll-view">
         <div class="news-mode-scroll">
@@ -53,18 +54,18 @@
       </div>
     </section>
 
-    <!-- TAB: FRIENDS (Hook: #tab-friends) — restored real feature: mutual
+    <!-- TAB: COMMUNITY (Hook: #tab-friends) — restored real feature: mutual
          24hr statuses + Anime of the Day. Follow model replaced below
          with friend requests (search -> request -> accept). -->
     <section class="tab-pane" id="tab-friends">
       <div class="section-header">
         <div>
-          <h2>Friends</h2>
-          <p id="friends-active-count"></p>
+          <h2>Community</h2>
+          <p id="friends-active-count">Talk with friends and fellow anime fans</p>
         </div>
         <div style="display:flex; gap:8px;">
           <button type="button" id="share-aotd-btn" class="status-pill" style="padding: 6px 12px; font-size:12px;">🎬 Share</button>
-          <button type="button" id="find-friends-btn" class="status-pill active" style="padding: 6px 12px; font-size:12px;">Find Friends</button>
+          <button type="button" id="find-friends-btn" class="status-pill active" style="padding: 6px 12px; font-size:12px;">Find people</button>
         </div>
       </div>
 
@@ -88,14 +89,20 @@
     <section class="tab-pane" id="tab-watchlist">
       <div class="section-header">
         <div>
-          <h2>Anime Watchlist</h2>
-          <p>Track ongoing series and episode progress</p>
+          <h2>My Watchlist</h2>
+          <p>Track what you are watching, planning, and have finished</p>
         </div>
       </div>
 
+      <div class="watchlist-search-tools">
+        <div class="media-type-switch" role="tablist" aria-label="Search type">
+          <button type="button" class="media-type-btn active" data-media-type="ANIME" role="tab" aria-selected="true">Anime</button>
+          <button type="button" class="media-type-btn" data-media-type="MANGA" role="tab" aria-selected="false">Manga</button>
+        </div>
+      </div>
       <div class="search-box">
         <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="anilist-search-input" placeholder="Search anime titles to add via AniList..." />
+        <input type="text" id="anilist-search-input" placeholder="Search anime or manga via MyAnimeList..." />
       </div>
 
       <div class="search-results-dropdown" id="anilist-results" style="display:none;"></div>
@@ -118,10 +125,15 @@
     <section class="tab-pane" id="tab-inbox">
       <div class="section-header">
         <div>
-          <h2>Messages</h2>
-          <p>Every friend appears here — you can only chat with friends</p>
+          <h2>Inbox</h2>
+          <p>Talk anime with your friends</p>
         </div>
       </div>
+
+      <section class="creator-help-card" id="creator-help-card">
+        <div class="creator-help-heading"><span class="creator-help-icon">✦</span><div><h3>Content Creators Help</h3><p>Likes and conversations about your videos</p></div><span class="creator-help-badge hidden" id="creator-help-badge">0</span></div>
+        <div class="creator-help-list" id="creator-help-list"><p class="creator-help-empty">Your creator activity will appear here.</p></div>
+      </section>
 
       <div class="inbox-list" id="conversation-list"></div>
       <div class="empty-state hidden" id="inbox-empty-state">
@@ -162,26 +174,31 @@
           <span class="streak-badge hidden" id="streak-badge"></span>
           <span class="watching-badge hidden" id="currently-watching-badge"><span>📺</span><span></span></span>
 
-          <div class="profile-stats">
-            <div class="stat-box">
-              <span class="stat-number" id="stat-friends">0</span>
-              <span class="stat-label">Friends</span>
+        <div class="profile-stats">
+          <div class="stat-box">
+              <span class="stat-number" id="stat-followers">0</span>
+              <span class="stat-label">Followers</span>
             </div>
             <div class="stat-divider"></div>
             <div class="stat-box">
-              <span class="stat-number" id="stat-likes">0</span>
-              <span class="stat-label">Likes</span>
+              <span class="stat-number" id="stat-following">0</span>
+              <span class="stat-label">Following</span>
             </div>
+            <div class="stat-divider"></div>
+            <div class="stat-box"><span class="stat-number" id="stat-likes">0</span><span class="stat-label">Likes</span></div>
           </div>
-
-          <button type="button" id="open-video-post-btn" class="profile-post-video-btn">
-            <span>＋</span> Post a video
-          </button>
 
           <button type="button" class="friend-request-btn hidden" id="friend-action-btn" style="margin-top:14px;">Add Friend</button>
         </div>
 
-        <div class="watchlist-section-label" style="margin-top:20px;">Posts</div>
+        <nav class="profile-content-tabs" aria-label="Creator profile sections">
+          <button type="button" class="profile-content-tab active" data-profile-section="posted">Anime activity</button>
+          <button type="button" class="profile-content-tab" data-profile-section="reposted">Reviews</button>
+          <button type="button" class="profile-content-tab" data-profile-section="saved">Saved</button>
+          <button type="button" class="profile-content-tab" data-profile-section="locked">Locked</button>
+        </nav>
+        <div class="profile-saved-tabs hidden" id="profile-saved-tabs"><button type="button" class="active" data-saved-section="videos">Saved Videos</button><button type="button" data-saved-section="sounds">Saved Sounds</button></div>
+        <div class="watchlist-section-label" id="profile-section-title" style="margin-top:20px;">Posted Videos</div>
         <div class="profile-posts-grid" id="profile-posts-grid"></div>
         <div class="empty-state hidden" id="profile-posts-empty-state">
           <div class="empty-state-icon">📭</div>
@@ -228,26 +245,81 @@
 
   <!-- VIDEO POST COMPOSER -->
   <div class="video-post-modal hidden" id="video-post-modal" role="dialog" aria-modal="true" aria-labelledby="video-post-title">
-    <div class="video-post-sheet">
+    <div class="video-post-sheet video-studio-shell">
       <div class="video-post-header">
-        <div>
-          <h3 id="video-post-title">Post a video</h3>
-          <p>Visible to your friends for 24 hours.</p>
-        </div>
+        <div><p class="video-editor-kicker">KAIDRA STUDIO</p><h3 id="video-post-title">Edit your post</h3><p>Build your story, then share it with friends for 24 hours.</p></div>
+        <div class="studio-header-actions"><span class="studio-save-state">Autosaved locally</span><button type="button" id="studio-preview-button" class="studio-preview-button">Preview</button></div>
         <button type="button" id="close-video-post-btn" class="video-post-close" aria-label="Close">×</button>
       </div>
-      <label for="video-post-input" class="video-file-picker" id="video-file-picker">
-        <span class="video-file-icon">🎥</span>
-        <strong>Choose a video</strong>
-        <small>MP4, WebM, or MOV · up to 100 MB</small>
-      </label>
-      <input class="hidden" type="file" id="video-post-input" accept="video/mp4,video/webm,video/quicktime,video/*" />
-      <video id="video-post-preview" class="video-post-preview hidden" controls playsinline></video>
-      <p id="video-post-file-name" class="video-post-file-name hidden"></p>
-      <label class="video-caption-label" for="video-post-caption">Caption <span>optional</span></label>
-      <textarea id="video-post-caption" class="video-caption-input" maxlength="280" rows="3" placeholder="Tell your friends about it…"></textarea>
+      <input class="hidden" type="file" id="video-post-input" accept="video/*,image/*" />
+      <div class="studio-workspace">
+        <aside class="studio-left-sidebar" aria-label="Studio tools">
+          <button type="button" class="studio-rail-button active" data-studio-panel="sounds"><span>♫</span><small>Sounds</small></button>
+          <button type="button" class="studio-rail-button" data-studio-focus="video-post-overlay-text"><span>T</span><small>Text</small></button>
+          <button type="button" class="studio-rail-button" data-studio-focus="video-post-sticker"><span>✦</span><small>Stickers</small></button>
+          <button type="button" class="studio-rail-button" data-studio-focus="video-post-filter"><span>◌</span><small>Filters</small></button>
+          <button type="button" class="studio-rail-button" data-studio-panel="templates"><span>▦</span><small>Templates</small></button>
+          <div class="studio-rail-spacer"></div>
+          <button type="button" class="studio-rail-button" data-studio-action="change-media"><span>＋</span><small>Add clip</small></button>
+        </aside>
+        <div class="video-editor-layout">
+          <div class="studio-canvas-column">
+            <div class="video-editor-stage" id="video-editor-stage">
+              <video id="video-post-preview" class="video-post-preview hidden" controls playsinline></video>
+              <img id="image-post-preview" class="image-post-preview hidden" alt="Post preview" />
+              <div id="video-editor-overlay" class="video-editor-overlay hidden"></div>
+              <span id="video-editor-sticker" class="video-editor-sticker hidden"></span>
+            </div>
+            <div class="studio-canvas-footer"><span id="studio-canvas-format">9:16 vertical</span><span>Drag canvas elements to position</span></div>
+          </div>
+        <div class="video-editor-controls studio-publish-sidebar">
+          <div class="studio-panel-heading"><span>Publish details</span><button type="button" class="studio-collapse-button" aria-label="Collapse publishing details">⌄</button></div>
+          <p id="video-post-file-name" class="video-post-file-name hidden"></p>
+          <div id="video-trim-controls" class="video-trim-controls hidden">
+            <div class="video-control-heading"><strong>Trim clip</strong><span id="video-trim-label">0s – 0s</span></div>
+            <label>Start <input id="video-trim-start" type="range" min="0" max="180" step="0.1" value="0" /></label>
+            <label>End <input id="video-trim-end" type="range" min="0" max="180" step="0.1" value="180" /></label>
+          </div>
+          <div class="video-caption-label">Text layers <span>add multiple timed overlays</span></div>
+          <div id="video-overlay-layers" class="video-overlay-layers"></div>
+          <button type="button" id="add-video-overlay-btn" class="video-add-layer-button">＋ Add text layer</button>
+          <div class="video-post-field-grid">
+            <div><label class="video-caption-label" for="video-post-sticker">Sticker</label><select id="video-post-sticker" class="video-caption-input video-select"><option value="">None</option><option value="✨">✨ Sparkle</option><option value="🔥">🔥 Fire</option><option value="💖">💖 Love</option><option value="😂">😂 Laugh</option><option value="🎉">🎉 Party</option></select></div>
+            <div><label class="video-caption-label" for="video-post-filter">Filter</label><select id="video-post-filter" class="video-caption-input video-select"><option value="none">Original</option><option value="soft">Soft</option><option value="mono">Mono</option><option value="vivid">Vivid</option></select></div>
+          </div>
+          <div class="video-post-field-grid">
+            <div><label class="video-caption-label" for="video-post-music-title">Sound title <span>optional</span></label><input id="video-post-music-title" class="video-caption-input video-short-input" maxlength="80" placeholder="Original sound" /></div>
+            <div><label class="video-caption-label" for="video-post-music-artist">Artist</label><input id="video-post-music-artist" class="video-caption-input video-short-input" maxlength="80" placeholder="Artist name" /></div>
+          </div>
+          <button type="button" id="open-audio-picker-btn" class="video-audio-picker-button"><span>♫</span><span><strong id="video-selected-sound-title">Add sound</strong><small id="video-selected-sound-meta">Browse the Kaidra audio library</small></span><span class="video-audio-chevron">›</span></button>
+          <label class="video-caption-label" for="video-post-tags">Tags <span>optional · comma separated</span></label>
+          <input id="video-post-tags" class="video-caption-input video-short-input" maxlength="180" placeholder="#anime, #amv, #kaidra" />
+          <label class="video-caption-label" for="video-post-caption">Caption <span>optional</span></label>
+          <textarea id="video-post-caption" class="video-caption-input" maxlength="280" rows="3" placeholder="Tell your friends about it…"></textarea>
+          <label class="video-download-setting"><input type="checkbox" id="video-post-allow-download" checked /> Allow friends to download this post</label>
+        </div>
+        </div>
+      </div>
+      <section class="studio-timeline" aria-label="Multi-track timeline">
+        <div class="studio-timeline-toolbar"><div><strong>Timeline</strong><span id="studio-timeline-duration">00:00</span></div><div class="studio-timeline-actions"><button type="button" id="studio-split-button">✂ Split</button><button type="button" id="studio-zoom-out">−</button><span id="studio-zoom-level">100%</span><button type="button" id="studio-zoom-in">＋</button></div></div>
+        <div class="studio-ruler"><span>00:00</span><span>00:05</span><span>00:10</span><span>00:15</span><span>00:20</span><span>00:30</span></div>
+        <div class="studio-track-row"><span class="studio-track-label">MEDIA</span><div class="studio-track-lane"><div id="studio-media-clip" class="studio-track-clip"><span id="studio-media-clip-label">Your clip</span><i class="studio-trim-handle left"></i><i class="studio-trim-handle right"></i></div><div id="studio-split-markers"></div></div></div>
+        <div class="studio-track-row"><span class="studio-track-label">SOUND</span><div class="studio-track-lane sound-lane"><div id="studio-audio-clip" class="studio-track-clip audio-clip"><span>♫ Original sound</span></div></div></div>
+        <div class="studio-track-row"><span class="studio-track-label">TEXT</span><div id="studio-text-track-lane" class="studio-track-lane text-track-lane"></div></div>
+        <div class="studio-playhead" id="studio-playhead"></div>
+      </section>
       <p id="video-post-error" class="video-post-error hidden" role="alert"></p>
       <button type="button" id="submit-video-post-btn" class="video-post-submit" disabled>Post video</button>
+    </div>
+  </div>
+
+  <div class="video-audio-drawer hidden" id="video-audio-drawer" role="dialog" aria-modal="true" aria-labelledby="video-audio-title">
+    <div class="video-audio-sheet">
+      <div class="video-audio-header"><div><p class="video-editor-kicker">SOUND</p><h3 id="video-audio-title">Choose a sound</h3></div><button type="button" id="close-audio-picker-btn" class="video-post-close" aria-label="Close sound picker">×</button></div>
+      <div class="video-audio-search"><span>⌕</span><input id="video-audio-search-input" type="search" placeholder="Search sounds" autocomplete="off" /></div>
+      <div class="video-audio-filters" role="tablist" aria-label="Sound categories"><button type="button" class="audio-filter-button active" data-audio-filter="favorites">Favorites</button><button type="button" class="audio-filter-button" data-audio-filter="original">Original Audio</button></div>
+      <button type="button" id="use-original-sound-btn" class="video-audio-original"><span class="video-audio-note">♫</span><span><strong>Original sound</strong><small>Use the audio from your upload</small></span><span>Use</span></button>
+      <div id="video-audio-results" class="video-audio-results"><p class="video-audio-empty">Search for a sound to get started.</p></div>
     </div>
   </div>
 
@@ -267,6 +339,10 @@
       <div class="video-comments-header"><h3 id="video-activity-title">Your video activity</h3><button type="button" id="close-video-activity-btn" aria-label="Close">×</button></div>
       <div id="video-activity-list" class="video-comments-list"></div>
     </div>
+  </div>
+
+  <div class="video-share-drawer hidden" id="video-share-drawer" role="dialog" aria-modal="true" aria-labelledby="video-share-title">
+    <div class="video-share-sheet"><div class="video-comments-header"><h3 id="video-share-title">Share video</h3><button type="button" id="close-video-share-btn" aria-label="Close">×</button></div><div class="video-share-options" id="video-share-options"></div></div>
   </div>
 
   <!-- STATUS VIEWER MODAL (Hook: #status-viewer-modal) -->
@@ -309,7 +385,7 @@
       <img id="aotd-viewer-cover" class="sotd-listen-art" src="" alt="Anime cover" />
       <h3 id="aotd-viewer-title" class="sotd-listen-track"></h3>
       <p id="aotd-viewer-note" class="sotd-listen-artist"></p>
-      <a id="aotd-viewer-anilist-link" href="#" target="_blank" rel="noopener" class="sotd-listen-open-btn">View on AniList</a>
+      <a id="aotd-viewer-anilist-link" href="#" target="_blank" rel="noopener" class="sotd-listen-open-btn">View on MyAnimeList</a>
     </div>
   </div>
 
@@ -343,28 +419,25 @@
       <p class="status-picker-prompt">Add to which list?</p>
       <div class="status-picker-options">
         <button type="button" class="status-picker-option" data-status="watching">Currently Watching</button>
-        <button type="button" class="status-picker-option" data-status="planned">About to Watch</button>
-        <button type="button" class="status-picker-option" data-status="completed">Watched</button>
-        <button type="button" class="status-picker-option" data-status="favourite">Favourite</button>
-        <button type="button" class="status-picker-option" data-status="worst">Worst</button>
+        <button type="button" class="status-picker-option" data-status="completed">Completed</button>
+        <button type="button" class="status-picker-option" data-status="on_hold">On Hold</button>
+        <button type="button" class="status-picker-option" data-status="dropped">Dropped</button>
+        <button type="button" class="status-picker-option" data-status="plan_to_watch">Plan to Watch</button>
       </div>
       <button type="button" id="status-picker-cancel-btn" class="status-picker-cancel">Cancel</button>
     </div>
   </div>
 
-  <!-- ANILIST IMPORT MODAL (Hook: #anilist-import-modal) -->
+  <!-- MYANIMELIST CONNECTION MODAL (Hook kept for existing settings wiring) -->
   <div class="find-friends-modal hidden" id="anilist-import-modal">
     <div class="find-friends-search-bar">
-      <span style="font-family:var(--font-display); font-weight:700; color:var(--ink);">Import AniList</span>
+      <span style="font-family:var(--font-display); font-weight:700; color:var(--ink);">Connect MyAnimeList</span>
       <button type="button" id="anilist-import-close-btn">Cancel</button>
     </div>
     <div class="edit-profile-form">
-      <div class="editp-field">
-        <label for="anilist-import-username">AniList Username</label>
-        <input type="text" id="anilist-import-username" class="editp-input" placeholder="e.g. Josuke_Higashikata" />
-      </div>
+      <p>Authorize Kaidra to read and update your MyAnimeList anime list. Your discussions, friends, reviews, and DMs stay in Kaidra.</p>
       <div id="anilist-import-error" class="editp-error hidden"></div>
-      <button type="button" id="anilist-import-submit-btn" class="editp-save-btn">Import My List</button>
+      <button type="button" id="anilist-import-submit-btn" class="editp-save-btn">Connect &amp; Sync My List</button>
     </div>
   </div>
 
@@ -457,15 +530,8 @@
             </div>
 
             <div class="setting-card-item non-interactive">
-              <div class="item-left-group">
-                <div class="icon-box pink">
-                  <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Date of Birth</span>
-                  <span class="subtext" id="settings-dob-val">Verified Age (13+ Requirement)</span>
-                </div>
-              </div>
+              <div class="item-left-group"><div class="icon-box purple">✓</div><div class="item-text"><span class="heading">Safety mode</span><span class="subtext">Under-18 safe content is on by default</span></div></div>
+              <span class="action-badge">Protected</span>
             </div>
           </div>
         </div>
@@ -492,6 +558,16 @@
             </div>
 
             <div class="setting-card-item non-interactive">
+              <div class="item-left-group"><div class="icon-box cyan">◎</div><div class="item-text"><span class="heading">Messages from non-friends</span><span class="subtext">Allow people outside your Friends list to chat</span></div></div>
+              <label class="switch"><input type="checkbox" id="setting-allow-nonfriend-dms" /><span class="slider"></span></label>
+            </div>
+
+            <div class="setting-card-item non-interactive">
+              <div class="item-left-group"><div class="icon-box purple">◉</div><div class="item-text"><span class="heading">Messages from followers</span><span class="subtext">Allow approved followers to start chats</span></div></div>
+              <label class="switch"><input type="checkbox" id="setting-allow-follower-dms" /><span class="slider"></span></label>
+            </div>
+
+            <div class="setting-card-item non-interactive">
               <div class="item-left-group">
                 <div class="icon-box purple">
                   <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -506,8 +582,12 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box pink">♥</div><div class="item-text"><span class="heading">Likes on your videos</span><span class="subtext">Notify me when someone likes my post</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-likes" checked /><span class="slider"></span></label></div>
+            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box cyan">◌</div><div class="item-text"><span class="heading">Comments &amp; replies</span><span class="subtext">Notify me about conversations on my videos</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-comments" checked /><span class="slider"></span></label></div>
           </div>
         </div>
+
+        <div class="settings-section"><div class="settings-section-title">Community guidelines</div><div class="settings-guidelines"><p><strong>Keep Kaidra human.</strong> No harassment, hate, threats, sexual content involving minors, spam, or sharing private information.</p><p>Use report and block tools when a conversation crosses a line. Repeated violations may limit posting, messaging, or visibility.</p><button type="button" class="settings-guideline-link">Read the full safety guide <span>›</span></button></div></div>
 
         <!-- CATEGORY 3: NOTIFICATIONS -->
         <div class="settings-section">
@@ -543,8 +623,8 @@
                   <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                 </div>
                 <div class="item-text">
-                  <span class="heading">Import External Watchlist</span>
-                  <span class="subtext">Sync AniList or MyAnimeList in one click</span>
+                  <span class="heading">Sync MyAnimeList</span>
+                  <span class="subtext">Connect your MAL list and keep it in sync</span>
                 </div>
               </div>
               <span class="action-badge">Sync</span>
@@ -575,12 +655,12 @@
                   <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                 </div>
                 <div class="item-text">
-                  <span class="heading">Mature Content Filter</span>
-                  <span class="subtext">Hide sensitive 18+ titles and stories</span>
+                  <span class="heading">Mature Content</span>
+                  <span class="subtext">Allow sensitive 18+ titles and stories</span>
                 </div>
               </div>
               <label class="switch">
-                <input type="checkbox" id="setting-nsfw-filter" checked />
+                <input type="checkbox" id="setting-nsfw-filter" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -610,7 +690,7 @@
 
       <button class="nav-item" data-tab="friends">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-        <span>Friends</span>
+        <span>Community</span>
       </button>
 
       <button class="nav-item" data-tab="watchlist">
@@ -633,10 +713,10 @@
 
   <script type="module" src="/js/news-data.js"></script>
   <script type="module" src="/js/watchlist.js"></script>
+  <script type="module" src="/js/mal-discovery.js"></script>
   <script type="module" src="/js/friends.js"></script>
   <script type="module" src="/js/inbox.js"></script>
   <script type="module" src="/js/profile.js"></script>
-  <script type="module" src="/js/video-posts.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

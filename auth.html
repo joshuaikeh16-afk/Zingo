@@ -43,7 +43,10 @@
               <label for="password-input" style="margin-bottom:0;">Password</label>
               <a href="#" id="forgot-password-link">Forgot?</a>
             </div>
-            <input type="password" id="password-input" name="password" placeholder="••••••••" required class="auth-input" />
+            <div class="password-input-wrap">
+              <input type="password" id="password-input" name="password" placeholder="••••••••" autocomplete="current-password" required class="auth-input" />
+              <button type="button" class="password-toggle" data-password-target="password-input" aria-label="Show password">Show</button>
+            </div>
           </div>
 
           <button id="auth-submit-btn" type="submit" class="auth-submit-btn">Sign In</button>
@@ -52,7 +55,7 @@
         <div class="auth-divider"><span>or continue with</span></div>
 
         <div class="auth-social-row">
-          <button type="button" class="auth-social-btn">
+          <button id="google-auth-btn" type="button" class="auth-social-btn">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.761H12.545z"/></svg>
             <span>Google</span>
           </button>

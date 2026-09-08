@@ -29,8 +29,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     const prefs = await getUserPreferences(currentUserId);
     const toggleMap = {
       'setting-allow-dms': 'allow_dms',
+      'setting-allow-nonfriend-dms': 'allow_nonfriend_dms',
+      'setting-allow-follower-dms': 'allow_follower_dms',
       'setting-public-watchlist': 'public_watchlist',
       'setting-notify-dm': 'notify_dm',
+      'setting-notify-likes': 'notify_likes',
+      'setting-notify-comments': 'notify_comments',
       'setting-nsfw-filter': 'nsfw_filter',
     };
     Object.entries(toggleMap).forEach(([elId, prefKey]) => {
@@ -38,7 +42,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (!el) return;
       el.checked = !!prefs[prefKey];
       el.addEventListener('change', () => {
-        updateUserPreferences(currentUserId, { [prefKey]: el.checked }).catch((err) => {
+        updateUserPreferences(currentUserId, { [prefKey]: el.checked }).then(() => {
+          if (prefKey === 'nsfw_filter') {
+            document.dispatchEvent(new CustomEvent('kaidra:content-preference-change', { detail: { allowSensitive: el.checked } }));
+          }
+        }).catch((err) => {
           console.error('Failed to save setting:', err);
           el.checked = !el.checked; // revert on failure
         });
@@ -54,35 +62,27 @@ document.addEventListener('DOMContentLoaded', async function() {
     window.location.replace('/auth.html');
   });
 
-  // Bottom Navigation Routing
-  document.querySelectorAll('#app-bottom-nav .nav-item').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('#app-bottom-nav .nav-item').forEach(function(b) {
-        b.classList.remove('active');
-      });
-      btn.classList.add('active');
-      
-      var targetTab = btn.getAttribute('data-tab');
-
-      document.querySelectorAll('.tab-pane').forEach(function(pane) {
-        pane.classList.remove('active');
-      });
-      var targetPane = document.getElementById('tab-' + targetTab);
-      if (targetPane) {
-        targetPane.classList.add('active');
-      }
-
-      document.dispatchEvent(new CustomEvent('kaidra:tab-change', { 
-        detail: { tab: targetTab } 
-      }));
+  // Bottom Navigation Routing. Persist the last tab so a refresh does not
+  // always reset the user to Home.
+  const tabStorageKey = currentUserId ? `kaidra:last-tab:${currentUserId}` : 'kaidra:last-tab';
+  function activateTab(targetTab, persist = true) {
+    document.querySelectorAll('#app-bottom-nav .nav-item').forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-tab') === targetTab);
     });
+    document.querySelectorAll('.tab-pane').forEach((pane) => pane.classList.remove('active'));
+    document.getElementById('tab-' + targetTab)?.classList.add('active');
+    if (persist) localStorage.setItem(tabStorageKey, targetTab);
+    document.dispatchEvent(new CustomEvent('kaidra:tab-change', { detail: { tab: targetTab } }));
+  }
+  document.querySelectorAll('#app-bottom-nav .nav-item').forEach((btn) => {
+    btn.addEventListener('click', () => activateTab(btn.getAttribute('data-tab')));
   });
+  const savedTab = localStorage.getItem(tabStorageKey);
+  if (savedTab && document.getElementById('tab-' + savedTab)) activateTab(savedTab, false);
 
-  // Home has two deliberately separate surfaces: the full-screen video FYP
-  // is the default, while News remains available without mixing cards into
-  // the vertical video gesture.
+  // Home has two anime-first surfaces: recommendations and news.
   const homeModeButtons = document.querySelectorAll('.home-mode-btn');
-  const fypView = document.getElementById('fyp-video-view');
+  const recommendationsView = document.getElementById('recommendations-view');
   const newsView = document.getElementById('news-scroll-view');
   homeModeButtons.forEach((button) => {
     button.addEventListener('click', () => {
@@ -92,9 +92,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         item.classList.toggle('active', active);
         item.setAttribute('aria-selected', String(active));
       });
-      fypView?.classList.toggle('hidden', mode !== 'fyp');
+      recommendationsView?.classList.toggle('hidden', mode !== 'recommendations');
       newsView?.classList.toggle('hidden', mode !== 'news');
-      if (mode === 'news') document.querySelectorAll('#fyp-video-feed video').forEach((video) => video.pause());
       document.dispatchEvent(new CustomEvent('kaidra:home-mode-change', { detail: { mode } }));
     });
   });
@@ -184,9 +183,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   function forwardArticleToFriend(friendId, name, avatarUrl, article) {
-    var content = 'Check out this news: ' + article.title +
-      (article.sourceUrl ? ' — ' + article.sourceUrl : '') +
-      (article.relatedAnimeTitle ? ' (About: ' + article.relatedAnimeTitle + ')' : '');
+    var content = article.kind === 'video'
+      ? 'Check out this Kaidra video: ' + (article.post.caption || article.url)
+      : 'Check out this news: ' + article.title +
+        (article.sourceUrl ? ' — ' + article.sourceUrl : '') +
+        (article.relatedAnimeTitle ? ' (About: ' + article.relatedAnimeTitle + ')' : '');
 
     getOrCreateConversation(friendId).then(function(conversationId) {
       return sendMessage({ conversationId: conversationId, senderId: currentUserId, content: content })
@@ -206,7 +207,65 @@ document.addEventListener('DOMContentLoaded', async function() {
     openForwardPicker(e.detail);
   });
 
+  document.addEventListener('kaidra:video-forward-request', function(e) {
+    openForwardPicker({ kind: 'video', post: e.detail.post, url: e.detail.url });
+  });
+
   if (closeForwardBtn) closeForwardBtn.addEventListener('click', closeForwardPicker);
+
+  // Mobile-first dismissal: drag a sheet down instead of reaching for a
+  // tiny X. Desktop close buttons remain available through CSS.
+  document.querySelectorAll('.video-post-sheet, .video-audio-sheet, .video-comments-sheet, .video-share-sheet').forEach((sheet) => {
+    let startY = null;
+    let startX = null;
+    sheet.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse') return;
+      startY = event.clientY;
+      startX = event.clientX;
+      sheet.setPointerCapture?.(event.pointerId);
+    });
+    sheet.addEventListener('pointermove', (event) => {
+      if (startY == null) return;
+      const deltaY = event.clientY - startY;
+      if (deltaY > 0 && Math.abs(deltaY) > Math.abs(event.clientX - startX)) sheet.style.transform = `translateY(${Math.min(deltaY, 240)}px)`;
+    });
+    sheet.addEventListener('pointerup', (event) => {
+      if (startY == null) return;
+      const shouldClose = event.clientY - startY > 80;
+      const parent = sheet.parentElement;
+      startY = null; startX = null;
+      if (shouldClose) {
+        sheet.classList.add('is-swipe-closing');
+        window.setTimeout(() => {
+          parent?.querySelector('button[aria-label="Close"], .video-post-close')?.click();
+          sheet.classList.remove('is-swipe-closing');
+          sheet.style.transform = '';
+          if (parent?.id === 'video-share-drawer' || parent?.id === 'video-audio-drawer') parent.classList.add('hidden');
+        }, 180);
+      } else {
+        sheet.style.transform = '';
+      }
+    });
+    sheet.addEventListener('pointercancel', () => { startY = null; startX = null; sheet.style.transform = ''; });
+  });
+
+  document.querySelectorAll('.chat-overlay, .settings-panel, .forward-picker-panel').forEach((panel) => {
+    let startX = null;
+    panel.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse') return;
+      startX = event.clientX;
+      panel.setPointerCapture?.(event.pointerId);
+    });
+    panel.addEventListener('pointerup', (event) => {
+      if (startX == null) return;
+      const deltaX = event.clientX - startX;
+      startX = null;
+      if (deltaX > 80) {
+        panel.querySelector('button[aria-label="Close Chat"], #close-settings-btn, #close-forward-picker-btn')?.click();
+      }
+    });
+    panel.addEventListener('pointercancel', () => { startX = null; });
+  });
 
   // Anime Tag → Watchlist Jump
   // Lets a user verify what a news story is actually about by jumping

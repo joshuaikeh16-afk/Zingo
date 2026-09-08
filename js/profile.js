@@ -7,7 +7,9 @@ import {
   supabase,
   requireAuth,
   requireProfile,
-  getFriendCount,
+  getFollowCounts,
+  getCreatorProfilePosts,
+  getPinnedVideoIds,
   getTotalLikesForUser,
   getUserPosts,
   getCurrentlyWatching,
@@ -33,11 +35,17 @@ const bioEl = document.getElementById('profile-bio');
 const streakBadgeEl = document.getElementById('streak-badge');
 const currentlyWatchingEl = document.getElementById('currently-watching-badge');
 const compatibilityEl = document.getElementById('compatibility-score');
-const friendsStatEl = document.getElementById('stat-friends');
+const followersStatEl = document.getElementById('stat-followers');
+const followingStatEl = document.getElementById('stat-following');
 const likesStatEl = document.getElementById('stat-likes');
+const profileSectionTitle = document.getElementById('profile-section-title');
+const savedTabs = document.getElementById('profile-saved-tabs');
 const friendActionBtn = document.getElementById('friend-action-btn');
 const postsGrid = document.getElementById('profile-posts-grid');
 const postsEmptyState = document.getElementById('profile-posts-empty-state');
+
+let activeProfileSection = 'posted';
+let activeSavedSection = 'videos';
 
 function formatCount(n) {
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
@@ -64,7 +72,10 @@ async function buildPostTile(post) {
 
 async function renderPosts() {
   if (!postsGrid) return;
-  const posts = await getUserPosts(profileUserId);
+  const posts = await getCreatorProfilePosts(profileUserId, activeProfileSection, activeSavedSection);
+  const pinned = activeProfileSection === 'posted' ? await getPinnedVideoIds(profileUserId).catch(() => []) : [];
+  const pinRank = new Map(pinned.map((item) => [item.post_id, item.pin_order]));
+  posts.sort((a, b) => (pinRank.get(a.id) || 99) - (pinRank.get(b.id) || 99));
   postsGrid.querySelectorAll('[data-post-id]').forEach((el) => el.remove());
 
   if (posts.length === 0) {
@@ -75,10 +86,28 @@ async function renderPosts() {
     postsEmptyState?.classList.add('hidden');
     postsEmptyState?.classList.remove('flex');
     postsGrid.classList.remove('hidden');
-    const tiles = await Promise.all(posts.map(buildPostTile));
+    const tiles = await Promise.all(posts.map(async (post) => {
+      const tile = await buildPostTile(post);
+      if (pinRank.has(post.id)) { tile.classList.add('is-pinned'); tile.insertAdjacentHTML('beforeend', `<b class="profile-pin-badge">📌 Pinned ${pinRank.get(post.id)}</b>`); }
+      return tile;
+    }));
     tiles.forEach((tile) => postsGrid.appendChild(tile));
   }
 }
+
+document.querySelectorAll('[data-profile-section]').forEach((button) => button.addEventListener('click', async () => {
+  activeProfileSection = button.dataset.profileSection;
+  document.querySelectorAll('[data-profile-section]').forEach((item) => item.classList.toggle('active', item === button));
+  savedTabs?.classList.toggle('hidden', activeProfileSection !== 'saved');
+  if (profileSectionTitle) profileSectionTitle.textContent = activeProfileSection === 'posted' ? 'Anime activity' : activeProfileSection === 'reposted' ? 'Reviews' : activeProfileSection === 'saved' ? `Saved ${activeSavedSection === 'videos' ? 'Anime' : 'Sounds'}` : 'Locked Content';
+  await renderPosts();
+}));
+savedTabs?.querySelectorAll('[data-saved-section]').forEach((button) => button.addEventListener('click', async () => {
+  activeSavedSection = button.dataset.savedSection;
+  savedTabs.querySelectorAll('button').forEach((item) => item.classList.toggle('active', item === button));
+  if (profileSectionTitle) profileSectionTitle.textContent = `Saved ${activeSavedSection === 'videos' ? 'Anime' : 'Sounds'}`;
+  await renderPosts();
+}));
 
 async function renderHeader() {
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', profileUserId).maybeSingle();
@@ -103,11 +132,12 @@ async function renderHeader() {
   }
 
   // Stats
-  const [friendCount, likes] = await Promise.all([
-    getFriendCount(profileUserId),
+  const [likes, followCounts] = await Promise.all([
     getTotalLikesForUser(profileUserId),
+    getFollowCounts(profileUserId).catch(() => ({ followers: 0, following: 0 })),
   ]);
-  if (friendsStatEl) friendsStatEl.textContent = formatCount(friendCount);
+  if (followersStatEl) followersStatEl.textContent = formatCount(followCounts.followers);
+  if (followingStatEl) followingStatEl.textContent = formatCount(followCounts.following);
   if (likesStatEl) likesStatEl.textContent = formatCount(likes);
 
   if (isOwnProfile) {

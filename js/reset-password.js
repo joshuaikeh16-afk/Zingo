@@ -16,6 +16,17 @@ const newPasswordInput = document.getElementById('new-password-input');
 const confirmPasswordInput = document.getElementById('confirm-password-input');
 const submitBtn = document.getElementById('reset-submit-btn');
 
+document.querySelectorAll('.password-toggle').forEach((toggle) => {
+  toggle.addEventListener('click', () => {
+    const input = document.getElementById(toggle.dataset.passwordTarget);
+    if (!input) return;
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    toggle.textContent = showing ? 'Show' : 'Hide';
+    toggle.setAttribute('aria-label', `${showing ? 'Show' : 'Hide'} password`);
+  });
+});
+
 let recoveryReady = false;
 
 function setError(message) {

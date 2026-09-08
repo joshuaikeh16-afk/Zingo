@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaidra Admin</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin-body">
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div><span class="admin-kicker">Kaidra operations</span><h1>Admin overview</h1><p>Monitor community activity without opening Supabase.</p></div>
+      <a class="admin-back" href="/app.html">Back to Kaidra</a>
+    </header>
+    <div id="admin-error" class="admin-error hidden"></div>
+    <section class="admin-stats" id="admin-stats"><article class="admin-card"><span>Loading</span><strong>—</strong></article></section>
+    <section class="admin-panel"><h2>Recent comments</h2><div id="admin-comments">Loading…</div></section>
+  </main>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

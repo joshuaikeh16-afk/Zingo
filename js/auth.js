@@ -16,8 +16,20 @@ const mode = document.body.dataset.authMode === 'signup' ? 'signup' : 'signin';
 const emailInput = document.getElementById('email-input');
 const passwordInput = document.getElementById('password-input');
 const submitBtn = document.getElementById('auth-submit-btn');
+const googleAuthBtn = document.getElementById('google-auth-btn');
 const errorEl = document.getElementById('auth-error-message');
 const loadingEl = document.getElementById('auth-loading');
+
+document.querySelectorAll('.password-toggle').forEach((toggle) => {
+  toggle.addEventListener('click', () => {
+    const input = document.getElementById(toggle.dataset.passwordTarget);
+    if (!input) return;
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    toggle.textContent = showing ? 'Show' : 'Hide';
+    toggle.setAttribute('aria-label', `${showing ? 'Show' : 'Hide'} password`);
+  });
+});
 
 function setError(message) {
   if (!errorEl) return;
@@ -118,15 +130,43 @@ submitBtn?.addEventListener('click', async (e) => {
   }
 });
 
+googleAuthBtn?.addEventListener('click', async () => {
+  setError(null);
+  setLoading(true);
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth.html`,
+    },
+  });
+
+  // OAuth normally navigates away immediately. If it cannot start, keep the
+  // user on the page and show the provider error instead.
+  if (error) {
+    setLoading(false);
+    setError(error.message);
+  }
+});
+
 // If already signed in, skip the auth page entirely. Also re-checked on
 // pageshow with persisted=true -- that fires when the browser restores
 // this page from bfcache (e.g. tapping back from the app), which does
 // NOT re-run this script normally, so without this a signed-in user
 // could land back on a stale, unredirected auth page.
 async function redirectIfSignedIn() {
+  // A user may already have a session after a previous sign-up attempt but
+  // still need to return here to correct their email or try another account.
+  if (mode === 'signup') return;
+
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
-    window.location.replace('/onboarding.html');
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', session.user.id)
+      .maybeSingle();
+    window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
   }
 }
 

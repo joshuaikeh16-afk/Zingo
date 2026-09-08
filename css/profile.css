@@ -120,6 +120,12 @@
   background: var(--hairline);
 }
 
+.profile-content-tabs { display: flex; gap: 5px; margin-top: 20px; padding: 4px; overflow-x: auto; border: 1px solid var(--hairline); border-radius: var(--radius-pill); background: var(--surface); }
+.profile-content-tab { flex: 1; min-width: max-content; padding: 9px 10px; border-radius: var(--radius-pill); color: var(--ink-soft); font-size: 10px; font-weight: 800; }
+.profile-content-tab.active { background: var(--indigo); color: #fff; }
+.profile-saved-tabs { display: flex; gap: 7px; margin-top: 10px; }.profile-saved-tabs button { padding: 7px 11px; border-radius: var(--radius-pill); color: var(--ink-soft); font-size: 10px; font-weight: 800; }.profile-saved-tabs button.active { background: var(--indigo-soft); color: var(--indigo); }
+.profile-posts-grid [data-post-id] { position: relative; }.profile-pin-badge { position: absolute; top: 7px; left: 7px; padding: 4px 7px; border-radius: var(--radius-pill); background: rgba(27,29,34,.78); color: #fff; font-size: 9px; }
+
 /* ------------------------------------------------------------------
    Settings Slide-Over
    ------------------------------------------------------------------ */
@@ -418,6 +424,19 @@
   background: rgba(27, 29, 34, 0.65);
   color: #fff;
 }
+
+.profile-posts-grid > div { border-color: rgba(139,143,255,.24); box-shadow: 0 8px 24px rgba(0,0,0,.22); transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.profile-posts-grid > div:hover { transform: translateY(-3px); border-color: var(--indigo); box-shadow: 0 14px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(139,143,255,.18); }
+.profile-posts-grid > div::after { position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.08); border-radius: inherit; content: ''; pointer-events: none; }
+
+.settings-overlay { background: rgba(1,3,8,.64); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.settings-panel { background: linear-gradient(180deg, rgba(20,26,39,.98), rgba(10,14,22,.99)); border-left: 1px solid rgba(139,143,255,.18); box-shadow: -24px 0 70px rgba(0,0,0,.42); }
+.settings-panel-header { background: rgba(19,24,35,.72); border-bottom-color: rgba(255,255,255,.1); box-shadow: 0 8px 30px rgba(0,0,0,.15); }
+.settings-user-card, .setting-card-item, .settings-guidelines { background: linear-gradient(145deg, rgba(31,39,57,.72), rgba(17,22,34,.72)); border-color: rgba(255,255,255,.1); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.14); }
+.setting-card-item { transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+.setting-card-item:not(.non-interactive):hover { transform: translateY(-2px); border-color: rgba(139,143,255,.55); background: rgba(42,49,77,.8); }
+.settings-section-title { color: #9ca7bd; letter-spacing: .08em; text-transform: uppercase; }
+.settings-guidelines { padding: 14px; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }.settings-guidelines p + p { margin-top: 8px; }.settings-guidelines strong { color: var(--ink); }.settings-guideline-link { display: flex; justify-content: space-between; width: 100%; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--indigo); font-size: 11px; font-weight: 800; }
 
 /* ------------------------------------------------------------------
    Edit Profile Modal

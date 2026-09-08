@@ -24,6 +24,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
+  // Local presentation preferences are intentionally device-level. They do
+  // not affect the social or watchlist data stored in Supabase.
+  const themeSelect = document.getElementById('setting-theme');
+  const spoilerSelect = document.getElementById('setting-spoilers');
+  const savedTheme = localStorage.getItem('kaidra:theme') || 'dark';
+  const savedSpoilers = localStorage.getItem('kaidra:spoilers') || 'protected';
+  if (themeSelect) themeSelect.value = savedTheme;
+  if (spoilerSelect) spoilerSelect.value = savedSpoilers;
+  const applyTheme = (theme) => document.documentElement.dataset.theme = theme;
+  applyTheme(savedTheme);
+  themeSelect?.addEventListener('change', () => { localStorage.setItem('kaidra:theme', themeSelect.value); applyTheme(themeSelect.value); });
+  spoilerSelect?.addEventListener('change', () => localStorage.setItem('kaidra:spoilers', spoilerSelect.value));
+
   // Real Settings: load current values, persist on change
   if (currentUserId) {
     const prefs = await getUserPreferences(currentUserId);
@@ -78,10 +91,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     btn.addEventListener('click', () => activateTab(btn.getAttribute('data-tab')));
   });
   const savedTab = localStorage.getItem(tabStorageKey);
-  if (savedTab && document.getElementById('tab-' + savedTab)) activateTab(savedTab, false);
+  const hasBrowseGenre = new URLSearchParams(window.location.search).has('genre');
+  if (hasBrowseGenre) activateTab('watchlist', false);
+  else if (savedTab && document.getElementById('tab-' + savedTab)) activateTab(savedTab, false);
 
   // Home has two anime-first surfaces: recommendations and news.
-  const homeModeButtons = document.querySelectorAll('.home-mode-btn');
+  const homeModeButtons = document.querySelectorAll('.home-mode-btn, .home-news-link');
   const recommendationsView = document.getElementById('recommendations-view');
   const newsView = document.getElementById('news-scroll-view');
   homeModeButtons.forEach((button) => {
@@ -240,7 +255,6 @@ document.addEventListener('DOMContentLoaded', async function() {
           parent?.querySelector('button[aria-label="Close"], .video-post-close')?.click();
           sheet.classList.remove('is-swipe-closing');
           sheet.style.transform = '';
-          if (parent?.id === 'video-share-drawer' || parent?.id === 'video-audio-drawer') parent.classList.add('hidden');
         }, 180);
       } else {
         sheet.style.transform = '';

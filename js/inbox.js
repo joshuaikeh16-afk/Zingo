@@ -18,8 +18,6 @@ import {
   getActiveAotdDetails,
   markAotdViewed,
   getOrCreateConversation,
-  getCreatorNotifications,
-  subscribeToCreatorNotifications,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -32,8 +30,6 @@ const conversationList = document.getElementById('conversation-list');
 const threadContainer = document.getElementById('message-thread-container');
 const messageInput = document.getElementById('message-text-input');
 const sendBtn = document.getElementById('message-send-btn');
-const creatorHelpList = document.getElementById('creator-help-list');
-const creatorHelpBadge = document.getElementById('creator-help-badge');
 
 function formatRelativeTime(isoString) {
   if (!isoString) return '';
@@ -44,24 +40,6 @@ function formatRelativeTime(isoString) {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
-}
-
-function renderCreatorNotifications(notifications) {
-  if (!creatorHelpList) return;
-  const unread = notifications.filter((item) => !item.read_at).length;
-  creatorHelpBadge?.classList.toggle('hidden', unread === 0);
-  if (creatorHelpBadge) creatorHelpBadge.textContent = String(unread);
-  creatorHelpList.innerHTML = '';
-  if (!notifications.length) {
-    creatorHelpList.innerHTML = '<p class="creator-help-empty">Your creator activity will appear here.</p>';
-    return;
-  }
-  notifications.slice(0, 5).forEach((item) => {
-    const row = document.createElement('div');
-    row.className = `creator-help-item${item.read_at ? '' : ' is-unread'}`;
-    row.innerHTML = `<span class="creator-help-dot">${item.notification_type === 'like' ? '♥' : '◌'}</span><span>${item.message}<small>${formatRelativeTime(item.created_at)}</small></span>`;
-    creatorHelpList.appendChild(row);
-  });
 }
 
 function buildConversationRow(friendRow) {
@@ -291,15 +269,6 @@ messageInput?.addEventListener('keydown', (e) => {
 
   currentUserId = session.user.id;
   await renderConversationList();
-  let creatorActivity = null;
-  try { creatorActivity = await getCreatorNotifications(currentUserId); }
-  catch (error) { console.error('Creator activity unavailable:', error); }
-  if (creatorActivity) {
-    renderCreatorNotifications(creatorActivity);
-    subscribeToCreatorNotifications(currentUserId, () => {
-      getCreatorNotifications(currentUserId).then((items) => items && renderCreatorNotifications(items)).catch(() => {});
-    });
-  }
 
   // Keeps the conversation list itself live (previews, unread badges,
   // ordering) even for messages arriving in a conversation that isn't

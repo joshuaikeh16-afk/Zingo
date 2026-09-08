@@ -8,10 +8,7 @@ import {
   requireAuth,
   requireProfile,
   getFollowCounts,
-  getCreatorProfilePosts,
-  getPinnedVideoIds,
-  getTotalLikesForUser,
-  getUserPosts,
+  getUserWatchlist,
   getCurrentlyWatching,
   getCompatibilityScore,
   getStreak,
@@ -20,7 +17,6 @@ import {
   sendFriendRequest,
   cancelFriendRequest,
   removeFriend,
-  getSignedMediaUrl,
 } from './supabase-client.js';
 
 let currentUserId = null;
@@ -32,6 +28,8 @@ const displayNameEl = document.getElementById('profile-display-name');
 const usernameEl = document.getElementById('profile-username');
 const statusEl = document.getElementById('profile-status');
 const bioEl = document.getElementById('profile-bio');
+const animeVibeEl = document.getElementById('profile-anime-vibe');
+const interestChipsEl = document.getElementById('profile-interest-chips');
 const streakBadgeEl = document.getElementById('streak-badge');
 const currentlyWatchingEl = document.getElementById('currently-watching-badge');
 const compatibilityEl = document.getElementById('compatibility-score');
@@ -39,75 +37,61 @@ const followersStatEl = document.getElementById('stat-followers');
 const followingStatEl = document.getElementById('stat-following');
 const likesStatEl = document.getElementById('stat-likes');
 const profileSectionTitle = document.getElementById('profile-section-title');
-const savedTabs = document.getElementById('profile-saved-tabs');
 const friendActionBtn = document.getElementById('friend-action-btn');
 const postsGrid = document.getElementById('profile-posts-grid');
 const postsEmptyState = document.getElementById('profile-posts-empty-state');
 
-let activeProfileSection = 'posted';
-let activeSavedSection = 'videos';
+let activeProfileStatus = 'watching';
 
 function formatCount(n) {
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   return String(n);
 }
 
-async function buildPostTile(post) {
+function buildAnimeTile(entry) {
   const tile = document.createElement('div');
-  tile.dataset.postId = post.id;
-
-  const badge = post.post_type === 'video' ? '🎥' : post.post_type === 'aotd' ? '🎬 AOTD' : post.post_type === 'text_only' ? '📝' : '❤️';
-  const videoUrl = post.post_type === 'video' && post.media_url
-    ? (post.media_url.startsWith('http') ? post.media_url : await getSignedMediaUrl('post-videos', post.media_url))
-    : null;
-  const mediaHtml = videoUrl
-    ? `<video src="${videoUrl}" muted playsinline preload="metadata"></video>`
-    : post.media_url
-    ? `<img src="${post.media_url}" alt="Post" />`
-    : `<div class="post-tile-text">${post.caption ?? ''}</div>`;
-
-  tile.innerHTML = `${mediaHtml}<span>${badge}</span>`;
+  tile.dataset.animeId = entry.animeId;
+  const status = String(entry.status || 'plan_to_watch').replaceAll('_', ' ');
+  const progress = entry.totalEpisodes ? `${entry.progress || 0}/${entry.totalEpisodes}` : status;
+  tile.innerHTML = entry.coverUrl
+    ? `<img src="${entry.coverUrl}" alt="${entry.title}" loading="lazy" /><div class="anime-tile-caption"><strong>${entry.title}</strong><span>${progress}</span></div>`
+    : `<div class="anime-tile-placeholder"><strong>${entry.title}</strong><span>${progress}</span></div>`;
   return tile;
 }
 
 async function renderPosts() {
   if (!postsGrid) return;
-  const posts = await getCreatorProfilePosts(profileUserId, activeProfileSection, activeSavedSection);
-  const pinned = activeProfileSection === 'posted' ? await getPinnedVideoIds(profileUserId).catch(() => []) : [];
-  const pinRank = new Map(pinned.map((item) => [item.post_id, item.pin_order]));
-  posts.sort((a, b) => (pinRank.get(a.id) || 99) - (pinRank.get(b.id) || 99));
-  postsGrid.querySelectorAll('[data-post-id]').forEach((el) => el.remove());
+  const entries = (await getUserWatchlist(profileUserId).catch(() => []))
+    .filter((entry) => entry.status === activeProfileStatus);
+  postsGrid.querySelectorAll('[data-anime-id]').forEach((el) => el.remove());
 
-  if (posts.length === 0) {
+  if (entries.length === 0) {
     postsEmptyState?.classList.remove('hidden');
     postsEmptyState?.classList.add('flex');
     postsGrid.classList.add('hidden');
+    if (postsEmptyState) postsEmptyState.querySelector('h4').textContent = 'No anime added yet';
+    if (postsEmptyState) postsEmptyState.querySelector('p').textContent = 'Add anime or manga to your list and your activity will appear here.';
   } else {
     postsEmptyState?.classList.add('hidden');
     postsEmptyState?.classList.remove('flex');
     postsGrid.classList.remove('hidden');
-    const tiles = await Promise.all(posts.map(async (post) => {
-      const tile = await buildPostTile(post);
-      if (pinRank.has(post.id)) { tile.classList.add('is-pinned'); tile.insertAdjacentHTML('beforeend', `<b class="profile-pin-badge">📌 Pinned ${pinRank.get(post.id)}</b>`); }
-      return tile;
-    }));
+    const tiles = entries.map(buildAnimeTile);
     tiles.forEach((tile) => postsGrid.appendChild(tile));
   }
 }
 
-document.querySelectorAll('[data-profile-section]').forEach((button) => button.addEventListener('click', async () => {
-  activeProfileSection = button.dataset.profileSection;
-  document.querySelectorAll('[data-profile-section]').forEach((item) => item.classList.toggle('active', item === button));
-  savedTabs?.classList.toggle('hidden', activeProfileSection !== 'saved');
-  if (profileSectionTitle) profileSectionTitle.textContent = activeProfileSection === 'posted' ? 'Anime activity' : activeProfileSection === 'reposted' ? 'Reviews' : activeProfileSection === 'saved' ? `Saved ${activeSavedSection === 'videos' ? 'Anime' : 'Sounds'}` : 'Locked Content';
+document.querySelectorAll('[data-profile-status]').forEach((button) => button.addEventListener('click', async () => {
+  activeProfileStatus = button.dataset.profileStatus;
+  document.querySelectorAll('[data-profile-status]').forEach((item) => item.classList.toggle('active', item === button));
   await renderPosts();
 }));
-savedTabs?.querySelectorAll('[data-saved-section]').forEach((button) => button.addEventListener('click', async () => {
-  activeSavedSection = button.dataset.savedSection;
-  savedTabs.querySelectorAll('button').forEach((item) => item.classList.toggle('active', item === button));
-  if (profileSectionTitle) profileSectionTitle.textContent = `Saved ${activeSavedSection === 'videos' ? 'Anime' : 'Sounds'}`;
+document.addEventListener('kaidra:watchlist-change', async (event) => {
+  if (event.detail?.status) {
+    activeProfileStatus = event.detail.status;
+    document.querySelectorAll('[data-profile-status]').forEach((item) => item.classList.toggle('active', item.dataset.profileStatus === activeProfileStatus));
+  }
   await renderPosts();
-}));
+});
 
 async function renderHeader() {
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', profileUserId).maybeSingle();
@@ -118,6 +102,21 @@ async function renderHeader() {
   if (usernameEl) usernameEl.textContent = '@' + (profile.username ?? 'unknown');
   if (statusEl) statusEl.textContent = profile.status_text || '';
   if (bioEl) bioEl.textContent = profile.bio || '';
+  if (animeVibeEl) animeVibeEl.textContent = profile.status_text || 'Anime fan · building a list';
+  if (interestChipsEl) {
+    const interests = Array.isArray(profile.interests) ? profile.interests : [];
+    interestChipsEl.innerHTML = interests.length
+      ? interests.slice(0, 6).map((interest) => `<span>${String(interest).replaceAll('_', ' ')}</span>`).join('')
+      : '<span>Anime</span><span>Manga</span><span>Community</span>';
+  }
+  const template = profile.profile_template || 'midnight';
+  const profileContainer = document.querySelector('.profile-container');
+  const heroCard = document.querySelector('.profile-hero-card');
+  const templateClasses = ['midnight', 'sakura', 'ocean', 'sunset', 'monochrome', 'cyberpunk', 'forest', 'starlight'];
+  profileContainer?.classList.remove(...templateClasses.map((name) => `profile-template-${name}`));
+  heroCard?.classList.remove(...templateClasses.map((name) => `profile-template-${name}`));
+  profileContainer?.classList.add(`profile-template-${template}`);
+  heroCard?.classList.add(`profile-template-${template}`);
 
   // Currently watching -- shown on any profile (own or other), since
   // it's just "what they're watching right now," not friend-gated
@@ -132,13 +131,13 @@ async function renderHeader() {
   }
 
   // Stats
-  const [likes, followCounts] = await Promise.all([
-    getTotalLikesForUser(profileUserId),
+  const [watchlist, followCounts] = await Promise.all([
+    getUserWatchlist(profileUserId).catch(() => []),
     getFollowCounts(profileUserId).catch(() => ({ followers: 0, following: 0 })),
   ]);
   if (followersStatEl) followersStatEl.textContent = formatCount(followCounts.followers);
   if (followingStatEl) followingStatEl.textContent = formatCount(followCounts.following);
-  if (likesStatEl) likesStatEl.textContent = formatCount(likes);
+  if (likesStatEl) likesStatEl.textContent = formatCount(watchlist.length);
 
   if (isOwnProfile) {
     // Compatibility score and streak don't apply to your own profile;
@@ -238,6 +237,8 @@ const editAvatarInput = document.getElementById('edit-profile-avatar-input');
 const editDisplayNameInput = document.getElementById('edit-profile-display-name');
 const editStatusInput = document.getElementById('edit-profile-status');
 const editBioInput = document.getElementById('edit-profile-bio');
+const editInterestsInput = document.getElementById('edit-profile-interests');
+const editTemplateInput = document.getElementById('edit-profile-template');
 const editSaveBtn = document.getElementById('edit-profile-save-btn');
 const editErrorEl = document.getElementById('edit-profile-error');
 
@@ -258,6 +259,8 @@ editProfileTrigger?.addEventListener('click', async () => {
   if (editDisplayNameInput) editDisplayNameInput.value = profile.display_name || '';
   if (editStatusInput) editStatusInput.value = profile.status_text || '';
   if (editBioInput) editBioInput.value = profile.bio || '';
+  if (editInterestsInput) editInterestsInput.value = Array.isArray(profile.interests) ? profile.interests.join(', ') : '';
+  if (editTemplateInput) editTemplateInput.value = profile.profile_template || 'midnight';
   setEditError(null);
 
   editProfileModal?.classList.remove('hidden');
@@ -299,6 +302,8 @@ editSaveBtn?.addEventListener('click', async () => {
       display_name: editDisplayNameInput?.value.trim() || null,
       status_text: editStatusInput?.value.trim() || null,
       bio: editBioInput?.value.trim() || null,
+      interests: (editInterestsInput?.value || '').split(',').map((item) => item.trim().toLowerCase().replace(/\s+/g, '_')).filter(Boolean).slice(0, 12),
+      profile_template: editTemplateInput?.value || 'midnight',
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     }).eq('id', currentUserId);
 

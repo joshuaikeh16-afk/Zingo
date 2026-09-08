@@ -19,6 +19,7 @@ const submitBtn = document.getElementById('auth-submit-btn');
 const googleAuthBtn = document.getElementById('google-auth-btn');
 const errorEl = document.getElementById('auth-error-message');
 const loadingEl = document.getElementById('auth-loading');
+let isRedirecting = false;
 
 document.querySelectorAll('.password-toggle').forEach((toggle) => {
   toggle.addEventListener('click', () => {
@@ -42,6 +43,17 @@ function setError(message) {
 function setLoading(isLoading) {
   if (loadingEl) loadingEl.classList.toggle('hidden', !isLoading);
   if (submitBtn) submitBtn.disabled = isLoading;
+}
+
+async function redirectForSession(session) {
+  if (!session || isRedirecting) return;
+  isRedirecting = true;
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', session.user.id)
+    .maybeSingle();
+  window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
 }
 
 const forgotLink = document.getElementById('forgot-password-link');
@@ -115,13 +127,7 @@ submitBtn?.addEventListener('click', async (e) => {
     // to the app if a profile already exists. Only an edge case -- a
     // session with no profile yet -- falls through to onboarding.
     const { data: { session } } = await supabase.auth.getSession();
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', session.user.id)
-      .maybeSingle();
-
-    window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
+    await redirectForSession(session);
   } catch (err) {
     setError('Something went wrong. Try again.');
     console.error(err);
@@ -138,6 +144,7 @@ googleAuthBtn?.addEventListener('click', async () => {
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth.html`,
+      queryParams: { prompt: 'select_account' },
     },
   });
 
@@ -146,6 +153,14 @@ googleAuthBtn?.addEventListener('click', async () => {
   if (error) {
     setLoading(false);
     setError(error.message);
+  }
+});
+
+// OAuth can finish after the initial page script has run. Handle the
+// returned SIGNED_IN event so Google users are routed reliably.
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    window.setTimeout(() => redirectForSession(session), 0);
   }
 });
 
@@ -160,14 +175,7 @@ async function redirectIfSignedIn() {
   if (mode === 'signup') return;
 
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', session.user.id)
-      .maybeSingle();
-    window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
-  }
+  if (session) await redirectForSession(session);
 }
 
 redirectIfSignedIn();

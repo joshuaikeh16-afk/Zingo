@@ -97,13 +97,15 @@ const INTEREST_CATEGORY_MAP = {
 };
 
 function getFilteredData() {
+  const animeNews = new Set(['anime', 'art_manga', 'manga', 'idols_music', 'vtubers']);
+  const animeOnly = currentNewsData.filter((item) => animeNews.has(item.category));
   // Feed is filtered to the user's own selected interests, if known.
   // No manual category chips -- this is the whole feed, personalized.
   if (userInterests && userInterests.length > 0) {
     const categories = new Set(userInterests.flatMap((interest) => INTEREST_CATEGORY_MAP[interest] ?? [interest]));
-    return currentNewsData.filter(item => categories.has(item.category));
+    return animeOnly.filter(item => categories.has(item.category));
   }
-  return currentNewsData;
+  return animeOnly;
 }
 
 function findArticleById(id) {
@@ -157,7 +159,12 @@ function renderNewsScroll(filteredData) {
 }
 
 function renderAll() {
-  renderNewsScroll(getFilteredData());
+  const filtered = getFilteredData();
+  renderNewsScroll(filtered);
+  const preview = document.getElementById('home-news-preview');
+  if (preview) {
+    preview.innerHTML = filtered.slice(0, 4).map((item) => `<article><span>${item.categoryLabel || 'Anime news'}</span><h3>${item.title}</h3><p>${item.snippet || 'Read the latest anime update.'}</p></article>`).join('') || '<article><h3>No anime news yet</h3><p>New anime stories will appear here.</p></article>';
+  }
 }
 
 // ------------------------------------------------------------------

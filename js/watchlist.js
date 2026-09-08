@@ -14,7 +14,7 @@ import {
   getUserWatchlist,
   getUserPreferences,
 } from './supabase-client.js';
-import { searchMAL, getMALRanking, connectMAL, finishMALAuth, getMALAnimeList, isMALConnected, updateMALListEntry, deleteMALListEntry } from './mal-client.js';
+import { searchMAL, getMALDetail, getMALRanking, connectMAL, finishMALAuth, getMALAnimeList, isMALConnected, updateMALListEntry, deleteMALListEntry } from './mal-client.js';
 
 document.addEventListener('DOMContentLoaded', async function () {
 
@@ -26,11 +26,12 @@ document.addEventListener('DOMContentLoaded', async function () {
   const genreRowsContainer = document.getElementById('watchlist-genre-rows');
 
   let searchDebounceTimer = null;
-  let activeStatus = 'watching';
+  let activeStatus = null;
   let currentUserId = null;
   let watchlistCache = [];
   let activeMediaType = 'ANIME';
   let allowSensitive = false;
+  let malMetadataUnavailable = false;
 
   async function syncMALList() {
     const payload = await getMALAnimeList('', 100);
@@ -106,13 +107,49 @@ document.addEventListener('DOMContentLoaded', async function () {
       '</div>';
 
     cardsContainer.appendChild(card);
-    applyStatusFilter(activeStatus);
+    applyStatusFilter(null);
   }
 
   async function loadWatchlist() {
     if (!cardsContainer) return;
     cardsContainer.innerHTML = '<div class="watchlist-loading">Loading your list…</div>';
     watchlistCache = await getUserWatchlist(currentUserId, allowSensitive);
+
+    // Older rows may contain only an ID from an incomplete import. Resolve
+    // those records before rendering so users never see "MAL #123" cards.
+    const incomplete = watchlistCache.filter((entry) => !entry.title || entry.title.startsWith('MAL #') || !entry.coverUrl);
+    if (incomplete.length && !malMetadataUnavailable) {
+      const hydrated = [];
+      for (const entry of incomplete) {
+        if (malMetadataUnavailable) break;
+        try {
+          const detail = await getMALDetail(entry.animeId, entry.mediaType === 'manga' ? 'manga' : 'anime');
+          const title = detail.title || entry.title;
+          const coverUrl = detail.main_picture?.large || detail.main_picture?.medium || entry.coverUrl;
+          const totalEpisodes = entry.mediaType === 'manga' ? (detail.num_chapters || entry.totalEpisodes) : (detail.num_episodes || entry.totalEpisodes);
+          if (title && !title.startsWith('MAL #')) {
+            await supabase.from('user_watchlist').update({ title, cover_url: coverUrl, total_episodes: totalEpisodes }).eq('user_id', currentUserId).eq('anime_id', entry.animeId);
+          }
+          hydrated.push({ ...entry, title, coverUrl, totalEpisodes });
+        } catch (error) {
+          const message = String(error?.message || '');
+          if (message.includes('404')) {
+            // This is an incomplete legacy row pointing to a title MAL no
+            // longer knows. Do not keep rendering it as "MAL #123".
+            await supabase.from('user_watchlist').delete().eq('user_id', currentUserId).eq('anime_id', entry.animeId);
+            hydrated.push(null);
+            continue;
+          }
+          malMetadataUnavailable = true;
+          console.warn(`Could not resolve MAL #${entry.animeId}:`, error);
+          hydrated.push(entry);
+        }
+      }
+      const byId = new Map(hydrated.filter(Boolean).map((entry) => [String(entry.animeId), entry]));
+      const invalidIds = new Set(incomplete.filter((_, index) => hydrated[index] === null).map((entry) => String(entry.animeId)));
+      watchlistCache = watchlistCache.filter((entry) => !invalidIds.has(String(entry.animeId))).map((entry) => byId.get(String(entry.animeId)) || entry);
+      document.dispatchEvent(new CustomEvent('kaidra:watchlist-change'));
+    }
 
     if (watchlistCache.length === 0) {
       cardsContainer.innerHTML = '<div class="watchlist-empty">Nothing here yet — search above or add something from Recommended.</div>';
@@ -121,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     cardsContainer.innerHTML = '';
     watchlistCache.forEach(renderCard);
-    applyStatusFilter(activeStatus);
+    applyStatusFilter(null);
   }
 
   // ------------------------------------------------------------------
@@ -260,6 +297,13 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
   });
 
+  document.addEventListener('kaidra:hero-add-anime', (event) => {
+    if (event.detail?.animeId) openStatusPicker(event.detail);
+  });
+  document.addEventListener('kaidra:browse-add-anime', (event) => {
+    if (event.detail?.animeId) openStatusPicker(event.detail);
+  });
+
   // ------------------------------------------------------------------
   // ADD TO WATCHLIST — real Supabase insert, then render for real.
   // ------------------------------------------------------------------
@@ -267,12 +311,21 @@ document.addEventListener('DOMContentLoaded', async function () {
   async function addAnimeToList({ animeId, title, coverUrl, totalEpisodes, mediaType, score }, status) {
     try {
       await addToWatchlist(currentUserId, animeId, status, totalEpisodes, { title, coverUrl, mediaType, score });
-      if (mediaType !== 'manga' && await isMALConnected(currentUserId)) {
-        await updateMALListEntry(animeId, { status, num_watched_episodes: 0, score: score || 0 });
-      }
       renderCard({ animeId, title, coverUrl, totalEpisodes, progress: 0, status, mediaType });
+      activeStatus = null;
+      applyStatusFilter(null);
+      document.dispatchEvent(new CustomEvent('kaidra:watchlist-change', { detail: { status } }));
     } catch (err) {
       console.error('Failed to add to watchlist:', err);
+    }
+
+    // MAL only accepts its five official list statuses. Custom local labels
+    // such as Favourite and Worst still belong in Kaidra's local list.
+    const malStatuses = ['watching', 'completed', 'on_hold', 'dropped', 'plan_to_watch'];
+    if (mediaType !== 'manga' && malStatuses.includes(status) && await isMALConnected(currentUserId)) {
+      updateMALListEntry(animeId, { status, num_watched_episodes: 0, score: score || 0 }).catch((err) => {
+        console.warn('MAL list update skipped:', err);
+      });
     }
 
     if (resultsBox) resultsBox.style.display = 'none';
@@ -288,7 +341,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (!cardsContainer) return;
     cardsContainer.querySelectorAll('.anime-card').forEach((card) => {
       const cardStatus = card.getAttribute('data-status') || 'watching';
-      card.style.display = (cardStatus === status) ? '' : 'none';
+      card.style.display = !status || cardStatus === status ? '' : 'none';
     });
   }
 
@@ -311,6 +364,8 @@ document.addEventListener('DOMContentLoaded', async function () {
       await removeFromWatchlist(currentUserId, removeId);
       if (await isMALConnected(currentUserId)) await deleteMALListEntry(removeId).catch(() => {});
       removeCard.remove();
+      watchlistCache = watchlistCache.filter((entry) => String(entry.animeId) !== String(removeId));
+      document.dispatchEvent(new CustomEvent('kaidra:watchlist-change', { detail: { removedId: removeId } }));
       return;
     }
     if (!btn) return;

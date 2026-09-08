@@ -4,7 +4,16 @@ async function malRequest(action, payload = {}) {
   const { data, error } = await supabase.functions.invoke('mal-api', {
     body: { action, ...payload },
   });
-  if (error) throw error;
+  if (error) {
+    let detail = '';
+    try {
+      const responseBody = await error.context?.json();
+      detail = responseBody?.error || responseBody?.message || '';
+    } catch {
+      detail = '';
+    }
+    throw new Error(`MAL API unavailable (${action}). ${detail || error.message || 'Check the deployed function logs.'}`);
+  }
   if (data?.error) throw new Error(data.error);
   return data;
 }
@@ -12,6 +21,7 @@ async function malRequest(action, payload = {}) {
 export const searchMAL = (query, type = 'anime', limit = 12) => malRequest('search', { query, type, limit });
 export const getMALDetail = (id, type = 'anime') => malRequest('detail', { id, type });
 export const getMALRanking = (type = 'anime', rankingType = 'bypopularity', limit = 12) => malRequest('ranking', { type, rankingType, limit });
+export const getMALGenre = (genre, year = 'all', limit = 20, offset = 0) => malRequest('genre', { genre, sort_year: year, limit, offset });
 export const getMALSeasonal = (year, season, limit = 12) => malRequest('seasonal', { year, season, limit });
 export const getMALUpcoming = (limit = 12) => malRequest('upcoming', { limit });
 export const getMALRecommendations = (id, limit = 12) => malRequest('recommendations', { id, limit });

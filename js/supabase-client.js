@@ -179,14 +179,21 @@ export async function getStreak(userA, userB) {
 }
 
 async function hasActiveAotdFrom(senderId, recipientId) {
-  const { data } = await supabase
+  const { data: recipients, error: recipientError } = await supabase
     .from('aotd_recipients')
-    .select('aotd_id, aotd_posts!inner(sender_id, expires_at)')
+    .select('aotd_id')
     .eq('recipient_id', recipientId)
-    .eq('aotd_posts.sender_id', senderId)
-    .gt('aotd_posts.expires_at', new Date().toISOString())
+    .limit(50);
+  if (recipientError || !recipients?.length) return false;
+
+  const { data: posts, error: postError } = await supabase
+    .from('aotd_posts')
+    .select('id')
+    .in('id', recipients.map((row) => row.aotd_id))
+    .eq('sender_id', senderId)
+    .gt('expires_at', new Date().toISOString())
     .limit(1);
-  return (data?.length ?? 0) > 0;
+  return !postError && (posts?.length ?? 0) > 0;
 }
 
 export { hasActiveAotdFrom };
@@ -258,16 +265,22 @@ export async function addStatusQuickReact(postId, userId, emoji = '🔥') {
 
 /** Full details for the active Anime of the Day from `senderId` to `recipientId`, for populating the viewer modal. Null if none active. */
 export async function getActiveAotdDetails(senderId, recipientId) {
-  const { data } = await supabase
+  const { data: recipients, error: recipientError } = await supabase
     .from('aotd_recipients')
-    .select('aotd_id, viewed_at, aotd_posts!inner(id, sender_id, anime_id, anime_title, cover_image_url, note, created_at, expires_at)')
+    .select('aotd_id, viewed_at')
     .eq('recipient_id', recipientId)
-    .eq('aotd_posts.sender_id', senderId)
-    .gt('aotd_posts.expires_at', new Date().toISOString())
-    .order('aotd_posts(created_at)', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data?.aotd_posts ?? null;
+    .limit(50);
+  if (recipientError || !recipients?.length) return null;
+
+  const { data: posts, error: postError } = await supabase
+    .from('aotd_posts')
+    .select('id, sender_id, anime_id, anime_title, cover_image_url, note, created_at, expires_at')
+    .in('id', recipients.map((row) => row.aotd_id))
+    .eq('sender_id', senderId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1);
+  return postError ? null : (posts?.[0] ?? null);
 }
 
 export async function markAotdViewed(aotdId, recipientId) {
@@ -1029,6 +1042,7 @@ export async function addToWatchlist(userId, animeId, status, totalEpisodes, met
       anime_id: animeId,
       mal_id: animeId,
       media_type: metadata.mediaType || 'anime',
+      status: status || 'plan_to_watch',
       title: metadata.title || null,
       cover_url: metadata.coverUrl || null,
       score: metadata.score ?? null,
@@ -1059,7 +1073,8 @@ export async function updateWatchlistStatus(userId, animeId, status) {
 }
 
 export async function removeFromWatchlist(userId, animeId) {
-  await supabase.from('user_watchlist').delete().eq('user_id', userId).eq('anime_id', animeId);
+  const { error } = await supabase.from('user_watchlist').delete().eq('user_id', userId).eq('anime_id', animeId);
+  if (error) throw error;
 }
 
 /** Full watchlist for a user, using locally cached MAL metadata. */
@@ -1074,7 +1089,7 @@ export async function getUserWatchlist(userId, includeAdult = false) {
   return rows.map((r) => ({
     animeId: r.mal_id ?? r.anime_id,
     mediaType: r.media_type || 'anime',
-    status: r.status === 'planned' ? 'plan_to_watch' : r.status === 'favourite' ? 'completed' : r.status,
+    status: r.status === 'planned' ? 'plan_to_watch' : (r.status || 'plan_to_watch'),
     progress: r.progress,
     totalEpisodes: r.total_episodes ?? null,
     title: r.title ?? `MAL #${r.mal_id ?? r.anime_id}`,
@@ -1167,14 +1182,15 @@ export async function getTrendingAnimeByGenre(genre, limit = 12, includeAdult = 
 // ---------------------------------------------------------------------
 
 export async function getUserPreferences(userId) {
+  const defaults = { allow_dms: true, allow_nonfriend_dms: false, allow_follower_dms: false, public_watchlist: true, nsfw_filter: false, notify_dm: true, notify_likes: true, notify_comments: true };
   const { data } = await supabase
     .from('user_preferences')
-    .select('allow_dms, allow_nonfriend_dms, allow_follower_dms, public_watchlist, nsfw_filter, notify_dm, notify_likes, notify_comments')
+    .select('*')
     .eq('user_id', userId)
     .maybeSingle();
 
   // Row may not exist yet for a user. Mature content stays off by default.
-  return data ?? { allow_dms: true, allow_nonfriend_dms: false, allow_follower_dms: false, public_watchlist: true, nsfw_filter: false, notify_dm: true, notify_likes: true, notify_comments: true };
+  return { ...defaults, ...(data || {}) };
 }
 
 export async function updateUserPreferences(userId, patch) {

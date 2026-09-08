@@ -2,6 +2,33 @@ import { getMALRanking, getMALSeasonal, getMALUpcoming } from './mal-client.js';
 
 const grid = document.getElementById('discovery-grid');
 const tabs = document.querySelectorAll('[data-discovery]');
+const heroCover = document.getElementById('anime-hero-cover');
+const heroTitle = document.getElementById('anime-hero-title');
+const heroMeta = document.getElementById('anime-hero-meta');
+const heroSynopsis = document.getElementById('anime-hero-synopsis');
+const heroAction = document.getElementById('anime-hero-action');
+let heroAnime = null;
+
+function renderHero(item) {
+  if (!item) return;
+  heroAnime = item;
+  if (heroCover) heroCover.src = item.main_picture?.large || item.main_picture?.medium || '';
+  if (heroTitle) heroTitle.textContent = item.title || 'Featured anime';
+  if (heroMeta) heroMeta.textContent = [item.mean ? `★ ${item.mean}` : '', item.num_episodes ? `${item.num_episodes} episodes` : '', item.status || ''].filter(Boolean).join(' · ');
+  if (heroSynopsis) heroSynopsis.textContent = item.synopsis || 'Discover your next favorite anime and share it with the community.';
+}
+
+heroAction?.addEventListener('click', () => {
+  if (!heroAnime) return;
+  document.dispatchEvent(new CustomEvent('kaidra:hero-add-anime', { detail: {
+    animeId: heroAnime.id,
+    title: heroAnime.title,
+    coverUrl: heroAnime.main_picture?.large || heroAnime.main_picture?.medium || '',
+    totalEpisodes: heroAnime.num_episodes || null,
+    mediaType: 'anime',
+    score: heroAnime.mean || null,
+  }}));
+});
 
 function cards(payload, type = 'anime') {
   const items = (payload?.data || []).map((item) => item.node || item);
@@ -9,7 +36,8 @@ function cards(payload, type = 'anime') {
     grid.innerHTML = '<p class="discovery-empty">No titles found right now.</p>';
     return;
   }
-  grid.innerHTML = items.map((item) => {
+  renderHero(items[0]);
+  grid.innerHTML = items.slice(1).map((item) => {
     const title = item.title || 'Untitled';
     const cover = item.main_picture?.large || item.main_picture?.medium || '';
     const meta = [item.media_type?.toUpperCase(), item.num_episodes ? `${item.num_episodes} eps` : '', item.mean ? `★ ${item.mean}` : ''].filter(Boolean).join(' · ');

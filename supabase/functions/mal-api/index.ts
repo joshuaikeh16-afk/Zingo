@@ -60,10 +60,13 @@ async function storedMalToken(request: Request) {
 }
 
 function malFields(type = 'anime') {
-  const common = ['id', 'title', 'main_picture', 'alternative_titles', 'synopsis', 'status', 'start_date', 'end_date', 'mean', 'rank', 'popularity', 'genres', 'themes', 'demographics', 'my_list_status', 'recommendations', 'num_list_users'];
+  // Keep public catalog requests to fields MAL accepts without a user token.
+  // my_list_status, recommendations, and related_anime are restricted or
+  // endpoint-specific and can make otherwise valid catalog calls return 400.
+  const common = ['id', 'title', 'main_picture', 'alternative_titles', 'synopsis', 'status', 'start_date', 'end_date', 'mean', 'rank', 'popularity', 'genres', 'themes', 'demographics', 'num_list_users'];
   const mediaFields = type === 'manga'
     ? ['media_type', 'num_chapters', 'num_volumes', 'authors', 'serialization']
-    : ['media_type', 'num_episodes', 'studios', 'source', 'rating', 'average_episode_duration', 'broadcast', 'start_season', 'related_anime'];
+    : ['media_type', 'num_episodes', 'studios', 'source', 'rating', 'average_episode_duration', 'broadcast', 'start_season'];
   return [...common, ...mediaFields].join(',');
 }
 
@@ -87,6 +90,40 @@ Deno.serve(async (request) => {
     if (action === 'ranking') {
       const type = body.type === 'manga' ? 'manga' : 'anime';
       return json(await malFetch(`/${type}/ranking`, { ranking_type: String(body.rankingType || 'bypopularity'), limit: String(limit), fields: malFields(type) }));
+    }
+    if (action === 'genre') {
+      const genre = String(body.genre || '');
+      if (!/^\d+$/.test(genre)) throw new Error('A valid MAL genre is required');
+      // MAL requires q on the /anime endpoint even when filtering by genre.
+      const year = String(body.sort_year || body.year || 'all');
+      const dateParams: Record<string, string> = {};
+      const singleYear = /^\d{4}$/.test(year) ? Number(year) : null;
+      const range = /^(\d{4})-(\d{4})$/.exec(year);
+      if (singleYear) {
+        dateParams.start_date = `${singleYear}-01-01`;
+        dateParams.end_date = `${singleYear}-12-31`;
+      } else if (range) {
+        const newer = Math.max(Number(range[1]), Number(range[2]));
+        const older = Math.min(Number(range[1]), Number(range[2]));
+        dateParams.start_date = `${older}-01-01`;
+        dateParams.end_date = `${newer}-12-31`;
+      }
+      const payload = await malFetch('/anime', { q: String(body.query || 'the'), genres: genre, sort: 'anime_start_date', offset: String(Math.max(Number(body.offset) || 0, 0)), limit: String(limit), ...dateParams, fields: malFields('anime') });
+      // MAL can return a mixed page around date boundaries. Enforce the
+      // selected year again before the response reaches the browser.
+      const matchesYear = (item: { node?: { start_date?: string | null } }) => {
+        const startDate = item.node?.start_date || '';
+        const releaseYear = Number(startDate.slice(0, 4));
+        if (!releaseYear || year === 'all') return true;
+        if (/^\d{4}$/.test(year)) return releaseYear === Number(year);
+        const match = /^(\d{4})-(\d{4})$/.exec(year);
+        if (!match) return true;
+        const high = Math.max(Number(match[1]), Number(match[2]));
+        const low = Math.min(Number(match[1]), Number(match[2]));
+        return releaseYear >= low && releaseYear <= high;
+      };
+      payload.data = (payload.data || []).filter(matchesYear).sort((a: { node?: { start_date?: string | null } }, b: { node?: { start_date?: string | null } }) => String(b.node?.start_date || '').localeCompare(String(a.node?.start_date || '')));
+      return json(payload);
     }
     if (action === 'seasonal') {
       const year = String(body.year || new Date().getUTCFullYear());

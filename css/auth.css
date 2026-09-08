@@ -235,3 +235,11 @@ body.auth-body {
   font-size: 10.5px;
   color: var(--ink-faint);
 }
+.auth-social-help { margin: 10px auto 0; max-width: 300px; color: var(--ink-soft); font-size: 11px; line-height: 1.45; text-align: center; }
+.auth-account-note { margin: -7px auto 18px; max-width: 290px; color: var(--ink-soft); font-size: 11px; line-height: 1.45; text-align: center; }
+.signup-benefits { display: grid; gap: 7px; margin: 2px 0 20px; padding: 13px 14px; border: 1px solid rgba(139,143,255,.35); border-radius: 14px; background: rgba(139,143,255,.09); color: var(--ink-soft); font-size: 11px; }
+.signup-benefits span { display: block; }
+.auth-signin .auth-card { border-top: 3px solid var(--indigo); }
+.auth-signup .auth-card { border-top: 3px solid var(--vermillion); background: linear-gradient(145deg, rgba(29,22,42,.98), rgba(19,24,35,.98)); }
+.auth-signup .auth-badge { background: var(--vermillion-soft); color: #ff9ea5; }
+.auth-signup .auth-submit-btn { background: var(--vermillion); }

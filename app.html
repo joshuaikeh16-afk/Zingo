@@ -15,7 +15,6 @@
 <link rel="stylesheet" href="/css/chat.css">
 <link rel="stylesheet" href="/css/watchlist.css">
 <link rel="stylesheet" href="/css/news-social.css">
-<link rel="stylesheet" href="/css/videos.css">
 </head>
 <body>
 
@@ -39,12 +38,14 @@
         <button type="button" class="home-mode-btn" data-home-mode="news" role="tab" aria-selected="false">Anime News</button>
       </div>
       <div id="recommendations-view" class="recommendations-view" aria-live="polite">
-        <div class="community-welcome">
-          <span class="community-kicker">ANIME COMMUNITY</span>
-          <h1>Find your next favorite.</h1>
-          <p>Discover anime, trade recommendations, and talk with people who get it.</p>
+        <div class="anime-home-hero" id="anime-home-hero">
+          <div class="anime-home-hero-art"><img id="anime-hero-cover" src="" alt="Featured anime cover" /></div>
+          <div class="anime-home-hero-copy"><span class="community-kicker">FEATURED ANIME</span><h1 id="anime-hero-title">Loading anime…</h1><div class="anime-hero-meta" id="anime-hero-meta"></div><p id="anime-hero-synopsis">Discover your next favorite anime from MyAnimeList.</p><button type="button" class="anime-hero-action" id="anime-hero-action">＋ Add to watchlist</button></div>
         </div>
-        <div class="discovery-tabs" role="tablist" aria-label="Anime discovery"><button type="button" class="discovery-tab active" data-discovery="recommendations">Recommendations</button><button type="button" class="discovery-tab" data-discovery="ranking">Top ranked</button><button type="button" class="discovery-tab" data-discovery="seasonal">This season</button><button type="button" class="discovery-tab" data-discovery="upcoming">Upcoming</button><button type="button" class="discovery-tab" data-discovery="manga">Manga</button></div>
+        <div class="discovery-tabs" role="tablist" aria-label="Anime discovery"><button type="button" class="discovery-tab active" data-discovery="recommendations">Most popular</button><button type="button" class="discovery-tab" data-discovery="ranking">Top rated</button><button type="button" class="discovery-tab" data-discovery="seasonal">This season</button><button type="button" class="discovery-tab" data-discovery="upcoming">Upcoming</button><button type="button" class="discovery-tab" data-discovery="manga">Manga</button></div>
+        <div class="home-section-heading"><h2>Anime news</h2><button type="button" class="home-news-link" data-home-mode="news">See all</button></div>
+        <div class="home-news-preview" id="home-news-preview"></div>
+        <div class="home-section-heading"><h2>Popular anime</h2></div>
         <div id="discovery-grid" class="recommendation-grid" aria-live="polite"></div>
       </div>
       <div class="news-view-container hidden" id="news-scroll-view">
@@ -85,41 +86,64 @@
 
     </section>
 
-    <!-- TAB 2: WATCHLIST (Hook: #tab-watchlist) -->
+    <!-- TAB 2: BROWSE (Hook: #tab-watchlist) -->
     <section class="tab-pane" id="tab-watchlist">
+      <div id="browse-main-view">
       <div class="section-header">
         <div>
-          <h2>My Watchlist</h2>
-          <p>Track what you are watching, planning, and have finished</p>
+          <h2>Browse</h2>
+          <p>Explore anime by mood, genre, and release</p>
         </div>
       </div>
 
-      <div class="watchlist-search-tools">
+      <div class="watchlist-search-tools browse-search-tools">
         <div class="media-type-switch" role="tablist" aria-label="Search type">
           <button type="button" class="media-type-btn active" data-media-type="ANIME" role="tab" aria-selected="true">Anime</button>
           <button type="button" class="media-type-btn" data-media-type="MANGA" role="tab" aria-selected="false">Manga</button>
         </div>
       </div>
-      <div class="search-box">
+      <div class="search-box browse-top-search">
         <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input type="text" id="anilist-search-input" placeholder="Search anime or manga via MyAnimeList..." />
       </div>
-
       <div class="search-results-dropdown" id="anilist-results" style="display:none;"></div>
 
-      <div id="watchlist-genre-rows"></div>
-
-      <div class="watchlist-section-label">Your List</div>
-      <div class="status-filters" id="watchlist-filters">
-        <button class="status-pill active" data-status="watching">Currently Watching</button>
-        <button class="status-pill" data-status="planned">About to Watch</button>
-        <button class="status-pill" data-status="completed">Watched</button>
-        <button class="status-pill" data-status="favourite">Favourite</button>
-        <button class="status-pill" data-status="worst">Worst</button>
+      <div class="browse-heading"><h3>Anime Genres</h3><span>Find your next world</span></div>
+      <div class="browse-genre-grid" id="browse-genre-grid">
+        <button type="button" class="browse-genre-card genre-action" data-browse-genre="action"><span>♨</span><strong>Action</strong></button>
+        <button type="button" class="browse-genre-card genre-adventure" data-browse-genre="adventure"><span>⌘</span><strong>Adventure</strong></button>
+        <button type="button" class="browse-genre-card genre-comedy" data-browse-genre="comedy"><span>◈</span><strong>Comedy</strong></button>
+        <button type="button" class="browse-genre-card genre-drama" data-browse-genre="drama"><span>♢</span><strong>Drama</strong></button>
+        <button type="button" class="browse-genre-card genre-fantasy" data-browse-genre="fantasy"><span>⚒</span><strong>Fantasy</strong></button>
+        <button type="button" class="browse-genre-card genre-music" data-browse-genre="music"><span>♫</span><strong>Music</strong></button>
+        <button type="button" class="browse-genre-card genre-romance" data-browse-genre="romance"><span>♡</span><strong>Romance</strong></button>
+        <button type="button" class="browse-genre-card genre-scifi" data-browse-genre="sci-fi"><span>⌁</span><strong>Sci-Fi</strong></button>
+        <button type="button" class="browse-genre-card genre-seinen" data-browse-genre="seinen"><span>▱</span><strong>Seinen</strong></button>
+        <button type="button" class="browse-genre-card genre-shojo" data-browse-genre="shojo"><span>♧</span><strong>Shoujo</strong></button>
+        <button type="button" class="browse-genre-card genre-shonen" data-browse-genre="shonen"><span>✊</span><strong>Shonen</strong></button>
+        <button type="button" class="browse-genre-card genre-slice" data-browse-genre="slice-of-life"><span>▣</span><strong>Slice of Life</strong></button>
       </div>
 
-      <div class="watchlist-grid" id="watchlist-cards-container"></div>
+      </div>
+
+      <div class="browse-genre-view hidden" id="browse-genre-view">
+        <button type="button" class="browse-back-btn" id="browse-back-btn">‹ All genres</button>
+        <nav class="browse-breadcrumb" aria-label="Breadcrumb"><a href="/app.html">Home</a><span>›</span><a href="/app.html">Browse</a><span>›</span><strong id="browse-breadcrumb-genre">Action</strong></nav>
+        <div class="browse-genre-header"><div><h1 id="browse-genre-title">Action Anime</h1><p id="browse-genre-description"></p></div><span class="browse-genre-mark">✦</span></div>
+        <div class="browse-utility-bar" aria-label="Genre controls"><label>Sort by<select id="browse-sort-year"><option value="all">All years</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="2021">2021</option><option value="2020-2010">2020 – 2010</option><option value="2010-2000">2010 – 2000</option></select></label></div>
+        <div id="browse-genre-results"></div>
+        <div class="browse-load-sentinel" id="browse-load-sentinel" aria-live="polite"></div>
+      </div>
+      <div class="watchlist-grid browse-results-grid" id="watchlist-cards-container"></div>
     </section>
+
+    <div class="anime-detail-modal hidden" id="anime-detail-modal" role="dialog" aria-modal="true" aria-labelledby="anime-detail-title">
+      <div class="anime-detail-sheet">
+        <button type="button" class="anime-detail-close" id="anime-detail-close" aria-label="Close anime details">×</button>
+        <img class="anime-detail-cover" id="anime-detail-cover" src="" alt="" />
+        <div class="anime-detail-body"><span class="community-kicker">ANIME DETAILS</span><h2 id="anime-detail-title">Anime</h2><div class="anime-detail-meta" id="anime-detail-meta"></div><p id="anime-detail-synopsis"></p><button type="button" class="anime-detail-add" id="anime-detail-add">＋ Add to watchlist</button></div>
+      </div>
+    </div>
 
     <!-- TAB 3: INBOX (Hook: #tab-inbox) -->
     <section class="tab-pane" id="tab-inbox">
@@ -130,10 +154,9 @@
         </div>
       </div>
 
-      <section class="creator-help-card" id="creator-help-card">
-        <div class="creator-help-heading"><span class="creator-help-icon">✦</span><div><h3>Content Creators Help</h3><p>Likes and conversations about your videos</p></div><span class="creator-help-badge hidden" id="creator-help-badge">0</span></div>
-        <div class="creator-help-list" id="creator-help-list"><p class="creator-help-empty">Your creator activity will appear here.</p></div>
-      </section>
+      <div class="conversation-row gemini-conversation-row" id="gemini-conversation-row" role="button" tabindex="0">
+        <span class="gemini-logo-only" aria-label="Open Gemini chat" title="Open Gemini chat"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gemini-gradient" x1="8" y1="5" x2="40" y2="43" gradientUnits="userSpaceOnUse"><stop stop-color="#8B8FFF"/><stop offset=".5" stop-color="#6A6CE8"/><stop offset="1" stop-color="#B279FF"/></linearGradient></defs><path fill="url(#gemini-gradient)" d="M24 3c2.9 11.6 9.4 18.1 21 21-11.6 2.9-18.1 9.4-21 21-2.9-11.6-9.4-18.1-21-21C14.6 21.1 21.1 14.6 24 3Z"/></svg></span>
+      </div>
 
       <div class="inbox-list" id="conversation-list"></div>
       <div class="empty-state hidden" id="inbox-empty-state">
@@ -150,7 +173,8 @@
         <!-- Header with Glass Gear Button -->
         <div class="profile-top-bar">
           <div class="profile-header-title">
-            <h2>Profile</h2>
+            <span class="profile-kicker">ANIME COMMUNITY</span>
+            <h2>My Anime Profile</h2>
           </div>
           <button class="settings-gear-btn" id="open-settings-btn" aria-label="Open Settings" data-action="open-settings">
             <svg viewBox="0 0 24 24">
@@ -162,6 +186,7 @@
 
         <!-- Profile Hero Card -->
         <div class="profile-hero-card">
+          <div class="profile-cover-art"><span>✦</span><span>好きなアニメを共有しよう</span></div>
           <div class="avatar-ring">
             <img class="profile-avatar" id="profile-avatar" src="" alt="User Avatar" />
           </div>
@@ -169,6 +194,8 @@
           <div class="handle" id="profile-username">@</div>
           <p class="profile-status-text" id="profile-status"></p>
           <p class="user-bio" id="profile-bio"></p>
+          <div class="profile-anime-vibe" id="profile-anime-vibe">Anime fan · building a list</div>
+          <div class="profile-interest-chips" id="profile-interest-chips" aria-label="Anime interests"></div>
 
           <span class="compat-badge hidden" id="compatibility-score"><span></span></span>
           <span class="streak-badge hidden" id="streak-badge"></span>
@@ -185,25 +212,25 @@
               <span class="stat-label">Following</span>
             </div>
             <div class="stat-divider"></div>
-            <div class="stat-box"><span class="stat-number" id="stat-likes">0</span><span class="stat-label">Likes</span></div>
+            <div class="stat-box"><span class="stat-number" id="stat-likes">0</span><span class="stat-label">Titles</span></div>
           </div>
 
           <button type="button" class="friend-request-btn hidden" id="friend-action-btn" style="margin-top:14px;">Add Friend</button>
         </div>
 
-        <nav class="profile-content-tabs" aria-label="Creator profile sections">
-          <button type="button" class="profile-content-tab active" data-profile-section="posted">Anime activity</button>
-          <button type="button" class="profile-content-tab" data-profile-section="reposted">Reviews</button>
-          <button type="button" class="profile-content-tab" data-profile-section="saved">Saved</button>
-          <button type="button" class="profile-content-tab" data-profile-section="locked">Locked</button>
-        </nav>
-        <div class="profile-saved-tabs hidden" id="profile-saved-tabs"><button type="button" class="active" data-saved-section="videos">Saved Videos</button><button type="button" data-saved-section="sounds">Saved Sounds</button></div>
-        <div class="watchlist-section-label" id="profile-section-title" style="margin-top:20px;">Posted Videos</div>
+        <div class="watchlist-section-label" id="profile-section-title" style="margin-top:20px;">Your List</div>
+        <div class="status-filters profile-status-filters" id="profile-status-filters" aria-label="Your anime list">
+          <button type="button" class="status-pill active" data-profile-status="watching">Currently Watching</button>
+          <button type="button" class="status-pill" data-profile-status="plan_to_watch">About to Watch</button>
+          <button type="button" class="status-pill" data-profile-status="completed">Watched</button>
+          <button type="button" class="status-pill" data-profile-status="favourite">Favourite</button>
+          <button type="button" class="status-pill" data-profile-status="worst">Worst</button>
+        </div>
         <div class="profile-posts-grid" id="profile-posts-grid"></div>
         <div class="empty-state hidden" id="profile-posts-empty-state">
           <div class="empty-state-icon">📭</div>
-          <h4>No posts yet</h4>
-          <p>Status posts and Song of the Day shares will show up here.</p>
+          <h4>No anime added yet</h4>
+          <p>Add anime or manga to your list and your activity will appear here.</p>
         </div>
 
       </div>
@@ -309,7 +336,6 @@
         <div class="studio-playhead" id="studio-playhead"></div>
       </section>
       <p id="video-post-error" class="video-post-error hidden" role="alert"></p>
-      <button type="button" id="submit-video-post-btn" class="video-post-submit" disabled>Post video</button>
     </div>
   </div>
 
@@ -469,6 +495,18 @@
         <textarea id="edit-profile-bio" class="editp-input editp-bio-input" placeholder="Tell people about yourself" maxlength="160" rows="3"></textarea>
       </div>
 
+      <div class="editp-field">
+        <label for="edit-profile-interests">Anime interests</label>
+        <input type="text" id="edit-profile-interests" class="editp-input" placeholder="shonen, romance, manga" />
+        <small class="editp-help">Separate interests with commas.</small>
+      </div>
+
+      <div class="editp-field">
+        <label for="edit-profile-template">Profile template</label>
+        <select id="edit-profile-template" class="editp-input"><option value="midnight">Midnight Neon</option><option value="sakura">Sakura Dream</option><option value="ocean">Ocean Quest</option><option value="sunset">Sunset Flame</option><option value="monochrome">Monochrome Manga</option><option value="cyberpunk">Cyberpunk Tokyo</option><option value="forest">Forest Spirit</option><option value="starlight">Starlight Galaxy</option></select>
+        <small class="editp-help">Choose the look that represents your anime world.</small>
+      </div>
+
       <div id="edit-profile-error" class="editp-error hidden"></div>
       <button type="button" id="edit-profile-save-btn" class="editp-save-btn">Save Changes</button>
     </div>
@@ -495,7 +533,7 @@
         <button class="settings-back-btn" id="close-settings-btn" aria-label="Back to Profile">
           <svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         </button>
-        <h3 class="settings-panel-title">Settings & Control</h3>
+        <h3 class="settings-panel-title">Settings &amp; privacy</h3>
         <div style="width: 38px;"></div>
       </div>
 
@@ -582,12 +620,12 @@
                 <span class="slider"></span>
               </label>
             </div>
-            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box pink">♥</div><div class="item-text"><span class="heading">Likes on your videos</span><span class="subtext">Notify me when someone likes my post</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-likes" checked /><span class="slider"></span></label></div>
-            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box cyan">◌</div><div class="item-text"><span class="heading">Comments &amp; replies</span><span class="subtext">Notify me about conversations on my videos</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-comments" checked /><span class="slider"></span></label></div>
+            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box pink">✦</div><div class="item-text"><span class="heading">Anime recommendations</span><span class="subtext">Notify me when friends recommend a title</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-likes" checked /><span class="slider"></span></label></div>
+            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box cyan">◌</div><div class="item-text"><span class="heading">Discussion replies</span><span class="subtext">Notify me when someone replies to me</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-comments" checked /><span class="slider"></span></label></div>
           </div>
         </div>
 
-        <div class="settings-section"><div class="settings-section-title">Community guidelines</div><div class="settings-guidelines"><p><strong>Keep Kaidra human.</strong> No harassment, hate, threats, sexual content involving minors, spam, or sharing private information.</p><p>Use report and block tools when a conversation crosses a line. Repeated violations may limit posting, messaging, or visibility.</p><button type="button" class="settings-guideline-link">Read the full safety guide <span>›</span></button></div></div>
+        <div class="settings-section"><div class="settings-section-title">Community guidelines</div><div class="settings-guidelines"><p><strong>Keep Kaidra human.</strong> No harassment, hate, threats, sexual content involving minors, spam, or sharing private information.</p><p>Use report and block tools when a conversation crosses a line. Repeated violations may limit messaging, discussions, or visibility.</p><button type="button" class="settings-guideline-link">Read the full safety guide <span>›</span></button></div></div>
 
         <!-- CATEGORY 3: NOTIFICATIONS -->
         <div class="settings-section">
@@ -632,21 +670,9 @@
           </div>
         </div>
 
-        <!-- VIDEO ACTIVITY -->
+        <!-- CATEGORY 5: ANIME PREFERENCES -->
         <div class="settings-section">
-          <div class="settings-section-title">Video Activity</div>
-          <button type="button" class="setting-card-item" id="open-video-activity-btn">
-            <div class="item-left-group">
-              <div class="icon-box pink">♥</div>
-              <div class="item-text"><span class="heading">Likes, saves &amp; comments</span><span class="subtext">View your saved videos and activity</span></div>
-            </div>
-            <svg class="arrow-icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
-        </div>
-
-        <!-- CATEGORY 5: SYSTEM PREFERENCES -->
-        <div class="settings-section">
-          <div class="settings-section-title">System Preferences</div>
+          <div class="settings-section-title">Anime preferences</div>
           
           <div class="settings-card-grid">
             <div class="setting-card-item non-interactive">
@@ -664,6 +690,14 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <label class="setting-card-item setting-select-row">
+              <span class="item-left-group"><span class="icon-box cyan">◐</span><span class="item-text"><span class="heading">App theme</span><span class="subtext">Choose the mood for your anime space</span></span></span>
+              <select id="setting-theme" class="settings-select"><option value="dark">Midnight</option><option value="light">Paper</option><option value="system">System</option></select>
+            </label>
+            <label class="setting-card-item setting-select-row">
+              <span class="item-left-group"><span class="icon-box purple">Aa</span><span class="item-text"><span class="heading">Spoiler protection</span><span class="subtext">Hide major plot details in community posts</span></span></span>
+              <select id="setting-spoilers" class="settings-select"><option value="protected">Protected</option><option value="open">Show spoilers</option></select>
+            </label>
           </div>
         </div>
 
@@ -694,8 +728,8 @@
       </button>
 
       <button class="nav-item" data-tab="watchlist">
-        <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-        <span>Watchlist</span>
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+        <span>Browse</span>
       </button>
 
       <button class="nav-item" data-tab="inbox">
@@ -713,9 +747,11 @@
 
   <script type="module" src="/js/news-data.js"></script>
   <script type="module" src="/js/watchlist.js"></script>
+  <script type="module" src="/js/browse.js"></script>
   <script type="module" src="/js/mal-discovery.js"></script>
   <script type="module" src="/js/friends.js"></script>
   <script type="module" src="/js/inbox.js"></script>
+  <script type="module" src="/js/gemini.js"></script>
   <script type="module" src="/js/profile.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>

@@ -15,3 +15,6 @@ body.admin-body { min-height: 100vh; background: var(--paper); }
 .admin-event small { color: var(--ink-faint); }
 .admin-error { padding: 18px; border-radius: var(--radius-md); background: var(--vermillion-soft); color: var(--vermillion); }
 @media (max-width: 700px) { .admin-stats { grid-template-columns: repeat(2, 1fr); } .admin-header { align-items: flex-start; gap: 18px; flex-direction: column; } }
+.admin-event-form { display: grid; gap: 18px; margin-top: 24px; max-width: 600px; }
+.admin-event-form label { display: grid; gap: 8px; color: var(--ink-soft); font-size: 12px; }
+.admin-event-form input, .admin-event-form textarea { padding: 12px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; }

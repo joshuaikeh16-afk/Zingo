@@ -1,32 +1,27 @@
 import { supabase, requireAuth } from './supabase-client.js';
-
-const statsEl = document.getElementById('admin-stats');
-const commentsEl = document.getElementById('admin-comments');
+import { element } from './ui.js';
 const errorEl = document.getElementById('admin-error');
-
-function showError(message) {
-  if (!errorEl) return;
-  errorEl.textContent = message;
-  errorEl.classList.remove('hidden');
-  statsEl?.classList.add('hidden');
-  commentsEl.textContent = '';
-}
-
-function renderDashboard(data) {
-  const cards = [['Users', data.users], ['Video posts', data.posts], ['Comments', data.comments], ['Likes', data.likes]];
-  statsEl.innerHTML = cards.map(([label, value]) => `<article class="admin-card"><span>${label}</span><strong>${Number(value || 0).toLocaleString()}</strong></article>`).join('');
-  const comments = data.recent_comments || [];
-  commentsEl.innerHTML = comments.length ? comments.map((item) => `<article class="admin-event"><span><strong>${item.username || 'Kaidra member'}</strong> — ${item.content || ''}</span><small>${new Date(item.created_at).toLocaleString()}</small></article>`).join('') : '<p>No recent comments.</p>';
-}
-
-(async () => {
-  const session = await requireAuth();
-  if (!session) return;
-  const { data, error } = await supabase.rpc('get_admin_dashboard');
+async function load() {
+  const { data, error } = await supabase.rpc('get_community_admin_dashboard');
   if (error) {
-    console.error('Admin dashboard failed:', error);
-    showError(error.message.includes('admin access') ? 'You are not authorized to view the Kaidra admin dashboard.' : 'The admin dashboard is not available yet. Apply the admin migration first.');
-    return;
+    errorEl.textContent = 'Admin access is required. If you are an admin, check that the latest migration has been applied.';
+    errorEl.classList.remove('hidden'); document.getElementById('admin-stats').replaceChildren(); return false;
   }
-  renderDashboard(data);
-})();
+  document.getElementById('admin-stats').replaceChildren(...[['Users', data.users], ['Conversations', data.conversations], ['Messages', data.messages], ['Upcoming events', data.events]].map(([label, count]) => {
+    const card = element('article', 'admin-card');card.append(element('span', '', label), element('strong', '', Number(count || 0).toLocaleString())); return card;
+  }));
+  document.getElementById('admin-event-panel').classList.remove('hidden'); return true;
+}
+(async () => { if (await requireAuth()) await load(); })();
+document.getElementById('admin-event-form').addEventListener('submit', async (event) => {
+  event.preventDefault(); const button = document.getElementById('publish-event'), result = document.getElementById('event-result'); button.disabled = true;
+  try {
+    const { error } = await supabase.rpc('publish_special_event', {
+      event_title: document.getElementById('event-title').value.trim(), event_body: document.getElementById('event-body').value.trim(),
+      event_url: document.getElementById('event-url').value.trim(), event_start: new Date(document.getElementById('event-start').value).toISOString(), event_competition: document.getElementById('event-competition').value,
+    });
+    if (error) throw error;
+    event.target.reset(); result.textContent = 'Event published. Its reminder will be delivered by the scheduled sync.'; await load();
+  } catch (error) { result.textContent = error.message || 'The event could not be published.'; }
+  finally { button.disabled = false; }
+});

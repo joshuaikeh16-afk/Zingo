@@ -1,0 +1,50 @@
+import { element, actionButton, iconButton, openModal, closeModal, notify } from './ui.js';
+// One modal/focus boundary serves anchored desktop menus and mobile bottom sheets.
+let sequence = 0;
+export function dialog(title, className = '') {
+  const id = `context-dialog-${++sequence}`, modal = element('div', `social-modal hidden ${className}`), card = element('div', 'social-modal-card');
+  modal.id = id; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', `${id}-title`);
+  const heading = element('div', 'modal-heading'), name = element('h2', '', title), close = iconButton('close', 'Close'); name.id = `${id}-title`;
+  close.addEventListener('click', () => closeModal(id)); heading.append(name, close); card.append(heading); modal.append(card); document.body.append(modal);
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(id); });
+  const cleanup = event => { if (event.detail.id === id) { modal.remove(); document.removeEventListener('kaidra:modal-close', cleanup); } };
+  document.addEventListener('kaidra:modal-close', cleanup);
+  return { id, modal, card, open: () => openModal(id), close: () => closeModal(id) };
+}
+export function confirmAction(title, description, label = 'Confirm') {
+  return new Promise(resolve => {
+    const panel = dialog(title, 'confirm-modal'); panel.card.append(element('p', 'muted', description));
+    const actions = element('div', 'detail-actions'), cancel = actionButton('Cancel'), confirm = actionButton(label, 'check', 'danger-button');
+    let accepted = false;
+    cancel.addEventListener('click', panel.close); confirm.addEventListener('click', () => { accepted = true; panel.close(); }); actions.append(cancel, confirm); panel.card.append(actions);
+    const finish = event => { if (event.detail.id === panel.id) { document.removeEventListener('kaidra:modal-close', finish); resolve(accepted); } };
+    document.addEventListener('kaidra:modal-close', finish); panel.open();
+  });
+}
+export function openMenu(anchor, actions, title = 'Actions', point) {
+  const panel = dialog(title, 'context-layer'), menu = element('div', 'context-menu'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', title);
+  for (const action of actions.filter(Boolean)) {
+    const button = actionButton(action.label, action.icon || 'arrow', `context-action${action.danger ? ' is-danger' : ''}`);
+    button.setAttribute('role', 'menuitem'); button.disabled = !!action.disabled;
+    button.addEventListener('click', async () => { panel.close(); try { await action.run(); } catch { notify('Could not complete that action. Please try again.'); } }); menu.append(button);
+  }
+  menu.addEventListener('keydown', event => {
+    const buttons = [...menu.querySelectorAll('button:not(:disabled)')], at = buttons.indexOf(document.activeElement);
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (at + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
+  });
+  panel.card.append(menu); const box = anchor.getBoundingClientRect();
+  panel.card.style.setProperty('--menu-x', `${Math.max(8, Math.min(point?.x ?? box.right - 230, innerWidth - 250))}px`);
+  panel.card.style.setProperty('--menu-y', `${Math.max(8, Math.min(point?.y ?? box.bottom + 6, innerHeight - actions.length * 46 - 90))}px`);
+  panel.open(); menu.querySelector('button:not(:disabled)')?.focus(); return panel;
+}
+export function bindContext(node, getActions, { title = 'Actions', more = false } = {}) {
+  let timer, start, suppressUntil = 0;
+  const show = event => { suppressUntil = Date.now() + 800; openMenu(node, getActions(), title, event && { x: event.clientX, y: event.clientY }); };
+  node.addEventListener('contextmenu', event => { if (event.target.closest('audio, input, textarea')) return; event.preventDefault(); event.stopPropagation(); show(event); });
+  node.addEventListener('pointerdown', event => { if (event.pointerType === 'mouse' || event.target.closest('audio, input, textarea, .context-more')) return; start = { x: event.clientX, y: event.clientY }; timer = setTimeout(() => show(event), 500); });
+  node.addEventListener('pointermove', event => { if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) clearTimeout(timer); });
+  for (const event of ['pointerup', 'pointercancel', 'pointerleave']) node.addEventListener(event, () => clearTimeout(timer));
+  node.addEventListener('click', event => { if (Date.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
+  node.addEventListener('keydown', event => { if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) { event.preventDefault(); show(); } });
+  if (more) { const button = iconButton('more', title, 'icon-button context-more'); button.addEventListener('click', event => { event.stopPropagation(); openMenu(button, getActions(), title); }); node.append(button); }
+}

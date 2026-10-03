@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kaidra Admin</title>
   <link rel="stylesheet" href="/css/main.css">
-  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="stylesheet" href="/css/admin.css"><link rel="stylesheet" href="/css/components.css">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -15,7 +15,7 @@
     </header>
     <div id="admin-error" class="admin-error hidden"></div>
     <section class="admin-stats" id="admin-stats"><article class="admin-card"><span>Loading</span><strong>—</strong></article></section>
-    <section class="admin-panel"><h2>Recent comments</h2><div id="admin-comments">Loading…</div></section>
+    <section class="admin-panel hidden" id="admin-event-panel"><h2>Announce a football event</h2><p class="muted">Followers receive an alert ten minutes before the event. Publishing an event that starts sooner alerts followers on the next sync.</p><form id="admin-event-form" class="admin-event-form"><label>Title<input id="event-title" required maxlength="120"></label><label>Details<textarea id="event-body" maxlength="500" rows="3"></textarea></label><label>Official source URL<input type="url" id="event-url" placeholder="https://www.fifa.com/…" required></label><label>Start time (your local time)<input type="datetime-local" id="event-start" required></label><label>Competition<select id="event-competition"><option value="ALL">All football fans</option><option value="PL">Premier League</option><option value="CL">Champions League</option><option value="PD">La Liga</option><option value="SA">Serie A</option><option value="BL1">Bundesliga</option><option value="FL1">Ligue 1</option><option value="WC">World Cup</option></select></label><button type="submit" id="publish-event" class="primary-button">Publish event</button><p id="event-result" role="status"></p></form></section>
   </main>
   <script type="module" src="/js/admin.js"></script>
 </body>

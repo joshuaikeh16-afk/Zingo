@@ -1,758 +1,162 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kaidra — Anime Community</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/main.css">
-<link rel="stylesheet" href="/css/news.css">
-<link rel="stylesheet" href="/css/friends.css">
-<link rel="stylesheet" href="/css/profile.css">
-<link rel="stylesheet" href="/css/chat.css">
-<link rel="stylesheet" href="/css/watchlist.css">
-<link rel="stylesheet" href="/css/news-social.css">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08080b"><meta name="description" content="Discover your next favourite. Share it with your people.">
+  <title>Kaidra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css"><link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/layout.css"><link rel="stylesheet" href="/css/entertainment.css">
+  <link rel="stylesheet" href="/css/friends.css"><link rel="stylesheet" href="/css/chat.css"><link rel="stylesheet" href="/css/profile.css"><link rel="stylesheet" href="/css/social-controls.css">
 </head>
-<body>
+<body class="kaidra-app">
+<a class="skip-link" href="#main-content">Skip to content</a>
+<aside class="desktop-sidebar" aria-label="Application navigation">
+  <a class="brand" href="/app.html#home"><span class="brand-mark" data-icon="spark"></span>Kaidra<span class="brand-period">.</span></a>
+  <p class="nav-caption">YOUR SPACE</p>
+  <nav class="side-nav" aria-label="Desktop navigation">
+    <button type="button" data-tab="home" class="nav-item active"><span data-icon="home"></span><span>For you</span></button>
+    <button type="button" data-tab="discover" class="nav-item"><span data-icon="compass"></span><span>Discover</span></button>
+    <button type="button" data-tab="friends" class="nav-item"><span data-icon="people"></span><span>Friends</span><span class="nav-counter hidden" id="sidebar-requests-count"></span></button>
+    <button type="button" data-tab="inbox" class="nav-item"><span data-icon="chat"></span><span>Inbox</span><span class="nav-counter hidden" id="sidebar-inbox-count"></span></button>
+    <button type="button" data-tab="profile" class="nav-item"><span data-icon="user"></span><span>My profile</span></button>
+  </nav>
+  <div class="sidebar-bottom"><button type="button" class="nav-item" data-open-settings><span data-icon="settings"></span>Settings</button>
+    <button type="button" class="sidebar-account" data-tab="profile"><img id="sidebar-avatar" class="avatar" alt="Your profile"><span><strong id="sidebar-name">Your space</strong><small id="sidebar-handle">Kaidra</small></span><span data-icon="more"></span></button>
+  </div>
+</aside>
+<header class="app-header">
+  <a class="brand mobile-brand" href="/app.html#home"><span class="brand-mark" data-icon="spark"></span>Kaidra<span class="brand-period">.</span></a>
+  <div class="header-location"><span class="header-route" id="header-route">For you</span></div>
+  <div class="header-actions"><button type="button" class="header-search" id="open-global-search"><span data-icon="search"></span><span>Search titles &amp; people</span><kbd>/</kbd></button>
+    <button type="button" class="icon-button notification-trigger" id="open-alerts-btn" aria-label="Open notifications"><span data-icon="bell"></span><span class="notification-count hidden" id="alerts-count">0</span></button>
 
-  <!-- TOP APP HEADER -->
-  <header class="app-header">
-    <div class="app-logo">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-      </div>
-      <span>Kaidra</span>
-    </div>
-  </header>
-
-  <!-- MAIN TAB PANES VIEWPORT -->
-  <main class="main-content">
-
-    <!-- HOME: anime recommendations and news. -->
-    <section class="tab-pane active" id="tab-news">
-      <div class="home-mode-switch" role="tablist" aria-label="Home content">
-        <button type="button" class="home-mode-btn active" data-home-mode="recommendations" role="tab" aria-selected="true">Recommendations</button>
-        <button type="button" class="home-mode-btn" data-home-mode="news" role="tab" aria-selected="false">Anime News</button>
-      </div>
-      <div id="recommendations-view" class="recommendations-view" aria-live="polite">
-        <div class="anime-home-hero" id="anime-home-hero">
-          <div class="anime-home-hero-art"><img id="anime-hero-cover" src="" alt="Featured anime cover" /></div>
-          <div class="anime-home-hero-copy"><span class="community-kicker">FEATURED ANIME</span><h1 id="anime-hero-title">Loading anime…</h1><div class="anime-hero-meta" id="anime-hero-meta"></div><p id="anime-hero-synopsis">Discover your next favorite anime from MyAnimeList.</p><button type="button" class="anime-hero-action" id="anime-hero-action">＋ Add to watchlist</button></div>
-        </div>
-        <div class="discovery-tabs" role="tablist" aria-label="Anime discovery"><button type="button" class="discovery-tab active" data-discovery="recommendations">Most popular</button><button type="button" class="discovery-tab" data-discovery="ranking">Top rated</button><button type="button" class="discovery-tab" data-discovery="seasonal">This season</button><button type="button" class="discovery-tab" data-discovery="upcoming">Upcoming</button><button type="button" class="discovery-tab" data-discovery="manga">Manga</button></div>
-        <div class="home-section-heading"><h2>Anime news</h2><button type="button" class="home-news-link" data-home-mode="news">See all</button></div>
-        <div class="home-news-preview" id="home-news-preview"></div>
-        <div class="home-section-heading"><h2>Popular anime</h2></div>
-        <div id="discovery-grid" class="recommendation-grid" aria-live="polite"></div>
-      </div>
-      <div class="news-view-container hidden" id="news-scroll-view">
-        <div class="news-mode-scroll">
-          <div id="scroll-feed-container"></div>
-        </div>
-      </div>
+  </div>
+</header>
+<div class="offline-banner hidden" id="offline-banner" role="status">You're offline. Your open conversation stays here; reconnect to send and refresh.</div>
+<main class="main-content" id="main-content" tabindex="-1">
+<section class="tab-pane active" id="tab-home" aria-label="For you">
+  <div class="page-heading"><div><h1 id="home-greeting">For you</h1><p id="home-social-summary">Your conversations and recommendations</p></div><button type="button" class="quiet-button" id="tune-recommendations"><span data-icon="settings"></span><span>Tune my picks</span></button></div>
+  <div class="home-columns"><div class="home-feed">
+    <section class="home-recent hidden"><div class="rail-heading"><h2>New in your conversations</h2><span data-icon="chat"></span></div><div id="home-conversations" class="rail-conversations"></div></section>
+    <div id="featured-recommendation" class="featured-recommendation" aria-label="Featured recommendations"></div>
+    <div class="section-header"><div><h2>Picked for you</h2><p id="taste-summary">Recommendations shaped by what you love</p></div><button type="button" class="text-button" data-navigate="discover">Explore all <span data-icon="arrow"></span></button></div>
+    <p class="sr-only" id="recommendation-context" aria-live="polite"></p><div id="recommendations-grid" class="media-rail" aria-label="Your recommendations"></div>
+    <section class="conversation-activity hidden" id="home-activity-section"><div class="section-header"><div><h2>Shared with you</h2></div></div><div id="home-activity" class="activity-list"></div></section>
+    <section id="interest-football" class="interest-section hidden" aria-label="Football in your feed">
+      <div class="section-header"><div><h2>Matchday</h2><p id="fixtures-updated">Fixtures and scores, alongside your other interests</p></div><button type="button" class="icon-button" id="refresh-football-btn" aria-label="Refresh football"><span data-icon="refresh"></span></button></div>
+      <div class="section-toolbar"><label class="select-label" for="football-league">Competition <select id="football-league"><option value="ALL">All competitions</option><option value="PL">Premier League</option><option value="CL">Champions League</option><option value="PD">La Liga</option><option value="SA">Serie A</option><option value="BL1">Bundesliga</option><option value="FL1">Ligue 1</option><option value="WC">World Cup</option></select></label><button type="button" class="text-button" id="open-sports-settings"><span data-icon="bell"></span>Matchday notifications</button></div>
+      <div id="fixtures-list" class="fixtures-list"></div><div id="football-news" class="news-list compact-news"></div><div id="sports-events" class="news-list"></div>
     </section>
-
-    <!-- TAB: COMMUNITY (Hook: #tab-friends) — restored real feature: mutual
-         24hr statuses + Anime of the Day. Follow model replaced below
-         with friend requests (search -> request -> accept). -->
-    <section class="tab-pane" id="tab-friends">
-      <div class="section-header">
-        <div>
-          <h2>Community</h2>
-          <p id="friends-active-count">Talk with friends and fellow anime fans</p>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <button type="button" id="share-aotd-btn" class="status-pill" style="padding: 6px 12px; font-size:12px;">🎬 Share</button>
-          <button type="button" id="find-friends-btn" class="status-pill active" style="padding: 6px 12px; font-size:12px;">Find people</button>
-        </div>
-      </div>
-
-      <!-- Incoming Friend Requests -->
-      <div id="friend-requests-bar" class="friend-requests-bar hidden">
-        <div class="friend-requests-header">Friend Requests (<span id="friend-requests-count">0</span>)</div>
-        <div id="friend-requests-list" class="friend-requests-list"></div>
-      </div>
-
-      <div id="friends-status-container" class="friends-status-container"></div>
-
-      <div id="friends-empty-state" class="empty-state hidden">
-        <div class="empty-state-icon">👥</div>
-        <h4>No active statuses</h4>
-        <p>When friends post a status or share music, it'll appear here.</p>
-      </div>
-
+    <div class="section-header"><div><h2>In the news</h2><p>BBC Entertainment</p></div><button type="button" class="icon-button" id="refresh-news-btn" aria-label="Refresh entertainment news"><span data-icon="refresh"></span></button></div><div id="entertainment-news" class="news-list"></div>
+    <section class="personal-feed" id="personal-feed-section" aria-label="More recommendations for you">
+      <div class="section-header"><div><h2>More for you</h2></div></div>
+      <div id="home-feed-grid" class="content-grid"></div>
+      <div class="feed-pagination" id="home-feed-more"><p id="home-feed-status" role="status"></p><button type="button" id="load-home-more" class="quiet-button">More picks <span data-icon="arrow"></span></button></div><div id="home-feed-sentinel" class="feed-sentinel" aria-hidden="true"></div>
     </section>
+    <details class="data-credits"><summary>Sources &amp; credits</summary><p><a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer"><img src="/assets/tmdb.svg" alt="TMDB" width="90" height="20"></a></p><p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability: JustWatch. News: BBC. Match data: football-data.org.</p></details>
+  </div><aside class="context-rail" aria-label="Your social circle">
 
-    <!-- TAB 2: BROWSE (Hook: #tab-watchlist) -->
-    <section class="tab-pane" id="tab-watchlist">
-      <div id="browse-main-view">
-      <div class="section-header">
-        <div>
-          <h2>Browse</h2>
-          <p>Explore anime by mood, genre, and release</p>
-        </div>
-      </div>
 
-      <div class="watchlist-search-tools browse-search-tools">
-        <div class="media-type-switch" role="tablist" aria-label="Search type">
-          <button type="button" class="media-type-btn active" data-media-type="ANIME" role="tab" aria-selected="true">Anime</button>
-          <button type="button" class="media-type-btn" data-media-type="MANGA" role="tab" aria-selected="false">Manga</button>
-        </div>
-      </div>
-      <div class="search-box browse-top-search">
-        <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="anilist-search-input" placeholder="Search anime or manga via MyAnimeList..." />
-      </div>
-      <div class="search-results-dropdown" id="anilist-results" style="display:none;"></div>
 
-      <div class="browse-heading"><h3>Anime Genres</h3><span>Find your next world</span></div>
-      <div class="browse-genre-grid" id="browse-genre-grid">
-        <button type="button" class="browse-genre-card genre-action" data-browse-genre="action"><span>♨</span><strong>Action</strong></button>
-        <button type="button" class="browse-genre-card genre-adventure" data-browse-genre="adventure"><span>⌘</span><strong>Adventure</strong></button>
-        <button type="button" class="browse-genre-card genre-comedy" data-browse-genre="comedy"><span>◈</span><strong>Comedy</strong></button>
-        <button type="button" class="browse-genre-card genre-drama" data-browse-genre="drama"><span>♢</span><strong>Drama</strong></button>
-        <button type="button" class="browse-genre-card genre-fantasy" data-browse-genre="fantasy"><span>⚒</span><strong>Fantasy</strong></button>
-        <button type="button" class="browse-genre-card genre-music" data-browse-genre="music"><span>♫</span><strong>Music</strong></button>
-        <button type="button" class="browse-genre-card genre-romance" data-browse-genre="romance"><span>♡</span><strong>Romance</strong></button>
-        <button type="button" class="browse-genre-card genre-scifi" data-browse-genre="sci-fi"><span>⌁</span><strong>Sci-Fi</strong></button>
-        <button type="button" class="browse-genre-card genre-seinen" data-browse-genre="seinen"><span>▱</span><strong>Seinen</strong></button>
-        <button type="button" class="browse-genre-card genre-shojo" data-browse-genre="shojo"><span>♧</span><strong>Shoujo</strong></button>
-        <button type="button" class="browse-genre-card genre-shonen" data-browse-genre="shonen"><span>✊</span><strong>Shonen</strong></button>
-        <button type="button" class="browse-genre-card genre-slice" data-browse-genre="slice-of-life"><span>▣</span><strong>Slice of Life</strong></button>
-      </div>
+  </aside></div>
+</section>
+<section class="tab-pane" id="tab-discover" aria-label="Discover">
+  <div class="page-heading"><div><h1>Discover</h1></div></div>
+  <form class="discovery-search" id="content-search-form"><span data-icon="search"></span><label class="sr-only" for="content-search">Search entertainment</label><input type="search" id="content-search" placeholder="Search movies, series and anime" maxlength="100"><button class="primary-button" type="submit">Search <span data-icon="arrow"></span></button></form>
+  <div class="discovery-controls"><div class="category-tabs" id="content-categories" aria-label="Entertainment categories"></div><label class="select-label" for="content-region">Watching in <select id="content-region"><option value="NG">Nigeria</option><option value="GH">Ghana</option><option value="ZA">South Africa</option><option value="KE">Kenya</option><option value="GB">United Kingdom</option><option value="US">United States</option><option value="CA">Canada</option><option value="IN">India</option></select></label></div>
+  <div class="section-header"><div><h2 id="discover-heading">Explore your interests</h2><p id="discover-context" aria-live="polite">Recommendations for your taste</p></div><span class="results-count" id="discover-count"></span></div>
+  <div id="discover-grid" class="content-grid"></div>
+  <div class="feed-pagination" id="discover-more"><p id="discover-page-status" role="status"></p><button type="button" id="load-discover-more" class="quiet-button">More picks <span data-icon="arrow"></span></button></div><div id="discover-sentinel" class="feed-sentinel" aria-hidden="true"></div>
 
-      </div>
+</section>
+<section class="tab-pane" id="tab-friends" aria-label="Friends">
+  <div class="page-heading"><div><h1>Friends <span id="friends-total" class="inline-count">0</span></h1></div><button type="button" id="find-friends-btn" class="primary-button"><span data-icon="plus"></span>Find people</button></div>
+  <div class="friends-view-tabs" aria-label="Friend filters"><button type="button" data-friends-filter="all" class="active" aria-pressed="true">All friends</button><button type="button" data-friends-filter="requests" aria-pressed="false">Requests <span id="requests-filter-count">0</span></button></div>
+  <p class="form-error hidden" id="friends-error" role="alert"></p>
+  <section id="friend-requests-bar" class="friend-requests-bar hidden"><div class="section-header"><h2>New connections <span class="count-pill" id="friend-requests-count">0</span></h2></div><div id="friend-requests-list" class="friend-requests-list"></div></section>
+  <div class="section-header" id="friends-list-toolbar"><h2>People</h2><label class="search-field"><span data-icon="search"></span><span class="sr-only">Search your friends</span><input id="friends-search" type="search" placeholder="Search your friends"></label></div>
+  <div class="friends-grid" id="friends-list"></div>
+  <div id="friends-empty-state" class="empty-state hidden"><span class="empty-state-icon" data-icon="people"></span><h3>No friends yet</h3><p>Find someone by name or username.</p><button type="button" class="quiet-button" data-action="find-people">Find people <span data-icon="arrow"></span></button></div>
+</section>
+<section class="tab-pane" id="tab-inbox" aria-label="Inbox">
 
-      <div class="browse-genre-view hidden" id="browse-genre-view">
-        <button type="button" class="browse-back-btn" id="browse-back-btn">‹ All genres</button>
-        <nav class="browse-breadcrumb" aria-label="Breadcrumb"><a href="/app.html">Home</a><span>›</span><a href="/app.html">Browse</a><span>›</span><strong id="browse-breadcrumb-genre">Action</strong></nav>
-        <div class="browse-genre-header"><div><h1 id="browse-genre-title">Action Anime</h1><p id="browse-genre-description"></p></div><span class="browse-genre-mark">✦</span></div>
-        <div class="browse-utility-bar" aria-label="Genre controls"><label>Sort by<select id="browse-sort-year"><option value="all">All years</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="2021">2021</option><option value="2020-2010">2020 – 2010</option><option value="2010-2000">2010 – 2000</option></select></label></div>
-        <div id="browse-genre-results"></div>
-        <div class="browse-load-sentinel" id="browse-load-sentinel" aria-live="polite"></div>
-      </div>
-      <div class="watchlist-grid browse-results-grid" id="watchlist-cards-container"></div>
-    </section>
-
-    <div class="anime-detail-modal hidden" id="anime-detail-modal" role="dialog" aria-modal="true" aria-labelledby="anime-detail-title">
-      <div class="anime-detail-sheet">
-        <button type="button" class="anime-detail-close" id="anime-detail-close" aria-label="Close anime details">×</button>
-        <img class="anime-detail-cover" id="anime-detail-cover" src="" alt="" />
-        <div class="anime-detail-body"><span class="community-kicker">ANIME DETAILS</span><h2 id="anime-detail-title">Anime</h2><div class="anime-detail-meta" id="anime-detail-meta"></div><p id="anime-detail-synopsis"></p><button type="button" class="anime-detail-add" id="anime-detail-add">＋ Add to watchlist</button></div>
-      </div>
+  <div class="messenger-layout"><div class="conversation-panel">
+    <div class="conversation-panel-heading"><div><h2>Messages</h2><p id="inbox-connection-status" class="connection-status" role="status">Connecting…</p></div><div class="header-actions"><button type="button" id="new-group-btn" class="icon-button" aria-label="New group"><span data-icon="people"></span></button><button type="button" id="new-chat-btn" class="icon-button accent-button" aria-label="New chat"><span data-icon="edit"></span></button></div></div>
+    <label class="search-field inbox-search"><span data-icon="search"></span><span class="sr-only">Search conversations</span><input type="search" id="inbox-search" placeholder="Search conversations"></label>
+    <div class="inbox-filters" aria-label="Conversation filters"><button type="button" class="active" data-inbox-filter="all" aria-pressed="true">All messages</button><button type="button" data-inbox-filter="unread" aria-pressed="false">Unread <span id="inbox-unread-count">0</span></button></div>
+    <p class="form-error hidden" id="inbox-error" role="alert"></p><div class="inbox-list" id="conversation-list"></div>
+    <div class="empty-state hidden" id="inbox-empty-state"><span class="empty-state-icon" data-icon="chat"></span><h3>No conversations yet</h3><p>Choose a friend to start chatting.</p><button type="button" class="quiet-button" data-action="find-people">Find people</button></div>
+  </div><div class="conversation-stage"><div id="chat-placeholder" class="chat-placeholder"><span data-icon="chat"></span><h2>Select a conversation</h2><p>Messages and shared recommendations appear here.</p><button type="button" class="quiet-button" id="placeholder-new-chat">New conversation <span data-icon="plus"></span></button></div>
+  <section class="chat-overlay" id="chat-view-drawer" aria-labelledby="dm-active-name" inert>
+    <header class="chat-header"><button type="button" class="icon-button chat-back-btn" id="close-chat-btn" aria-label="Close conversation"><span data-icon="back"></span></button><button type="button" class="chat-user-meta" id="chat-header-user" aria-label="View conversation profile"><img class="chat-avatar" id="dm-active-avatar" alt="Profile photo"><span class="chat-user-info"><strong id="dm-active-name"></strong><span id="chat-member-count" class="muted"></span><span id="chat-connection-status" class="connection-status" role="status">Connecting…</span></span></button><button type="button" class="icon-button" id="chat-info-btn" aria-label="Conversation information"><span data-icon="info"></span></button></header>
+    <button type="button" id="chat-pins" class="pinned-strip hidden"></button><button type="button" class="quiet-button hidden" id="jump-to-bottom">Latest messages ↓</button><div class="chat-messages-body" id="message-thread-container" role="log" aria-label="Messages" aria-live="polite" aria-relevant="additions text"></div>
+    <p class="chat-error hidden" id="chat-error" role="alert"></p><div id="share-draft-preview" class="share-draft-preview hidden"></div><div id="mention-suggestions" class="mention-suggestions hidden" aria-label="Mention a member"></div>
+    <div id="voice-recorder" class="voice-recorder hidden" aria-label="Voice recording">
+      <div class="voice-recording-copy"><span class="voice-recording-dot"></span><span id="voice-status" role="status">Recording</span><strong id="voice-duration">0:00</strong></div>
+      <audio id="voice-preview" class="hidden" controls aria-label="Preview your voice note"></audio>
+      <div class="voice-recording-actions"><button type="button" id="voice-discard-btn" class="icon-button" aria-label="Discard voice note"><span data-icon="trash"></span></button><button type="button" id="voice-stop-btn" class="quiet-button"><span data-icon="stop"></span>Stop</button><button type="button" id="voice-send-btn" class="primary-button hidden"><span data-icon="send"></span>Send voice note</button></div>
     </div>
-
-    <!-- TAB 3: INBOX (Hook: #tab-inbox) -->
-    <section class="tab-pane" id="tab-inbox">
-      <div class="section-header">
-        <div>
-          <h2>Inbox</h2>
-          <p>Talk anime with your friends</p>
-        </div>
-      </div>
-
-      <div class="conversation-row gemini-conversation-row" id="gemini-conversation-row" role="button" tabindex="0">
-        <span class="gemini-logo-only" aria-label="Open Gemini chat" title="Open Gemini chat"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gemini-gradient" x1="8" y1="5" x2="40" y2="43" gradientUnits="userSpaceOnUse"><stop stop-color="#8B8FFF"/><stop offset=".5" stop-color="#6A6CE8"/><stop offset="1" stop-color="#B279FF"/></linearGradient></defs><path fill="url(#gemini-gradient)" d="M24 3c2.9 11.6 9.4 18.1 21 21-11.6 2.9-18.1 9.4-21 21-2.9-11.6-9.4-18.1-21-21C14.6 21.1 21.1 14.6 24 3Z"/></svg></span>
-      </div>
-
-      <div class="inbox-list" id="conversation-list"></div>
-      <div class="empty-state hidden" id="inbox-empty-state">
-        <div class="empty-state-icon">💬</div>
-        <h4>No friends yet</h4>
-        <p>Add a friend from the Friends tab, and they'll show up here to chat with.</p>
-      </div>
-    </section>
-
-    <!-- TAB 4: PROFILE & PREFERENCES (Hook: #tab-profile) -->
-    <section class="tab-pane" id="tab-profile">
-      <div class="profile-container">
-
-        <!-- Header with Glass Gear Button -->
-        <div class="profile-top-bar">
-          <div class="profile-header-title">
-            <span class="profile-kicker">ANIME COMMUNITY</span>
-            <h2>My Anime Profile</h2>
-          </div>
-          <button class="settings-gear-btn" id="open-settings-btn" aria-label="Open Settings" data-action="open-settings">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Profile Hero Card -->
-        <div class="profile-hero-card">
-          <div class="profile-cover-art"><span>✦</span><span>好きなアニメを共有しよう</span></div>
-          <div class="avatar-ring">
-            <img class="profile-avatar" id="profile-avatar" src="" alt="User Avatar" />
-          </div>
-          <h3 class="display-name" id="profile-display-name"></h3>
-          <div class="handle" id="profile-username">@</div>
-          <p class="profile-status-text" id="profile-status"></p>
-          <p class="user-bio" id="profile-bio"></p>
-          <div class="profile-anime-vibe" id="profile-anime-vibe">Anime fan · building a list</div>
-          <div class="profile-interest-chips" id="profile-interest-chips" aria-label="Anime interests"></div>
-
-          <span class="compat-badge hidden" id="compatibility-score"><span></span></span>
-          <span class="streak-badge hidden" id="streak-badge"></span>
-          <span class="watching-badge hidden" id="currently-watching-badge"><span>📺</span><span></span></span>
-
-        <div class="profile-stats">
-          <div class="stat-box">
-              <span class="stat-number" id="stat-followers">0</span>
-              <span class="stat-label">Followers</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-box">
-              <span class="stat-number" id="stat-following">0</span>
-              <span class="stat-label">Following</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-box"><span class="stat-number" id="stat-likes">0</span><span class="stat-label">Titles</span></div>
-          </div>
-
-          <button type="button" class="friend-request-btn hidden" id="friend-action-btn" style="margin-top:14px;">Add Friend</button>
-        </div>
-
-        <div class="watchlist-section-label" id="profile-section-title" style="margin-top:20px;">Your List</div>
-        <div class="status-filters profile-status-filters" id="profile-status-filters" aria-label="Your anime list">
-          <button type="button" class="status-pill active" data-profile-status="watching">Currently Watching</button>
-          <button type="button" class="status-pill" data-profile-status="plan_to_watch">About to Watch</button>
-          <button type="button" class="status-pill" data-profile-status="completed">Watched</button>
-          <button type="button" class="status-pill" data-profile-status="favourite">Favourite</button>
-          <button type="button" class="status-pill" data-profile-status="worst">Worst</button>
-        </div>
-        <div class="profile-posts-grid" id="profile-posts-grid"></div>
-        <div class="empty-state hidden" id="profile-posts-empty-state">
-          <div class="empty-state-icon">📭</div>
-          <h4>No anime added yet</h4>
-          <p>Add anime or manga to your list and your activity will appear here.</p>
-        </div>
-
-      </div>
-    </section>
-
-  </main>
-
-  <!-- DIRECT MESSAGING DRAWER OVERLAY (Hook: #chat-view-drawer) -->
-  <div class="chat-overlay" id="chat-view-drawer">
-    <header class="chat-header">
-      <button class="chat-back-btn" id="close-chat-btn" aria-label="Close Chat">
-        <svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      </button>
-
-      <div class="chat-user-meta" id="chat-header-user" data-action="view-profile">
-        <div class="chat-avatar-wrapper">
-          <img class="chat-avatar" id="dm-active-avatar" src="" alt="Avatar" />
-          <div class="online-indicator"></div>
-        </div>
-        <div class="chat-user-info">
-          <span class="name" id="dm-active-name"></span>
-        </div>
-      </div>
-
-      <div style="width: 36px;"></div>
-    </header>
-
-    <div class="chat-messages-body" id="message-thread-container"></div>
-
-    <div class="chat-input-bar">
-      <div class="chat-input-wrapper">
-        <input type="text" class="chat-input-field" id="message-text-input" placeholder="Message..." autocomplete="off" />
-      </div>
-      <button type="button" class="chat-send-btn" id="message-send-btn" aria-label="Send Message">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-      </button>
-    </div>
+    <form class="chat-input-bar" id="message-form"><button type="button" id="composer-plus" class="icon-button" aria-label="Add to conversation"><span data-icon="plus"></span></button><button type="button" id="voice-record-btn" class="icon-button voice-record-btn hidden" aria-label="Record a voice note" aria-pressed="false"><span data-icon="mic"></span></button><div class="chat-input-wrapper"><label class="sr-only" for="message-text-input">Message</label><textarea id="message-text-input" class="chat-input-field" placeholder="Send a message…" rows="1" maxlength="4000"></textarea></div><button type="button" id="composer-emoji" class="icon-button" aria-label="Insert emoji"><span data-icon="smile"></span></button><button type="submit" class="chat-send-btn icon-button" id="message-send-btn" aria-label="Send message" disabled><span data-icon="send"></span></button></form>
+    <p class="composer-hint">Enter to send · Shift + Enter for a new line</p>
+  </section></div></div>
+</section>
+<section class="tab-pane" id="tab-profile" aria-label="Profile">
+  <div class="page-heading"><div><h1 id="profile-heading">My profile</h1></div><button type="button" class="icon-button" id="open-settings-btn" aria-label="Open settings"><span data-icon="settings"></span></button></div>
+  <p class="form-error hidden" id="profile-error" role="alert"></p>
+  <div class="profile-hero-card"><div class="profile-cover-art"><span class="cover-wordmark">KAIDRA.</span><span class="cover-caption" id="profile-cover-taste"></span><div class="cover-orbit" aria-hidden="true"></div></div>
+    <div class="profile-identity"><div class="avatar-ring"><img class="profile-avatar" id="profile-avatar" alt="Profile photo"></div><div class="profile-identity-copy"><h2 id="profile-display-name"></h2><p id="profile-username" class="handle"></p></div><div class="profile-actions"><button type="button" class="quiet-button" id="edit-profile-btn"><span data-icon="edit"></span>Edit profile</button></div></div>
+    <p id="profile-status" class="profile-status-text"></p><p id="profile-bio" class="user-bio"></p><div class="profile-interest-chips" id="profile-interest-chips" aria-label="Entertainment interests"></div>
+    <div class="profile-stats"><div><strong id="stat-friends">0</strong><span>Friends</span></div><div><strong id="stat-favorites">0</strong><span>Favourites</span></div></div>
   </div>
-
-  <!-- VIDEO POST COMPOSER -->
-  <div class="video-post-modal hidden" id="video-post-modal" role="dialog" aria-modal="true" aria-labelledby="video-post-title">
-    <div class="video-post-sheet video-studio-shell">
-      <div class="video-post-header">
-        <div><p class="video-editor-kicker">KAIDRA STUDIO</p><h3 id="video-post-title">Edit your post</h3><p>Build your story, then share it with friends for 24 hours.</p></div>
-        <div class="studio-header-actions"><span class="studio-save-state">Autosaved locally</span><button type="button" id="studio-preview-button" class="studio-preview-button">Preview</button></div>
-        <button type="button" id="close-video-post-btn" class="video-post-close" aria-label="Close">×</button>
-      </div>
-      <input class="hidden" type="file" id="video-post-input" accept="video/*,image/*" />
-      <div class="studio-workspace">
-        <aside class="studio-left-sidebar" aria-label="Studio tools">
-          <button type="button" class="studio-rail-button active" data-studio-panel="sounds"><span>♫</span><small>Sounds</small></button>
-          <button type="button" class="studio-rail-button" data-studio-focus="video-post-overlay-text"><span>T</span><small>Text</small></button>
-          <button type="button" class="studio-rail-button" data-studio-focus="video-post-sticker"><span>✦</span><small>Stickers</small></button>
-          <button type="button" class="studio-rail-button" data-studio-focus="video-post-filter"><span>◌</span><small>Filters</small></button>
-          <button type="button" class="studio-rail-button" data-studio-panel="templates"><span>▦</span><small>Templates</small></button>
-          <div class="studio-rail-spacer"></div>
-          <button type="button" class="studio-rail-button" data-studio-action="change-media"><span>＋</span><small>Add clip</small></button>
-        </aside>
-        <div class="video-editor-layout">
-          <div class="studio-canvas-column">
-            <div class="video-editor-stage" id="video-editor-stage">
-              <video id="video-post-preview" class="video-post-preview hidden" controls playsinline></video>
-              <img id="image-post-preview" class="image-post-preview hidden" alt="Post preview" />
-              <div id="video-editor-overlay" class="video-editor-overlay hidden"></div>
-              <span id="video-editor-sticker" class="video-editor-sticker hidden"></span>
-            </div>
-            <div class="studio-canvas-footer"><span id="studio-canvas-format">9:16 vertical</span><span>Drag canvas elements to position</span></div>
-          </div>
-        <div class="video-editor-controls studio-publish-sidebar">
-          <div class="studio-panel-heading"><span>Publish details</span><button type="button" class="studio-collapse-button" aria-label="Collapse publishing details">⌄</button></div>
-          <p id="video-post-file-name" class="video-post-file-name hidden"></p>
-          <div id="video-trim-controls" class="video-trim-controls hidden">
-            <div class="video-control-heading"><strong>Trim clip</strong><span id="video-trim-label">0s – 0s</span></div>
-            <label>Start <input id="video-trim-start" type="range" min="0" max="180" step="0.1" value="0" /></label>
-            <label>End <input id="video-trim-end" type="range" min="0" max="180" step="0.1" value="180" /></label>
-          </div>
-          <div class="video-caption-label">Text layers <span>add multiple timed overlays</span></div>
-          <div id="video-overlay-layers" class="video-overlay-layers"></div>
-          <button type="button" id="add-video-overlay-btn" class="video-add-layer-button">＋ Add text layer</button>
-          <div class="video-post-field-grid">
-            <div><label class="video-caption-label" for="video-post-sticker">Sticker</label><select id="video-post-sticker" class="video-caption-input video-select"><option value="">None</option><option value="✨">✨ Sparkle</option><option value="🔥">🔥 Fire</option><option value="💖">💖 Love</option><option value="😂">😂 Laugh</option><option value="🎉">🎉 Party</option></select></div>
-            <div><label class="video-caption-label" for="video-post-filter">Filter</label><select id="video-post-filter" class="video-caption-input video-select"><option value="none">Original</option><option value="soft">Soft</option><option value="mono">Mono</option><option value="vivid">Vivid</option></select></div>
-          </div>
-          <div class="video-post-field-grid">
-            <div><label class="video-caption-label" for="video-post-music-title">Sound title <span>optional</span></label><input id="video-post-music-title" class="video-caption-input video-short-input" maxlength="80" placeholder="Original sound" /></div>
-            <div><label class="video-caption-label" for="video-post-music-artist">Artist</label><input id="video-post-music-artist" class="video-caption-input video-short-input" maxlength="80" placeholder="Artist name" /></div>
-          </div>
-          <button type="button" id="open-audio-picker-btn" class="video-audio-picker-button"><span>♫</span><span><strong id="video-selected-sound-title">Add sound</strong><small id="video-selected-sound-meta">Browse the Kaidra audio library</small></span><span class="video-audio-chevron">›</span></button>
-          <label class="video-caption-label" for="video-post-tags">Tags <span>optional · comma separated</span></label>
-          <input id="video-post-tags" class="video-caption-input video-short-input" maxlength="180" placeholder="#anime, #amv, #kaidra" />
-          <label class="video-caption-label" for="video-post-caption">Caption <span>optional</span></label>
-          <textarea id="video-post-caption" class="video-caption-input" maxlength="280" rows="3" placeholder="Tell your friends about it…"></textarea>
-          <label class="video-download-setting"><input type="checkbox" id="video-post-allow-download" checked /> Allow friends to download this post</label>
-        </div>
-        </div>
-      </div>
-      <section class="studio-timeline" aria-label="Multi-track timeline">
-        <div class="studio-timeline-toolbar"><div><strong>Timeline</strong><span id="studio-timeline-duration">00:00</span></div><div class="studio-timeline-actions"><button type="button" id="studio-split-button">✂ Split</button><button type="button" id="studio-zoom-out">−</button><span id="studio-zoom-level">100%</span><button type="button" id="studio-zoom-in">＋</button></div></div>
-        <div class="studio-ruler"><span>00:00</span><span>00:05</span><span>00:10</span><span>00:15</span><span>00:20</span><span>00:30</span></div>
-        <div class="studio-track-row"><span class="studio-track-label">MEDIA</span><div class="studio-track-lane"><div id="studio-media-clip" class="studio-track-clip"><span id="studio-media-clip-label">Your clip</span><i class="studio-trim-handle left"></i><i class="studio-trim-handle right"></i></div><div id="studio-split-markers"></div></div></div>
-        <div class="studio-track-row"><span class="studio-track-label">SOUND</span><div class="studio-track-lane sound-lane"><div id="studio-audio-clip" class="studio-track-clip audio-clip"><span>♫ Original sound</span></div></div></div>
-        <div class="studio-track-row"><span class="studio-track-label">TEXT</span><div id="studio-text-track-lane" class="studio-track-lane text-track-lane"></div></div>
-        <div class="studio-playhead" id="studio-playhead"></div>
-      </section>
-      <p id="video-post-error" class="video-post-error hidden" role="alert"></p>
-    </div>
+  <div class="profile-content-grid"><section class="profile-about"><h2>Your taste</h2><p id="profile-taste-summary" class="muted">Your interests shape your recommendations.</p><button type="button" id="edit-tastes-btn" class="quiet-button">Edit my tastes <span data-icon="arrow"></span></button></section><section class="profile-favorites-section"><div class="section-header"><div><h2>Library</h2></div></div><div class="library-tabs" role="tablist" aria-label="Your library"><button type="button" role="tab" class="active" data-library-tab="favorites" aria-selected="true">Favorites</button><button type="button" role="tab" data-library-tab="watchlist" aria-selected="false">Watchlist</button></div><div id="profile-favorites" class="profile-favorites"></div></section></div>
+</section>
+<section class="tab-pane" id="tab-user" aria-label="User profile">
+  <div class="page-heading"><div><button type="button" class="text-button" id="user-back-btn"><span data-icon="back"></span>Back</button></div></div>
+  <p class="form-error hidden" id="user-profile-error" role="alert"></p>
+  <div class="profile-hero-card"><div class="profile-cover-art"><span class="cover-wordmark">KAIDRA.</span><span class="cover-caption" id="user-profile-cover-taste"></span><div class="cover-orbit" aria-hidden="true"></div></div>
+    <div class="profile-identity"><div class="avatar-ring"><img class="profile-avatar" id="user-profile-avatar" alt="Profile photo"></div><div class="profile-identity-copy"><h2 id="user-profile-display-name"></h2><p id="user-profile-username" class="handle"></p></div><div class="profile-actions"><button type="button" class="primary-button hidden" id="friend-action-btn">Add friend</button><button type="button" class="quiet-button hidden" id="profile-message-btn"><span data-icon="chat"></span>Message</button></div></div>
+    <p id="user-profile-status" class="profile-status-text"></p><p id="user-profile-bio" class="user-bio"></p><div class="profile-interest-chips" id="user-profile-interest-chips" aria-label="Entertainment interests"></div>
+    <div class="profile-stats"><div><strong id="user-stat-friends">0</strong><span>Friends</span></div><div><strong id="user-stat-favorites">0</strong><span>Favourites</span></div></div>
   </div>
-
-  <div class="video-audio-drawer hidden" id="video-audio-drawer" role="dialog" aria-modal="true" aria-labelledby="video-audio-title">
-    <div class="video-audio-sheet">
-      <div class="video-audio-header"><div><p class="video-editor-kicker">SOUND</p><h3 id="video-audio-title">Choose a sound</h3></div><button type="button" id="close-audio-picker-btn" class="video-post-close" aria-label="Close sound picker">×</button></div>
-      <div class="video-audio-search"><span>⌕</span><input id="video-audio-search-input" type="search" placeholder="Search sounds" autocomplete="off" /></div>
-      <div class="video-audio-filters" role="tablist" aria-label="Sound categories"><button type="button" class="audio-filter-button active" data-audio-filter="favorites">Favorites</button><button type="button" class="audio-filter-button" data-audio-filter="original">Original Audio</button></div>
-      <button type="button" id="use-original-sound-btn" class="video-audio-original"><span class="video-audio-note">♫</span><span><strong>Original sound</strong><small>Use the audio from your upload</small></span><span>Use</span></button>
-      <div id="video-audio-results" class="video-audio-results"><p class="video-audio-empty">Search for a sound to get started.</p></div>
-    </div>
-  </div>
-
-  <div class="video-comments-modal hidden" id="video-comments-modal" role="dialog" aria-modal="true" aria-labelledby="video-comments-title">
-    <div class="video-comments-sheet">
-      <div class="video-comments-header"><h3 id="video-comments-title">Comments</h3><button type="button" id="close-video-comments-btn" aria-label="Close">×</button></div>
-      <div id="video-comments-list" class="video-comments-list"></div>
-      <form id="video-comment-form" class="video-comment-form">
-        <input id="video-comment-input" maxlength="280" placeholder="Add a comment…" autocomplete="off" />
-        <button type="submit">Post</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="video-comments-modal hidden" id="video-activity-modal" role="dialog" aria-modal="true" aria-labelledby="video-activity-title">
-    <div class="video-comments-sheet">
-      <div class="video-comments-header"><h3 id="video-activity-title">Your video activity</h3><button type="button" id="close-video-activity-btn" aria-label="Close">×</button></div>
-      <div id="video-activity-list" class="video-comments-list"></div>
-    </div>
-  </div>
-
-  <div class="video-share-drawer hidden" id="video-share-drawer" role="dialog" aria-modal="true" aria-labelledby="video-share-title">
-    <div class="video-share-sheet"><div class="video-comments-header"><h3 id="video-share-title">Share video</h3><button type="button" id="close-video-share-btn" aria-label="Close">×</button></div><div class="video-share-options" id="video-share-options"></div></div>
-  </div>
-
-  <!-- STATUS VIEWER MODAL (Hook: #status-viewer-modal) -->
-  <div class="status-viewer-modal hidden" id="status-viewer-modal">
-    <div class="status-viewer-topbar">
-      <div class="status-viewer-user">
-        <img src="" alt="" />
-        <span class="status-viewer-name"></span>
-        <span class="status-viewer-time"></span>
-      </div>
-      <button type="button" id="status-close-btn" aria-label="Close">
-        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div class="status-media"></div>
-    <div class="status-viewer-actions">
-      <input type="text" id="status-reply-input" placeholder="Reply privately..." />
-      <button type="button" id="status-quick-react-btn" title="Quick react">🔥</button>
-      <button type="button" id="status-reply-submit-btn">Send</button>
-    </div>
-  </div>
-
-  <!-- FIND FRIENDS MODAL (Hook: #find-friends-modal) -->
-  <div class="find-friends-modal hidden" id="find-friends-modal">
-    <div class="find-friends-search-bar">
-      <input type="text" id="find-friends-input" placeholder="Search by username..." />
-      <button type="button" id="find-friends-close-btn">Cancel</button>
-    </div>
-    <div id="find-friends-results" class="find-friends-results"></div>
-  </div>
-
-  <!-- ANIME OF THE DAY VIEWER (Hook: #aotd-viewer-modal) -->
-  <div class="sotd-listen-modal hidden" id="aotd-viewer-modal">
-    <div class="sotd-listen-card">
-      <button type="button" id="aotd-viewer-close-btn" class="sotd-listen-close" aria-label="Close">
-        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-      <span class="sotd-listen-eyebrow">🎬 Anime of the Day</span>
-      <p id="aotd-viewer-shared-by" class="sotd-listen-shared-by"></p>
-      <img id="aotd-viewer-cover" class="sotd-listen-art" src="" alt="Anime cover" />
-      <h3 id="aotd-viewer-title" class="sotd-listen-track"></h3>
-      <p id="aotd-viewer-note" class="sotd-listen-artist"></p>
-      <a id="aotd-viewer-anilist-link" href="#" target="_blank" rel="noopener" class="sotd-listen-open-btn">View on MyAnimeList</a>
-    </div>
-  </div>
-
-  <!-- SHARE ANIME OF THE DAY (Hook: #aotd-share-modal) -->
-  <div class="find-friends-modal hidden" id="aotd-share-modal">
-    <div class="find-friends-search-bar">
-      <input type="text" id="aotd-share-search-input" placeholder="Search an anime to share..." />
-      <button type="button" id="aotd-share-close-btn">Cancel</button>
-    </div>
-    <div id="aotd-share-results" class="find-friends-results"></div>
-
-    <!-- Step 2: confirm + optional note, shown after picking a result -->
-    <div id="aotd-share-confirm-step" class="aotd-share-confirm hidden">
-      <img id="aotd-share-confirm-cover" class="aotd-share-confirm-cover" src="" alt="" />
-      <h4 id="aotd-share-confirm-title" class="aotd-share-confirm-title"></h4>
-      <textarea id="aotd-share-note-input" class="editp-input editp-bio-input" placeholder="Add a note (optional)" rows="2"></textarea>
-      <div class="aotd-share-confirm-actions">
-        <button type="button" id="aotd-share-back-btn" class="aotd-share-back-btn">Back</button>
-        <button type="button" id="aotd-share-confirm-btn" class="editp-save-btn">Share with Friends</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- WATCHLIST STATUS PICKER (Hook: #watchlist-status-picker) -->
-  <div class="status-picker-overlay hidden" id="watchlist-status-picker">
-    <div class="status-picker-sheet">
-      <div class="status-picker-header">
-        <img id="status-picker-cover" class="status-picker-cover" src="" alt="" />
-        <span id="status-picker-title" class="status-picker-title"></span>
-      </div>
-      <p class="status-picker-prompt">Add to which list?</p>
-      <div class="status-picker-options">
-        <button type="button" class="status-picker-option" data-status="watching">Currently Watching</button>
-        <button type="button" class="status-picker-option" data-status="completed">Completed</button>
-        <button type="button" class="status-picker-option" data-status="on_hold">On Hold</button>
-        <button type="button" class="status-picker-option" data-status="dropped">Dropped</button>
-        <button type="button" class="status-picker-option" data-status="plan_to_watch">Plan to Watch</button>
-      </div>
-      <button type="button" id="status-picker-cancel-btn" class="status-picker-cancel">Cancel</button>
-    </div>
-  </div>
-
-  <!-- MYANIMELIST CONNECTION MODAL (Hook kept for existing settings wiring) -->
-  <div class="find-friends-modal hidden" id="anilist-import-modal">
-    <div class="find-friends-search-bar">
-      <span style="font-family:var(--font-display); font-weight:700; color:var(--ink);">Connect MyAnimeList</span>
-      <button type="button" id="anilist-import-close-btn">Cancel</button>
-    </div>
-    <div class="edit-profile-form">
-      <p>Authorize Kaidra to read and update your MyAnimeList anime list. Your discussions, friends, reviews, and DMs stay in Kaidra.</p>
-      <div id="anilist-import-error" class="editp-error hidden"></div>
-      <button type="button" id="anilist-import-submit-btn" class="editp-save-btn">Connect &amp; Sync My List</button>
-    </div>
-  </div>
-
-  <!-- EDIT PROFILE MODAL (Hook: #edit-profile-modal) -->
-  <div class="find-friends-modal hidden" id="edit-profile-modal">
-    <div class="find-friends-search-bar">
-      <span style="font-family:var(--font-display); font-weight:700; color:var(--ink);">Edit Profile</span>
-      <button type="button" id="edit-profile-close-btn">Cancel</button>
-    </div>
-    <div class="edit-profile-form">
-      <div class="edit-profile-avatar-row">
-        <img id="edit-profile-avatar-preview" class="edit-profile-avatar-preview" src="" alt="Avatar" />
-        <label for="edit-profile-avatar-input" class="edit-profile-avatar-btn">Change Photo</label>
-        <input type="file" id="edit-profile-avatar-input" accept="image/*" class="hidden" />
-      </div>
-
-      <div class="editp-field">
-        <label for="edit-profile-display-name">Display Name</label>
-        <input type="text" id="edit-profile-display-name" class="editp-input" placeholder="Your display name" />
-      </div>
-
-      <div class="editp-field">
-        <label for="edit-profile-status">Status</label>
-        <input type="text" id="edit-profile-status" class="editp-input" placeholder="What's on your mind?" maxlength="60" />
-      </div>
-
-      <div class="editp-field">
-        <label for="edit-profile-bio">Bio</label>
-        <textarea id="edit-profile-bio" class="editp-input editp-bio-input" placeholder="Tell people about yourself" maxlength="160" rows="3"></textarea>
-      </div>
-
-      <div class="editp-field">
-        <label for="edit-profile-interests">Anime interests</label>
-        <input type="text" id="edit-profile-interests" class="editp-input" placeholder="shonen, romance, manga" />
-        <small class="editp-help">Separate interests with commas.</small>
-      </div>
-
-      <div class="editp-field">
-        <label for="edit-profile-template">Profile template</label>
-        <select id="edit-profile-template" class="editp-input"><option value="midnight">Midnight Neon</option><option value="sakura">Sakura Dream</option><option value="ocean">Ocean Quest</option><option value="sunset">Sunset Flame</option><option value="monochrome">Monochrome Manga</option><option value="cyberpunk">Cyberpunk Tokyo</option><option value="forest">Forest Spirit</option><option value="starlight">Starlight Galaxy</option></select>
-        <small class="editp-help">Choose the look that represents your anime world.</small>
-      </div>
-
-      <div id="edit-profile-error" class="editp-error hidden"></div>
-      <button type="button" id="edit-profile-save-btn" class="editp-save-btn">Save Changes</button>
-    </div>
-  </div>
-
-  <!-- FORWARD-TO-DM PICKER (Hook: #forward-picker-overlay) -->
-  <div class="forward-picker-overlay" id="forward-picker-overlay">
-    <div class="forward-picker-panel">
-      <div class="forward-picker-header">
-        <span>Forward to...</span>
-        <button class="forward-picker-close" id="close-forward-picker-btn" aria-label="Close">
-          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-      <div class="forward-picker-list" id="forward-picker-list"></div>
-    </div>
-  </div>
-
-  <!-- EXPANDED CYBER-GLASS SETTINGS PANEL OVERLAY (Hook: #settings-overlay) -->
-  <div class="settings-overlay" id="settings-overlay">
-    <div class="settings-panel">
-      
-      <div class="settings-panel-header">
-        <button class="settings-back-btn" id="close-settings-btn" aria-label="Back to Profile">
-          <svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        </button>
-        <h3 class="settings-panel-title">Settings &amp; privacy</h3>
-        <div style="width: 38px;"></div>
-      </div>
-
-      <div class="settings-body">
-        
-        <div class="settings-user-card">
-          <img class="mini-avatar" id="settings-user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=AlexKaidra" alt="User" />
-          <div class="user-card-meta">
-            <div class="name" id="settings-user-name">Alex Johnson</div>
-            <div class="tag">
-              <span id="settings-user-handle"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- CATEGORY 1: ACCOUNT & PROFILE -->
-        <div class="settings-section">
-          <div class="settings-section-title">Account & Credentials</div>
-          
-          <div class="settings-card-grid">
-            <div class="setting-card-item" data-action="edit-profile">
-              <div class="item-left-group">
-                <div class="icon-box cyan">
-                  <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Edit Public Profile</span>
-                  <span class="subtext">Customise display name, avatar & bio</span>
-                </div>
-              </div>
-              <svg class="arrow-icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </div>
-
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group"><div class="icon-box purple">✓</div><div class="item-text"><span class="heading">Safety mode</span><span class="subtext">Under-18 safe content is on by default</span></div></div>
-              <span class="action-badge">Protected</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- CATEGORY 2: PRIVACY & DIRECT MESSAGES -->
-        <div class="settings-section">
-          <div class="settings-section-title">Privacy & Direct Messages</div>
-          
-          <div class="settings-card-grid">
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group">
-                <div class="icon-box cyan">
-                  <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Allow Direct Messages</span>
-                  <span class="subtext">Receive 1-on-1 chats from Kaidra users</span>
-                </div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="setting-allow-dms" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group"><div class="icon-box cyan">◎</div><div class="item-text"><span class="heading">Messages from non-friends</span><span class="subtext">Allow people outside your Friends list to chat</span></div></div>
-              <label class="switch"><input type="checkbox" id="setting-allow-nonfriend-dms" /><span class="slider"></span></label>
-            </div>
-
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group"><div class="icon-box purple">◉</div><div class="item-text"><span class="heading">Messages from followers</span><span class="subtext">Allow approved followers to start chats</span></div></div>
-              <label class="switch"><input type="checkbox" id="setting-allow-follower-dms" /><span class="slider"></span></label>
-            </div>
-
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group">
-                <div class="icon-box purple">
-                  <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Show Watchlist Activity</span>
-                  <span class="subtext">Let DM contacts see what anime you're watching</span>
-                </div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="setting-public-watchlist" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box pink">✦</div><div class="item-text"><span class="heading">Anime recommendations</span><span class="subtext">Notify me when friends recommend a title</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-likes" checked /><span class="slider"></span></label></div>
-            <div class="setting-card-item non-interactive"><div class="item-left-group"><div class="icon-box cyan">◌</div><div class="item-text"><span class="heading">Discussion replies</span><span class="subtext">Notify me when someone replies to me</span></div></div><label class="switch"><input type="checkbox" id="setting-notify-comments" checked /><span class="slider"></span></label></div>
-          </div>
-        </div>
-
-        <div class="settings-section"><div class="settings-section-title">Community guidelines</div><div class="settings-guidelines"><p><strong>Keep Kaidra human.</strong> No harassment, hate, threats, sexual content involving minors, spam, or sharing private information.</p><p>Use report and block tools when a conversation crosses a line. Repeated violations may limit messaging, discussions, or visibility.</p><button type="button" class="settings-guideline-link">Read the full safety guide <span>›</span></button></div></div>
-
-        <!-- CATEGORY 3: NOTIFICATIONS -->
-        <div class="settings-section">
-          <div class="settings-section-title">Notification Alerts</div>
-          
-          <div class="settings-card-grid">
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group">
-                <div class="icon-box pink">
-                  <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">DM Push Notifications</span>
-                  <span class="subtext">Alerts when someone sends you a chat</span>
-                </div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="setting-notify-dm" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- CATEGORY 4: DATA IMPORT -->
-        <div class="settings-section">
-          <div class="settings-section-title">Data Sync & Import</div>
-          
-          <div class="settings-card-grid">
-            <div class="setting-card-item" id="btn-import-list" data-action="import-list">
-              <div class="item-left-group">
-                <div class="icon-box purple">
-                  <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Sync MyAnimeList</span>
-                  <span class="subtext">Connect your MAL list and keep it in sync</span>
-                </div>
-              </div>
-              <span class="action-badge">Sync</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- CATEGORY 5: ANIME PREFERENCES -->
-        <div class="settings-section">
-          <div class="settings-section-title">Anime preferences</div>
-          
-          <div class="settings-card-grid">
-            <div class="setting-card-item non-interactive">
-              <div class="item-left-group">
-                <div class="icon-box pink">
-                  <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                </div>
-                <div class="item-text">
-                  <span class="heading">Mature Content</span>
-                  <span class="subtext">Allow sensitive 18+ titles and stories</span>
-                </div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="setting-nsfw-filter" />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <label class="setting-card-item setting-select-row">
-              <span class="item-left-group"><span class="icon-box cyan">◐</span><span class="item-text"><span class="heading">App theme</span><span class="subtext">Choose the mood for your anime space</span></span></span>
-              <select id="setting-theme" class="settings-select"><option value="dark">Midnight</option><option value="light">Paper</option><option value="system">System</option></select>
-            </label>
-            <label class="setting-card-item setting-select-row">
-              <span class="item-left-group"><span class="icon-box purple">Aa</span><span class="item-text"><span class="heading">Spoiler protection</span><span class="subtext">Hide major plot details in community posts</span></span></span>
-              <select id="setting-spoilers" class="settings-select"><option value="protected">Protected</option><option value="open">Show spoilers</option></select>
-            </label>
-          </div>
-        </div>
-
-        <!-- CATEGORY 6: LOG OUT -->
-        <div class="settings-section">
-          <button class="logout-card-btn" id="settings-logout-btn" data-action="logout">
-            <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            Log Out of Kaidra
-          </button>
-        </div>
-
-      </div>
-
-    </div>
-  </div>
-
-  <!-- BOTTOM NAVIGATION BAR -->
-  <div class="bottom-nav-container">
-    <nav class="bottom-nav" id="app-bottom-nav">
-      <button class="nav-item active" data-tab="news">
-        <svg viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"></path></svg>
-        <span>Home</span>
-      </button>
-
-      <button class="nav-item" data-tab="friends">
-        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-        <span>Community</span>
-      </button>
-
-      <button class="nav-item" data-tab="watchlist">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
-        <span>Browse</span>
-      </button>
-
-      <button class="nav-item" data-tab="inbox">
-        <div class="unread-dot"></div>
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-        <span>Inbox</span>
-      </button>
-
-      <button class="nav-item" data-tab="profile">
-        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        <span>Profile</span>
-      </button>
-    </nav>
-  </div>
-
-  <script type="module" src="/js/news-data.js"></script>
-  <script type="module" src="/js/watchlist.js"></script>
-  <script type="module" src="/js/browse.js"></script>
-  <script type="module" src="/js/mal-discovery.js"></script>
-  <script type="module" src="/js/friends.js"></script>
-  <script type="module" src="/js/inbox.js"></script>
-  <script type="module" src="/js/gemini.js"></script>
-  <script type="module" src="/js/profile.js"></script>
-  <script type="module" src="/js/app.js"></script>
-</body>
-</html>
+  <div class="profile-content-grid"><section class="profile-about"><h2>Taste</h2><p id="user-profile-taste-summary" class="muted">Your interests shape your recommendations.</p></section><section class="profile-favorites-section"><div class="section-header"><div><h2>Favourites</h2></div></div><div id="user-profile-favorites" class="profile-favorites"></div></section></div>
+</section>
+</main>
+<div class="social-modal hidden search-modal" id="global-search-modal" role="dialog" aria-modal="true" aria-labelledby="global-search-title"><div class="social-modal-card global-search-card"><div class="modal-heading"><h2 id="global-search-title">Search Kaidra</h2><button type="button" class="icon-button" data-close="global-search-modal" aria-label="Close search"><span data-icon="close"></span></button></div><label class="search-field"><span data-icon="search"></span><span class="sr-only">Search titles and people</span><input id="global-search-input" type="search" placeholder="Titles, names, usernames…" maxlength="100" autocomplete="off" autofocus></label><div id="global-search-results" aria-live="polite"><p class="muted">Search for a title or someone you know.</p></div></div></div>
+<div class="social-modal hidden" id="find-friends-modal" role="dialog" aria-modal="true" aria-labelledby="find-people-title"><div class="social-modal-card"><div class="modal-heading"><div><h2 id="find-people-title">Find people</h2></div><button type="button" id="find-friends-close-btn" class="modal-close icon-button" aria-label="Close"><span data-icon="close"></span></button></div><label for="find-friends-input">Name or username</label><div class="search-field"><span data-icon="search"></span><input type="search" id="find-friends-input" placeholder="Search people…" autocomplete="off"></div><div id="find-friends-results" class="people-list" aria-live="polite"><p class="muted">Type at least two characters to find someone.</p></div></div></div>
+<div class="social-modal hidden" id="new-chat-modal" role="dialog" aria-modal="true" aria-labelledby="new-chat-title"><div class="social-modal-card"><div class="modal-heading"><div><h2 id="new-chat-title">New conversation</h2></div><button type="button" class="modal-close icon-button" data-close="new-chat-modal" aria-label="Close"><span data-icon="close"></span></button></div><p class="muted" id="chat-picker-description">Choose a friend or an existing group.</p><div id="new-chat-list" class="people-list"></div></div></div>
+<div class="social-modal hidden" id="edit-profile-modal" role="dialog" aria-modal="true" aria-labelledby="edit-profile-title" data-protect-form><form class="social-modal-card" id="edit-profile-form"><div class="modal-heading"><div><h2 id="edit-profile-title">Edit your profile.</h2></div><button type="button" class="modal-close icon-button" data-close="edit-profile-modal" aria-label="Close"><span data-icon="close"></span></button></div><label for="edit-profile-avatar-input">Profile photo</label><input type="file" id="edit-profile-avatar-input" accept="image/jpeg,image/png,image/webp"><div class="form-grid"><div><label for="edit-profile-display-name">Display name</label><input id="edit-profile-display-name" maxlength="60"></div><div><label for="edit-profile-status">What's on your mind?</label><input id="edit-profile-status" maxlength="120"></div></div><label for="edit-profile-bio">Bio</label><textarea id="edit-profile-bio" rows="3" maxlength="500" placeholder="The stories you love. The things that make you, you."></textarea><label for="edit-profile-template">Banner accent</label><select id="edit-profile-template"><option value="midnight">Violet</option><option value="ocean">Ocean</option><option value="sunset">Sunset</option><option value="monochrome">Monochrome</option><option value="sakura">Sakura</option></select><p class="muted">Update entertainment interests in Edit my tastes.</p><p class="form-error hidden" id="edit-profile-error" role="alert"></p><button type="submit" class="primary-button" id="edit-profile-save-btn">Save changes <span data-icon="check"></span></button></form></div>
+<div class="social-modal hidden settings-modal" id="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="social-modal-card settings-card"><div class="modal-heading"><div><h2 id="settings-title">Settings</h2></div><button type="button" id="close-settings-btn" class="modal-close icon-button" data-close="settings-overlay" aria-label="Close"><span data-icon="close"></span></button></div>
+  <section class="settings-section"><h3>Account</h3><button type="button" class="settings-link" id="settings-edit-profile"><span data-icon="user"></span><span><strong>Your profile</strong><small>Name, photo, and bio</small></span><span data-icon="arrow"></span></button><a class="settings-link" href="/onboarding.html?edit=1"><span data-icon="spark"></span><span><strong>Your entertainment taste</strong><small>Genres, favourites, and where you watch</small></span><span data-icon="arrow"></span></a></section>
+  <section class="settings-section"><h3>Privacy &amp; messaging</h3><label class="setting-row" for="setting-allow-dms"><span><strong>Direct messages</strong><small>Allow your friends to send you messages</small></span><span class="switch"><input type="checkbox" id="setting-allow-dms"><span class="switch-track"></span></span></label><p class="setting-note">Messaging changes save automatically.</p></section>
+  <section class="settings-section"><h3>Notifications</h3><button type="button" class="settings-link" id="settings-sports"><span data-icon="ball"></span><span><strong>Matchday notifications</strong><small>Kickoff reminders, results, and football news</small></span><span data-icon="arrow"></span></button><button type="button" class="settings-link" id="enable-browser-alerts"><span data-icon="bell"></span><span>Enable browser notifications</span></button><p class="setting-note" id="browser-alert-status">Browser notifications appear while Kaidra is open.</p></section>
+  <p class="form-error hidden" id="settings-error" role="alert"></p><button type="button" class="logout-card-btn" id="settings-logout-btn"><span data-icon="logout"></span>Log out</button>
+</div></div>
+<div class="social-modal hidden content-detail-modal" id="content-detail-modal" role="dialog" aria-modal="true" aria-labelledby="content-detail-title"><div class="social-modal-card content-detail-card"><div class="modal-heading"><div><p id="content-detail-kind" class="muted">Details</p><h2 id="content-detail-title" class="sr-only">Title details</h2></div><button type="button" class="modal-close icon-button" data-close="content-detail-modal" aria-label="Close"><span data-icon="close"></span></button></div><div id="content-detail-body"></div></div></div>
+<div class="social-modal hidden notifications-modal" id="alerts-modal" role="dialog" aria-modal="true" aria-labelledby="alerts-title"><div class="social-modal-card notification-panel"><div class="modal-heading"><div><h2 id="alerts-title">Notifications</h2></div><button type="button" class="modal-close icon-button" data-close="alerts-modal" aria-label="Close"><span data-icon="close"></span></button></div><button type="button" class="text-button" id="mark-alerts-read"><span data-icon="check"></span>Mark all as read</button><div id="alerts-list" class="notification-list" aria-live="polite"></div></div></div>
+<div class="social-modal hidden" id="sports-settings-modal" role="dialog" aria-modal="true" aria-labelledby="sports-settings-title"><div class="social-modal-card"><div class="modal-heading"><div><h2 id="sports-settings-title">Matchday notifications</h2></div><button type="button" class="modal-close icon-button" data-close="sports-settings-modal" aria-label="Close"><span data-icon="close"></span></button></div><label class="setting-row"><span><strong>Match &amp; event notifications</strong><small>Kickoff reminders, scores, and announced events</small></span><span class="switch"><input type="checkbox" id="sports-alerts-enabled"><span class="switch-track"></span></span></label><label class="setting-row"><span><strong>Football news</strong><small>Headlines from BBC Sport</small></span><span class="switch"><input type="checkbox" id="sports-news-enabled"><span class="switch-track"></span></span></label><label for="alerts-competition">Follow a competition</label><select id="alerts-competition"><option value="ALL">All competitions</option><option value="PL">Premier League</option><option value="CL">Champions League</option><option value="PD">La Liga</option><option value="SA">Serie A</option><option value="BL1">Bundesliga</option><option value="FL1">Ligue 1</option><option value="WC">World Cup</option></select><p class="form-error hidden" id="alerts-error" role="alert"></p><button type="button" class="primary-button" id="save-alerts-btn">Save preferences <span data-icon="check"></span></button></div></div>
+<div class="social-modal hidden" id="create-group-modal" role="dialog" aria-modal="true" aria-labelledby="create-group-title" data-protect-form>
+  <form class="social-modal-card group-create-card" id="create-group-form">
+    <div class="modal-heading"><div><h2 id="create-group-title">New group</h2></div><button type="button" class="modal-close icon-button" data-close="create-group-modal" aria-label="Close"><span data-icon="close"></span></button></div>
+    <div class="group-cover-preview"><span class="group-cover-symbol" data-icon="people"></span><div><strong id="group-name-preview">Your new group</strong><span id="group-members-preview">Choose at least one friend</span></div></div>
+    <label for="group-name">Give it a name</label><input id="group-name" required maxlength="80" placeholder="Movie night crew" autocomplete="off">
+    <div class="group-picker-heading"><label for="group-member-search">Bring your friends</label><span id="group-selection-count" class="group-selection-count" aria-live="polite">0 / 49</span></div>
+    <div class="search-field"><span data-icon="search"></span><input type="search" id="group-member-search" placeholder="Find a friend" autocomplete="off"></div>
+    <div id="group-selected-members" class="group-selected-members" aria-label="Selected friends"></div>
+    <div id="group-friend-picker" class="people-list group-friend-picker"></div><p class="muted group-limit-note">You and up to 49 friends.</p>
+    <p id="group-create-error" class="form-error hidden" role="alert"></p><button type="submit" class="primary-button" id="group-create-submit" disabled>Create group <span data-icon="arrow"></span></button>
+  </form>
+</div>
+<div class="social-modal hidden" id="chat-info-modal" role="dialog" aria-modal="true" aria-labelledby="chat-info-title"><div class="social-modal-card"><div class="modal-heading"><div><h2 id="chat-info-title">Conversation members</h2></div><button type="button" class="modal-close icon-button" data-close="chat-info-modal" aria-label="Close"><span data-icon="close"></span></button></div><div id="chat-members" class="people-list"></div><p id="chat-info-error" class="form-error hidden" role="alert"></p></div></div>
+<div class="social-modal hidden confirm-modal" id="discard-modal" role="dialog" aria-modal="true" aria-labelledby="discard-title"><div class="social-modal-card"><span class="confirm-icon" data-icon="edit"></span><h2 id="discard-title">Keep your changes?</h2><p class="muted">You have changes that haven't been saved.</p><div class="detail-actions"><button type="button" class="primary-button" id="keep-editing-btn">Keep editing</button><button type="button" class="quiet-button" id="discard-changes-btn">Discard changes</button></div></div></div>
+<div class="app-toast hidden" id="app-status" role="status" aria-live="polite"></div>
+<div class="bottom-nav-container"><nav class="bottom-nav" id="app-bottom-nav" aria-label="Mobile navigation">
+  <button type="button" class="nav-item active" data-tab="home" aria-current="page"><span data-icon="home"></span><span>For you</span></button>
+  <button type="button" class="nav-item" data-tab="discover"><span data-icon="compass"></span><span>Discover</span></button>
+  <button type="button" class="nav-item" data-tab="friends"><span data-icon="people"></span><span>Friends</span><span class="unread-dot hidden" id="friends-nav-dot"></span></button>
+  <button type="button" class="nav-item" data-tab="inbox"><span data-icon="chat"></span><span>Inbox</span><span class="nav-counter hidden" id="nav-inbox-count"></span></button>
+  <button type="button" class="nav-item" data-tab="profile"><span data-icon="user"></span><span>Profile</span></button>
+</nav></div>
+<script type="module" src="/js/app.js"></script><script type="module" src="/js/discover.js"></script><script type="module" src="/js/football.js"></script><script type="module" src="/js/notifications.js"></script><script type="module" src="/js/friends.js"></script><script type="module" src="/js/inbox.js"></script><script type="module" src="/js/profile.js"></script><script type="module" src="/js/search.js"></script>
+</body></html>

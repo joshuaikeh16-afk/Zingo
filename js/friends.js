@@ -1,445 +1,139 @@
-// Real Friends tab logic: renders mutual friends' active 24hr statuses,
-// opens the status viewer with real media, handles private replies
-// (delivered to Inbox, never a public comment) and quick-reacts.
+import { supabase, getMutualFriends, getIncomingRequests, searchUsers, getFriendshipStatus, sendFriendRequest, cancelFriendRequest, respondToFriendRequest } from './supabase-client.js';
+import { account } from './session.js';
+import { element, avatar, viewProfile, openModal, closeModal, showError, notify, actionButton, skeletons } from './ui.js';
 
-import {
-  requireAuth,
-  requireProfile,
-  getFriendsActiveStatuses,
-  sendStatusReply,
-  addStatusQuickReact,
-  searchUsers,
-  getFriendshipStatus,
-  sendFriendRequest,
-  cancelFriendRequest,
-  respondToFriendRequest,
-  removeFriend,
-  getIncomingRequests,
-  shareAnimeOfTheDay,
-} from './supabase-client.js';
-import { searchMAL } from './mal-client.js';
-
-let currentUserId = null;
-let openStatus = null; // { friend, post } currently shown in the viewer
-
-const statusContainer = document.getElementById('friends-status-container');
-const emptyState = document.getElementById('friends-empty-state');
-const activeCountBadge = document.getElementById('friends-active-count');
-
-const statusModal = document.getElementById('status-viewer-modal');
-const statusMediaEl = statusModal?.querySelector('.status-media');
-const replyInput = document.getElementById('status-reply-input');
-const replySubmitBtn = document.getElementById('status-reply-submit-btn');
-const quickReactBtn = document.getElementById('status-quick-react-btn');
-const statusCloseBtn = document.getElementById('status-close-btn');
-const statusTopBarName = statusModal?.querySelector('.status-viewer-name');
-const statusTopBarTime = statusModal?.querySelector('.status-viewer-time');
-const statusTopBarAvatar = statusModal?.querySelector('.status-viewer-user img');
-
-function formatRelativeTime(isoString) {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m ago`;
-  return `${Math.floor(mins / 60)}h ago`;
-}
-
-function buildFriendAvatar({ friend, post, hasActiveAotd }) {
-  const name = friend.display_name || friend.username || 'Friend';
-  const avatarUrl = friend.avatar_url || `https://placehold.co/120x120/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'friend-status-avatar relative flex-shrink-0 text-center cursor-pointer group';
-  btn.dataset.userId = friend.id;
-
-  btn.innerHTML = `
-    <div class="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-violet-500 via-rose-500 to-amber-400 shadow-md">
-      <img src="${avatarUrl}" alt="${name}" class="w-full h-full rounded-full object-cover" />
-    </div>
-    ${hasActiveAotd ? '<span class="sotd-indicator">🎬</span>' : ''}
-    <span class="block text-[11px] font-medium text-slate-300 mt-1 truncate max-w-[60px]">${name}</span>
-  `;
-
-  btn.addEventListener('click', () => openStatusViewer(friend, post));
-  return btn;
-}
-
-async function renderFriendsStatuses() {
-  if (!statusContainer) return;
-  const statuses = await getFriendsActiveStatuses(currentUserId);
-
-  statusContainer.querySelectorAll('.friend-status-avatar').forEach((el) => el.remove());
-
-  if (activeCountBadge) activeCountBadge.textContent = `${statuses.length} Active`;
-
-  if (statuses.length === 0) {
-    emptyState?.classList.remove('hidden');
-    emptyState?.classList.add('flex');
-    statusContainer.classList.add('hidden');
-  } else {
-    emptyState?.classList.add('hidden');
-    emptyState?.classList.remove('flex');
-    statusContainer.classList.remove('hidden');
-    statuses.forEach((s) => statusContainer.appendChild(buildFriendAvatar(s)));
-  }
-}
-
-function openStatusViewer(friend, post) {
-  openStatus = { friend, post };
-  if (!statusModal) return;
-
-  const name = friend.display_name || friend.username || 'Friend';
-  const avatarUrl = friend.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
-
-  if (statusTopBarName) statusTopBarName.textContent = name;
-  if (statusTopBarTime) statusTopBarTime.textContent = `• ${formatRelativeTime(post.created_at)}`;
-  if (statusTopBarAvatar) statusTopBarAvatar.src = avatarUrl;
-
-  if (statusMediaEl) {
-    if (post.post_type === 'text_only' || !post.media_url) {
-      statusMediaEl.innerHTML = `<div class="status-text-post">${post.caption ?? ''}</div>`;
-    } else {
-      statusMediaEl.innerHTML = `
-        <img src="${post.media_url}" alt="Status" class="status-media-img" />
-        ${post.caption ? `<div class="status-caption-overlay"><span>${post.caption}</span></div>` : ''}
-      `;
-    }
-  }
-
-  if (replyInput) {
-    replyInput.value = '';
-    replyInput.placeholder = `Reply privately to ${name}...`;
-  }
-
-  statusModal.classList.remove('hidden');
-}
-
-function closeStatusViewer() {
-  statusModal?.classList.add('hidden');
-  openStatus = null;
-}
-
-statusCloseBtn?.addEventListener('click', closeStatusViewer);
-
-replySubmitBtn?.addEventListener('click', async () => {
-  const text = replyInput?.value.trim();
-  if (!text || !openStatus) return;
-
-  replyInput.value = '';
-  replySubmitBtn.disabled = true;
-  try {
-    await sendStatusReply({
-      postId: openStatus.post.id,
-      authorId: openStatus.friend.id,
-      replierId: currentUserId,
-      content: text,
-    });
-    closeStatusViewer();
-  } catch (err) {
-    console.error('Failed to send status reply:', err);
-    replyInput.value = text;
-  } finally {
-    replySubmitBtn.disabled = false;
-  }
-});
-
-replyInput?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') replySubmitBtn?.click();
-});
-
-quickReactBtn?.addEventListener('click', async () => {
-  if (!openStatus) return;
-  await addStatusQuickReact(openStatus.post.id, currentUserId, '🔥');
-  quickReactBtn.classList.add('scale-125');
-  setTimeout(() => quickReactBtn.classList.remove('scale-125'), 200);
-});
-
-(async () => {
-  const session = await requireAuth();
-  if (!session) return;
-  const profile = await requireProfile(session);
-  if (!profile) return;
-
-  currentUserId = session.user.id;
-  await renderFriendsStatuses();
-  await renderIncomingRequests();
-})();
-
-// ---------------------------------------------------------------------
-// Find Friends: search users by username, follow/unfollow inline.
-// This is the actual discovery entry point -- without it, there was no
-// way for two users to ever become mutual friends in the first place.
-// ---------------------------------------------------------------------
-
-const findFriendsBtn = document.getElementById('find-friends-btn');
-const findFriendsModal = document.getElementById('find-friends-modal');
-const findFriendsInput = document.getElementById('find-friends-input');
-const findFriendsResults = document.getElementById('find-friends-results');
-const findFriendsCloseBtn = document.getElementById('find-friends-close-btn');
-
-let searchDebounceTimer = null;
-
-findFriendsBtn?.addEventListener('click', () => {
-  findFriendsModal?.classList.remove('hidden');
-  findFriendsInput?.focus();
-});
-
-findFriendsCloseBtn?.addEventListener('click', () => {
-  findFriendsModal?.classList.add('hidden');
-  if (findFriendsInput) findFriendsInput.value = '';
-  if (findFriendsResults) findFriendsResults.innerHTML = '';
-});
-
-findFriendsInput?.addEventListener('input', () => {
-  clearTimeout(searchDebounceTimer);
-  const query = findFriendsInput.value;
-  searchDebounceTimer = setTimeout(() => runUserSearch(query), 350);
-});
-
-async function runUserSearch(query) {
-  if (!findFriendsResults) return;
-  if (!query || query.trim().length < 2) {
-    findFriendsResults.innerHTML = '<p class="find-friends-hint">Type at least 2 characters to search.</p>';
-    return;
-  }
-
-  const results = await searchUsers(query, currentUserId);
-  findFriendsResults.innerHTML = '';
-
-  if (results.length === 0) {
-    findFriendsResults.innerHTML = '<p class="find-friends-hint">No users found.</p>';
-    return;
-  }
-
-  results.forEach((user) => findFriendsResults.appendChild(buildUserSearchRow(user)));
-}
-
-function buildUserSearchRow(user) {
-  const row = document.createElement('div');
-  row.className = 'find-friend-result-row';
-  const name = user.display_name || user.username;
-  const avatarUrl = user.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
-
-  row.innerHTML = `
-    <img src="${avatarUrl}" alt="${name}" />
-    <div class="find-friend-result-info">
-      <p class="find-friend-result-name">${name}</p>
-      <p class="find-friend-result-handle">@${user.username}</p>
-    </div>
-    <button type="button" class="friend-request-btn">Add Friend</button>
-  `;
-
-  const btn = row.querySelector('.friend-request-btn');
-
-  getFriendshipStatus(currentUserId, user.id).then((status) => {
-    setFriendBtnState(btn, status);
-  });
-
-  btn?.addEventListener('click', async () => {
-    const state = btn.dataset.state;
-    btn.disabled = true;
-    try {
-      if (state === 'none') {
-        await sendFriendRequest(currentUserId, user.id);
-        setFriendBtnState(btn, await getFriendshipStatus(currentUserId, user.id));
-      } else if (state === 'pending_sent') {
-        await cancelFriendRequest(currentUserId, user.id);
-        setFriendBtnState(btn, 'none');
-      } else if (state === 'friends') {
-        await removeFriend(currentUserId, user.id);
-        setFriendBtnState(btn, 'none');
-      }
-      // pending_received is handled from the incoming-requests bar, not here.
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
+let userId, refreshVersion = 0, searchVersion = 0, searchTimer;
+let allFriends = [], friendFilter = 'all', requestCount = 0;
+const list = document.getElementById('friends-list');
+const results = document.getElementById('find-friends-results');
+export function personRow(profile) {
+  const row = element('div', 'person-row');
+  const identity = element('button', 'person-identity');
+  identity.type = 'button';
+  const copy = element('span', 'person-copy');
+  copy.append(element('strong', '', profile.display_name || profile.username), element('small', '', `@${profile.username}`));
+  identity.append(avatar(profile), copy);
+  identity.addEventListener('click', () => { closeModal('find-friends-modal'); viewProfile(profile.id); });
+  row.append(identity);
   return row;
 }
-
-function setFriendBtnState(btn, status) {
-  if (!btn) return;
-  btn.dataset.state = status;
-
-  const labels = {
-    none: 'Add Friend',
-    pending_sent: 'Requested',
-    pending_received: 'Respond Below',
-    friends: 'Friends',
-  };
-  btn.textContent = labels[status] || 'Add Friend';
-  btn.disabled = status === 'pending_received';
-  btn.classList.toggle('is-active-state', status === 'none');
+function renderFriends() {
+  const query = document.getElementById('friends-search').value.toLowerCase().trim();
+  const shown = allFriends.filter(profile => `${profile.display_name} ${profile.username}`.toLowerCase().includes(query));
+  list.replaceChildren(...shown.map(profile => {
+    const card = personRow(profile); card.className = 'friend-card';
+    const chips = element('div', 'friend-interest-chips');
+    for (const interest of (profile.interests || []).slice(0, 4)) chips.append(element('span', '', interest.replaceAll('_', ' ')));
+    if (chips.childElementCount) card.append(chips);
+    const actions = element('div', 'friend-card-actions'), message = actionButton('Message', 'chat'), view = actionButton('View profile', 'arrow', 'text-button');
+    message.addEventListener('click', () => document.dispatchEvent(new CustomEvent('kaidra:message-user', { detail: { profile } })));
+    view.addEventListener('click', () => viewProfile(profile.id)); actions.append(message, view); card.append(actions); return card;
+  }));
+  document.getElementById('friends-empty-state').classList.toggle('hidden', allFriends.length > 0);
+  if (!shown.length && allFriends.length) list.append(element('p', 'feed-notice', 'No friends matched. Try another name.'));
+  list.setAttribute('aria-busy', 'false'); applyFilter();
 }
-
-// ---------------------------------------------------------------------
-// Incoming Friend Requests — shown as a small bar above the statuses.
-// ---------------------------------------------------------------------
-
-const requestsBar = document.getElementById('friend-requests-bar');
-const requestsList = document.getElementById('friend-requests-list');
-const requestsCount = document.getElementById('friend-requests-count');
-
-async function renderIncomingRequests() {
-  if (!requestsBar || !requestsList) return;
-  const requests = await getIncomingRequests(currentUserId);
-
-  if (requests.length === 0) {
-    requestsBar.classList.add('hidden');
-    return;
-  }
-
-  requestsBar.classList.remove('hidden');
-  if (requestsCount) requestsCount.textContent = String(requests.length);
-
-  requestsList.innerHTML = '';
-  requests.forEach((req) => {
-    const person = req.requester;
-    const name = person.display_name || person.username;
-    const avatarUrl = person.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${name[0].toUpperCase()}`;
-
-    const row = document.createElement('div');
-    row.className = 'friend-request-row';
-    row.innerHTML = `
-      <img src="${avatarUrl}" alt="${name}" />
-      <div class="friend-request-info">
-        <p class="friend-request-name">${name}</p>
-        <p class="friend-request-handle">@${person.username}</p>
-      </div>
-      <button type="button" class="request-accept-btn" data-request-id="${req.id}">Accept</button>
-      <button type="button" class="request-decline-btn" data-request-id="${req.id}">Decline</button>
-    `;
-
-    row.querySelector('.request-accept-btn').addEventListener('click', async () => {
-      await respondToFriendRequest(req.id, true);
-      await renderIncomingRequests();
-    });
-    row.querySelector('.request-decline-btn').addEventListener('click', async () => {
-      await respondToFriendRequest(req.id, false);
-      await renderIncomingRequests();
-    });
-
-    requestsList.appendChild(row);
-  });
-}
-
-// ---------------------------------------------------------------------
-// Share Anime of the Day: search MyAnimeList, pick one, optional note,
-// share with every mutual friend at once.
-// ---------------------------------------------------------------------
-
-const shareAotdBtn = document.getElementById('share-aotd-btn');
-const aotdShareModal = document.getElementById('aotd-share-modal');
-const aotdShareInput = document.getElementById('aotd-share-search-input');
-const aotdShareResults = document.getElementById('aotd-share-results');
-const aotdShareCloseBtn = document.getElementById('aotd-share-close-btn');
-
-let aotdShareDebounce = null;
-
-shareAotdBtn?.addEventListener('click', () => {
-  aotdShareModal?.classList.remove('hidden');
-  aotdShareInput?.focus();
-});
-
-aotdShareCloseBtn?.addEventListener('click', () => {
-  aotdShareModal?.classList.add('hidden');
-  resetAotdShareModal();
-});
-
-aotdShareInput?.addEventListener('input', () => {
-  clearTimeout(aotdShareDebounce);
-  const term = aotdShareInput.value.trim();
-  aotdShareDebounce = setTimeout(() => runAotdSearch(term), 350);
-});
-
-const aotdShareConfirmStep = document.getElementById('aotd-share-confirm-step');
-const aotdShareConfirmCover = document.getElementById('aotd-share-confirm-cover');
-const aotdShareConfirmTitle = document.getElementById('aotd-share-confirm-title');
-const aotdShareNoteInput = document.getElementById('aotd-share-note-input');
-const aotdShareBackBtn = document.getElementById('aotd-share-back-btn');
-const aotdShareConfirmBtn = document.getElementById('aotd-share-confirm-btn');
-
-let pendingAotdAnime = null;
-
-async function runAotdSearch(term) {
-  if (!aotdShareResults) return;
-  if (term.length < 2) {
-    aotdShareResults.innerHTML = '<p class="find-friends-hint">Type at least 2 characters to search.</p>';
-    return;
-  }
-
+document.getElementById('friends-search').addEventListener('input', renderFriends);
+async function refresh() {
+  if (!userId) return;
+  const version = ++refreshVersion;
   try {
-    const payload = await searchMAL(term, 'anime', 8);
-    const media = (payload?.data ?? []).map((entry) => entry.node || entry);
-    aotdShareResults.innerHTML = '';
-
-    if (media.length === 0) {
-      aotdShareResults.innerHTML = '<p class="find-friends-hint">No matches found.</p>';
-      return;
+    const [friends, requests] = await Promise.all([getMutualFriends(userId), getIncomingRequests(userId)]);
+    if (version !== refreshVersion) return;
+    showError('friends-error');
+    allFriends = friends; renderFriends();
+    document.getElementById('friends-total').textContent = friends.length;
+    for (const id of ['sidebar-requests-count', 'nav-requests-count']) { const badge = document.getElementById(id); if (badge) { badge.textContent = requests.length; badge.classList.toggle('hidden', !requests.length); } }
+    document.dispatchEvent(new CustomEvent('kaidra:friends-data', { detail: { friends, requests } }));
+    requestCount = requests.length;
+    document.getElementById('requests-filter-count').textContent = requests.length;
+    applyFilter();
+    document.getElementById('friend-requests-count').textContent = requests.length;
+    const requestList = document.getElementById('friend-requests-list');
+    requestList.replaceChildren();
+    for (const request of requests) {
+      const row = personRow(request.requester);
+      for (const [label, accept] of [['Accept', true], ['Decline', false]]) {
+        const button = element('button', accept ? 'primary-button' : 'quiet-button', label);
+        button.type = 'button';
+        button.addEventListener('click', async () => {
+          row.querySelectorAll('button').forEach((node) => { node.disabled = true; });
+          try {
+            await respondToFriendRequest(request.id, accept);
+            document.dispatchEvent(new CustomEvent('kaidra:friends-changed'));
+          } catch { notify('Could not update this request. Try again.'); }
+          finally { row.querySelectorAll('button').forEach((node) => { node.disabled = false; }); }
+        });
+        row.append(button);
+      }
+      requestList.append(row);
     }
-
-    media.forEach((anime) => {
-      const title = anime.title || 'Unknown title';
-      const row = document.createElement('div');
-      row.className = 'find-friend-result-row';
-      row.innerHTML = `
-        <img src="${anime.main_picture?.medium || anime.main_picture?.large || ''}" alt="${title}" />
-        <div class="find-friend-result-info">
-          <p class="find-friend-result-name">${title}</p>
-        </div>
-        <button type="button" class="friend-request-btn is-active-state">Share</button>
-      `;
-      row.querySelector('button').addEventListener('click', () => showAotdConfirmStep(anime, title));
-      aotdShareResults.appendChild(row);
-    });
-  } catch (err) {
-    console.error('MyAnimeList search failed:', err);
-    aotdShareResults.innerHTML = '<p class="find-friends-hint">Search failed — try again.</p>';
-  }
+    applyFilter();
+  } catch { list.setAttribute('aria-busy', 'false'); showError('friends-error', 'Could not load your friends. Reopen this tab to try again.'); }
 }
-
-function showAotdConfirmStep(anime, title) {
-  pendingAotdAnime = { anime, title };
-  if (aotdShareConfirmCover) aotdShareConfirmCover.src = anime.main_picture?.medium || anime.main_picture?.large || '';
-  if (aotdShareConfirmTitle) aotdShareConfirmTitle.textContent = title;
-  if (aotdShareNoteInput) aotdShareNoteInput.value = '';
-
-  aotdShareResults?.classList.add('hidden');
-  if (aotdShareInput) aotdShareInput.parentElement.classList.add('hidden');
-  aotdShareConfirmStep?.classList.remove('hidden');
-}
-
-function resetAotdShareModal() {
-  pendingAotdAnime = null;
-  if (aotdShareInput) { aotdShareInput.value = ''; aotdShareInput.parentElement.classList.remove('hidden'); }
-  if (aotdShareResults) { aotdShareResults.innerHTML = ''; aotdShareResults.classList.remove('hidden'); }
-  aotdShareConfirmStep?.classList.add('hidden');
-}
-
-aotdShareBackBtn?.addEventListener('click', resetAotdShareModal);
-
-aotdShareConfirmBtn?.addEventListener('click', async () => {
-  if (!pendingAotdAnime) return;
-  const { anime, title } = pendingAotdAnime;
-  const note = aotdShareNoteInput?.value.trim() || '';
-
-  aotdShareConfirmBtn.disabled = true;
-  try {
-    await shareAnimeOfTheDay(currentUserId, {
-      animeId: anime.id,
-      animeTitle: title,
-      coverImageUrl: anime.main_picture?.medium || anime.main_picture?.large || '',
-      note,
-    });
-    aotdShareModal?.classList.add('hidden');
-    resetAotdShareModal();
-    await renderFriendsStatuses();
-  } catch (err) {
-    console.error('Failed to share Anime of the Day:', err);
-    if (aotdShareConfirmTitle) aotdShareConfirmTitle.textContent = (err.message || 'Failed to share.') + ' — try again';
-  } finally {
-    aotdShareConfirmBtn.disabled = false;
-  }
+const input = document.getElementById('find-friends-input');
+document.getElementById('find-friends-btn').addEventListener('click', () => openModal('find-friends-modal'));
+document.getElementById('find-friends-close-btn').addEventListener('click', () => closeModal('find-friends-modal'));
+input.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const version = ++searchVersion, query = input.value.trim();
+  results.replaceChildren(element('p', 'muted', query.length < 2 ? 'Type at least 2 characters.' : 'Searching…'));
+  if (query.length < 2 || !userId) return;
+  searchTimer = setTimeout(async () => {
+    try {
+      const people = await searchUsers(query, userId);
+      const states = await Promise.all(people.map((person) => getFriendshipStatus(userId, person.id)));
+      if (version !== searchVersion) return;
+      results.replaceChildren();
+      if (!people.length) results.append(element('p', 'muted', 'No people found. Try another username.'));
+      people.forEach((person, index) => {
+        const row = personRow(person), button = element('button', 'quiet-button');
+        button.type = 'button';
+        let state = states[index];
+        const update = () => { button.textContent = ({ none: 'Add friend', pending_sent: 'Cancel request', pending_received: 'Accept request', friends: 'Friends' })[state]; button.disabled = state === 'friends'; };
+        update();
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            if (state === 'pending_sent') await cancelFriendRequest(userId, person.id);
+            else await sendFriendRequest(userId, person.id);
+            state = await getFriendshipStatus(userId, person.id);
+            if (state !== 'pending_received') row.querySelector('.request-decline')?.remove();
+            document.dispatchEvent(new CustomEvent('kaidra:friends-changed'));
+          } catch { notify('Could not update this request. Try again.'); }
+          finally { update(); }
+        });
+        row.append(button);
+        if (state === 'pending_received') {
+          const decline = element('button', 'quiet-button request-decline', 'Decline'); decline.type = 'button';
+          decline.addEventListener('click', async () => { decline.disabled = true; try { const incoming = await getIncomingRequests(userId), request = incoming.find(item => item.requester.id === person.id); if (!request) throw new Error('Request expired'); await respondToFriendRequest(request.id, false); state = 'none'; decline.remove(); update(); document.dispatchEvent(new CustomEvent('kaidra:friends-changed')); } catch { notify('Could not decline this request. Try again.'); decline.disabled = false; } }); row.append(decline);
+        }
+        results.append(row);
+      });
+    } catch { if (version === searchVersion) results.replaceChildren(element('p', 'form-error', 'Search is unavailable. Try again.')); }
+  }, 300);
 });
+document.addEventListener('kaidra:friends-changed', refresh);
+document.addEventListener('kaidra:tab-change', (event) => { if (event.detail.tab === 'friends') refresh(); });
+let channel;
+(async () => {
+  const current = await account;
+  if (!current) return;
+  userId = current.userId;
+  skeletons(list, 'person', 3);
+  await refresh();
+  channel = supabase.channel(`friends:${userId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, refresh).subscribe();
+})();
+window.addEventListener('pagehide', () => { if (channel) supabase.removeChannel(channel); channel = null; });
+window.addEventListener('pageshow', event => { if (event.persisted && userId) { refresh(); channel = supabase.channel(`friends:${userId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, refresh).subscribe(); } });
+
+function applyFilter() {
+  const requestsOnly = friendFilter === 'requests';
+  document.getElementById('friend-requests-bar').classList.toggle('hidden', !requestsOnly);
+  document.getElementById('friends-list-toolbar').classList.toggle('hidden', requestsOnly);
+  list.classList.toggle('hidden', requestsOnly);
+  document.getElementById('friends-empty-state').classList.toggle('hidden', requestsOnly || !!allFriends.length);
+  document.getElementById('requests-empty-state')?.remove();
+  if (requestsOnly && !requestCount) { const empty = element('p', 'rail-empty', 'No pending requests'); empty.id = 'requests-empty-state'; document.getElementById('friend-requests-list').append(empty); }
+}
+document.querySelectorAll('[data-friends-filter]').forEach(button => button.addEventListener('click', () => { friendFilter = button.dataset.friendsFilter; document.querySelectorAll('[data-friends-filter]').forEach(node => { node.classList.toggle('active', node === button); node.setAttribute('aria-pressed', String(node === button)); }); applyFilter(); }));

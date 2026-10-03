@@ -1,0 +1,10 @@
+# Local Supabase CLI installation (not application source)
+.tools/supabase/
+
+# Local credentials and generated artifacts
+.env
+.env.*
+!.env.example
+!.env.*.example
+__pycache__/
+*.pyc

@@ -1,185 +1,87 @@
-// Onboarding page logic (username, interests, optional avatar).
-//
-//   #username-input          <input type="text">
-//   #username-availability   shown/hidden + text updated as the user types
-//   #interest-chip           class (not id) on each selectable interest
-//                             chip — must have data-interest="anime" etc.
-//                             and toggle a class like .selected on click;
-//                             this script reads .selected chips at submit
-//   #avatar-input            <input type="file" accept="image/*"> (optional)
-//   #onboarding-submit-btn   <button>
-//   #onboarding-error        error message container
-//
-// Interest chips: layout should render one element per interest with
-// data-interest="anime" / "news" / "idols_music" (etc.) and a shared
-// class, e.g. class="interest-chip". This script queries
-// `.interest-chip` and toggles `.selected` on click — the layout
-// controls what "selected" looks like visually.
-
-import { supabase, requireAuth, updateUserPreferences } from './supabase-client.js';
-
-const usernameInput = document.getElementById('username-input');
-const usernameAvailability = document.getElementById('username-availability');
-const avatarInput = document.getElementById('avatar-input');
-const submitBtn = document.getElementById('onboarding-submit-btn');
-const errorEl = document.getElementById('onboarding-error');
-
-let session = null;
-let usernameCheckTimeout = null;
-
-function setError(message) {
-  if (!errorEl) return;
-  errorEl.textContent = message || '';
-  errorEl.style.display = message ? 'block' : 'none';
+import { supabase, requireAuth } from './supabase-client.js';
+import { element, artwork } from './ui.js';
+import { contentRequest } from './content-client.js';
+import { countries, genreChoices, preferencesFor } from './preferences.js';
+let userId, existing = null, step = 0, favorites = [], searchTimer, searchVersion = 0, usernameVersion = 0;
+const username = document.getElementById('username-input'), displayName = document.getElementById('display-name-input');
+const country = document.getElementById('country-input'), language = document.getElementById('language-input');
+const error = document.getElementById('onboarding-error'), submit = document.getElementById('onboarding-submit-btn');
+const selected = (name) => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
+function setError(message = '') { error.textContent = message; error.classList.toggle('hidden', !message); }
+for (const [key,title] of countries) { const option = element('option','',title); option.value = key; country.append(option); }
+for (const [key,title] of genreChoices) { const label = element('label'); const input = element('input'); input.type='checkbox';input.name='genre';input.value=key;label.append(input,document.createTextNode(title));document.getElementById('genre-choices').append(label); }
+function validate() {
+  if (step === 0 && !/^[a-zA-Z0-9_]{3,24}$/.test(username.value.trim())) { setError('Choose a username with 3–24 letters, numbers, or underscores.'); username.focus(); return false; }
+  if (step === 1 && (!selected('content-type').length || !selected('genre').length)) { setError('Choose at least one format and one genre so we can tailor your feed.'); return false; }
+  return true;
 }
-
-// --- Username availability check (debounced) ---
-usernameInput?.addEventListener('input', () => {
-  clearTimeout(usernameCheckTimeout);
-  const value = usernameInput.value.trim();
-
-  if (!usernameAvailability) return;
-  if (value.length < 3) {
-    usernameAvailability.textContent = '';
-    return;
-  }
-
-  usernameAvailability.textContent = 'Checking...';
-  usernameCheckTimeout = setTimeout(async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', value)
-      .limit(1);
-
-    if (error) {
-      usernameAvailability.textContent = '';
-      return;
-    }
-    usernameAvailability.textContent = data.length === 0 ? 'Available' : 'Already taken';
-    usernameAvailability.classList.toggle('available', data.length === 0);
-    usernameAvailability.classList.toggle('taken', data.length > 0);
-  }, 400);
-});
-
-// --- Interest chip selection ---
-document.querySelectorAll('.interest-chip').forEach((chip) => {
-  chip.addEventListener('click', () => {
-    chip.classList.toggle('selected');
-  });
-});
-
-function getSelectedInterests() {
-  return Array.from(document.querySelectorAll('.interest-chip.selected'))
-    .map((el) => el.dataset.interest)
-    .filter(Boolean);
+function showStep(next) {
+  step = next; setError();
+  document.querySelectorAll('[data-step]').forEach((section) => { const active=Number(section.dataset.step)===step; section.classList.toggle('hidden',!active); section.querySelectorAll('input').forEach(input=>{ if(input.id==='username-input') input.required=active; }); });
+  document.querySelectorAll('[data-step-indicator]').forEach((node) => { node.classList.toggle('active',Number(node.dataset.stepIndicator)===step);node.setAttribute('aria-current',Number(node.dataset.stepIndicator)===step?'step':'false'); });
+  document.getElementById('setup-back').classList.toggle('hidden',step===0);document.getElementById('setup-next').classList.toggle('hidden',step===2);submit.classList.toggle('hidden',step!==2);
+  document.getElementById('setup-next').textContent=step===0?'Your taste →':'Fine-tune →';
 }
-
-// --- Avatar preview ---
-avatarInput?.addEventListener('change', () => {
-  const file = avatarInput.files?.[0];
-  const preview = document.getElementById('avatar-preview');
-  const placeholder = document.getElementById('avatar-placeholder');
-  if (!file || !preview) return;
-  preview.src = URL.createObjectURL(file);
-  preview.classList.remove('hidden');
-  placeholder?.classList.add('hidden');
+document.getElementById('setup-next').addEventListener('click',()=>{if(validate())showStep(step+1);});
+document.getElementById('setup-back').addEventListener('click',()=>showStep(Math.max(0,step-1)));
+username.addEventListener('input',async()=>{
+  const version=++usernameVersion,value=username.value.trim();if(value.length<3)return;
+  const response=await supabase.from('profiles').select('id').eq('username',value).neq('id',userId).limit(1);
+  if(version!==usernameVersion)return;
+  document.getElementById('username-availability').textContent=response.error?'Availability will be checked when you save.':response.data.length?'That username is taken.':'Username available';
 });
-
-// --- Submit ---
-submitBtn?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  setError(null);
-
-  const username = usernameInput?.value?.trim();
-  const interests = getSelectedInterests();
-
-  if (!username || username.length < 3) {
-    setError('Pick a username (at least 3 characters).');
-    return;
-  }
-  submitBtn.disabled = true;
-  try {
-    // Re-read the user from Supabase before writing the profile. This is
-    // important after an OAuth callback: a cached session can exist in the
-    // browser before the Auth user has been fully confirmed by the API.
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      setError('Your sign-in session is not ready. Please sign in again.');
-      submitBtn.disabled = false;
-      return;
-    }
-    session = { ...session, user };
-
-    let avatarUrl = null;
-    const file = avatarInput?.files?.[0];
-    if (file) {
-      const path = `${session.user.id}/avatar.${file.name.split('.').pop()}`;
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(path, file, { upsert: true });
-      if (uploadError) {
-        setError('Avatar upload failed: ' + uploadError.message);
-        submitBtn.disabled = false;
-        return;
-      }
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      avatarUrl = urlData.publicUrl + '?v=' + Date.now();
-    }
-
-    // Upsert, not insert -- this page now shows on every sign-in (not
-    // just the first), so returning users re-submitting their existing
-    // profile row must update it rather than fail on a duplicate id.
-    const { error: upsertError } = await supabase.from('profiles').upsert({
-      id: session.user.id,
-      username,
-      interests,
-      ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
-    });
-
-    if (upsertError) {
-      setError(
-        upsertError.code === '23505'
-          ? 'That username is already taken.'
-          : upsertError.message
-      );
-      submitBtn.disabled = false;
-      return;
-    }
-
-    // New accounts start in the safer under-18 content mode. Users can
-    // explicitly change this later from Profile > Settings.
-    await updateUserPreferences(session.user.id, { nsfw_filter: false });
-
-    window.location.replace('/app.html');
-  } catch (err) {
-    setError('Something went wrong. Try again.');
-    console.error(err);
-    submitBtn.disabled = false;
-  }
+let previewUrl;
+document.getElementById('avatar-input').addEventListener('change',event=>{
+  const file=event.target.files[0];if(!file)return;
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){setError('Choose a JPG, PNG, or WebP under 5 MB.');event.target.value='';return;}
+  if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(file);
+  const img=document.getElementById('avatar-preview');img.onerror=()=>{img.classList.add('hidden');setError('That photo could not be opened. Choose another image.');};img.src=previewUrl;img.classList.remove('hidden');
 });
-
-// --- Init: require auth, and skip straight to the app if a profile
-// already exists (this page is only meant to be reached from sign-up,
-// or as a fallback if a session somehow has no profile yet). Also
-// re-checked on bfcache restore (pageshow persisted) -- see auth.js
-// for why that matters. ---
-async function checkAuthAndExistingProfile() {
-  session = await requireAuth();
-  if (!session) return;
-
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('id', session.user.id)
-    .maybeSingle();
-
-  if (existingProfile) {
-    window.location.replace('/app.html');
-  }
+function renderFavorites(){
+  const target=document.getElementById('chosen-favorites');target.replaceChildren();
+  favorites.forEach(item=>{const button=element('button','favorite-chip',`${item.title} ×`);button.type='button';button.addEventListener('click',()=>{favorites=favorites.filter(value=>value.id!==item.id);renderFavorites();});target.append(button);});
 }
-
-checkAuthAndExistingProfile();
-window.addEventListener('pageshow', (e) => {
-  if (e.persisted) checkAuthAndExistingProfile();
+document.getElementById('favorite-search').addEventListener('input',event=>{
+  clearTimeout(searchTimer);const query=event.target.value.trim(),version=++searchVersion,target=document.getElementById('favorite-results');
+  target.replaceChildren();if(query.length<2)return;
+  searchTimer=setTimeout(async()=>{
+    try{const data=await contentRequest('catalog',{category:'movie',query,region:country.value});if(version!==searchVersion)return;
+      target.replaceChildren();if(!data.configured){target.append(element('p','muted','Movie search is not connected yet. Your genre choices are enough to continue.'));return;}
+      for(const item of data.items.slice(0,5)){const button=element('button','favorite-result');button.type='button';button.append(artwork(item.image,'','favorite-artwork'));button.append(element('span','',`${item.title} · ${item.date?.slice(0,4)||''}`));
+        button.addEventListener('click',()=>{if(favorites.length>=3){setError('Choose up to three favourite movies.');return;}if(!favorites.some(value=>value.id===item.id))favorites.push({id:item.id,type:item.type,title:item.title,image:item.image});renderFavorites();target.replaceChildren();document.getElementById('favorite-search').value='';});target.append(button);}
+    }catch{if(version===searchVersion)target.replaceChildren(element('p','muted','Movie search is unavailable. You can add favourites later.'));}
+  },350);
 });
+document.getElementById('onboarding-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(step<2){if(validate())showStep(step+1);return;}setError();submit.disabled=true;
+  try{
+    if(!userId)throw new Error('Sign in again to finish setting up your profile.');
+    if(!/^[a-zA-Z0-9_]{3,24}$/.test(username.value.trim())){showStep(0);throw new Error('Choose a username with 3–24 letters, numbers, or underscores.');}
+    if(!selected('content-type').length||!selected('genre').length){showStep(1);throw new Error('Choose at least one format and one genre.');}
+    let avatarUrl=existing?.avatar_url;
+    const file=document.getElementById('avatar-input').files[0];
+    if(file){if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024)throw new Error('Choose a JPG, PNG, or WebP under 5 MB.');
+      const path=`${userId}/${crypto.randomUUID()}.${file.type.split('/')[1]}`;const upload=await supabase.storage.from('avatars').upload(path,file);if(upload.error)throw upload.error;avatarUrl=supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    }
+    const football=document.getElementById('interest-football-input').checked;
+    const preferences={content_types:selected('content-type'),genres:selected('genre'),country:country.value,language:language.value,providers:selected('provider').map(Number),favorites};
+    const interests=[...selected('content-type'),...selected('genre'),...(football?['football']:[])];
+    const result=await supabase.from('profiles').upsert({id:userId,username:username.value.trim(),display_name:displayName.value.trim()||null,interests,recommendation_preferences:preferences,...(avatarUrl?{avatar_url:avatarUrl}:{})});
+    if(result.error)throw result.error;
+    location.replace('/app.html#home');
+  }catch(problem){setError(problem.code==='23505'?'That username is already taken.':problem.message||'Could not save your preferences. Try again.');}
+  finally{submit.disabled=false;}
+});
+(async()=>{
+  const session=await requireAuth();if(!session)return;userId=session.user.id;
+  const {data,error:loadError}=await supabase.from('profiles').select('*').eq('id',userId).maybeSingle();
+  if(loadError){setError('Could not load your profile. Refresh to try again.');return;}
+  existing=data;
+  if(existing&&!new URLSearchParams(location.search).has('edit')){location.replace('/app.html');return;}
+  const prefs=preferencesFor(existing||{});username.value=existing?.username||'';displayName.value=existing?.display_name||'';country.value=prefs.country;language.value=prefs.language;favorites=prefs.favorites;
+  document.querySelectorAll('[name="content-type"]').forEach(input=>input.checked=prefs.content_types.includes(input.value));
+  document.querySelectorAll('[name="genre"]').forEach(input=>input.checked=prefs.genres.includes(input.value));
+  document.querySelectorAll('[name="provider"]').forEach(input=>input.checked=prefs.providers.map(String).includes(input.value));
+  document.getElementById('interest-football-input').checked=prefs.football;renderFavorites();
+  if(existing){document.title='Edit your tastes — Kaidra';showStep(1);}
+})().catch(()=>setError('Could not load your account. Please sign in again.'));

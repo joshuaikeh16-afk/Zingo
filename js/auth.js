@@ -48,11 +48,12 @@ function setLoading(isLoading) {
 async function redirectForSession(session) {
   if (!session || isRedirecting) return;
   isRedirecting = true;
-  const { data: existingProfile } = await supabase
+  const { data: existingProfile, error } = await supabase
     .from('profiles')
     .select('id')
     .eq('id', session.user.id)
     .maybeSingle();
+  if (error) { isRedirecting = false; setError('Could not load your account. Please try again.'); return; }
   window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
 }
 
@@ -94,7 +95,7 @@ forgotLink?.addEventListener('click', async (e) => {
   }
 });
 
-submitBtn?.addEventListener('click', async (e) => {
+document.getElementById('auth-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   setError(null);
 
@@ -108,9 +109,9 @@ submitBtn?.addEventListener('click', async (e) => {
 
   setLoading(true);
   try {
-    const { error } = mode === 'signin'
+    const { data, error } = mode === 'signin'
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
+      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${location.origin}/auth.html` } });
 
     if (error) {
       setError(error.message);
@@ -118,8 +119,8 @@ submitBtn?.addEventListener('click', async (e) => {
     }
 
     if (mode === 'signup') {
-      // Always onboard a brand-new account.
-      window.location.replace('/onboarding.html');
+      if (data?.session) await redirectForSession(data.session);
+      else setSuccess('Check your email to confirm your account, then sign in to choose your interests.');
       return;
     }
 
@@ -140,7 +141,7 @@ googleAuthBtn?.addEventListener('click', async () => {
   setError(null);
   setLoading(true);
 
-  const { error } = await supabase.auth.signInWithOAuth({
+  try { const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth.html`,
@@ -154,6 +155,7 @@ googleAuthBtn?.addEventListener('click', async () => {
     setLoading(false);
     setError(error.message);
   }
+  } catch { setLoading(false); setError('Google sign-in could not start. Try email sign-in or retry.'); }
 });
 
 // OAuth can finish after the initial page script has run. Handle the

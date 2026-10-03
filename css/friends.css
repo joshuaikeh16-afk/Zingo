@@ -1,358 +1,49 @@
-/* ==========================================================================
-   Kaidra — friends.css
-   Friends tab: mutual statuses, incoming requests, status viewer, and
-   the find-friends search/request modal.
-   ========================================================================== */
+/* Actual Kaidra identities, request states and touch-friendly people discovery. */
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-  padding: 32px 20px;
-  border-radius: var(--radius-lg);
-  border: 1.5px dashed var(--hairline-strong);
-  margin-top: 12px;
-}
 
-.empty-state-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--indigo-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-}
 
-.empty-state h4 { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--ink); }
-.empty-state p { font-size: 11.5px; color: var(--ink-soft); max-width: 240px; }
 
-/* ------------------------------------------------------------------
-   Incoming Friend Requests
-   ------------------------------------------------------------------ */
 
-.friend-requests-bar {
-  border: 1.5px solid var(--hairline);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: 12px;
-  margin-bottom: 14px;
-}
 
-.friend-requests-header {
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 8px;
-}
+.friends-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:16px}
+.friend-card{padding:22px;background:var(--surface);border:1px solid var(--border-subtle);border-radius:18px;transition:border-color var(--motion-normal),transform var(--motion-normal)}
+.friend-card:hover{border-color:var(--border-strong);transform:translateY(-2px)}
+.friend-card .person-identity{gap:14px;align-items:center}
+.friend-card .avatar{width:52px;height:52px;border-radius:18px}
+.person-identity{display:flex;align-items:center;gap:12px;text-align:left;min-width:0;flex:1}
+.person-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+.person-copy strong{font-size:.86rem;line-height:1.5;overflow-wrap:anywhere}
+.person-copy small{font-size:.73rem;color:var(--text-muted);overflow-wrap:anywhere}
+.friend-interest-chips{display:flex;flex-wrap:wrap;gap:6px;margin:17px 0;min-height:26px}
+.friend-interest-chips span{font-size:.63rem;color:var(--text-secondary);padding:4px 8px;border:1px solid var(--border-subtle);border-radius:6px;text-transform:capitalize}
+.friend-card-actions{display:flex;align-items:center;gap:8px;margin-top:16px;padding-top:15px;border-top:1px solid var(--border-subtle)}
+.friend-card-actions .quiet-button{flex:1;background:var(--surface-elevated);min-height:38px;padding:9px 12px;font-size:.72rem}
+.friend-card-actions .icon-button{width:38px;height:38px}
+.friend-card-actions>.text-button{font-size:.72rem;margin-left:auto}
+.people-list,.friend-requests-list{display:flex;flex-direction:column;gap:8px}
+.person-row{display:flex;align-items:center;gap:12px;padding:13px 10px;text-align:left;width:100%;border-radius:13px;border:1px solid transparent;min-width:0}
+button.person-row:hover,.person-row:has(.person-identity:hover){background:var(--surface-hover)}
+.person-row>.primary-button,.person-row>.quiet-button{font-size:.69rem;padding:9px 11px;min-height:38px;flex-shrink:0}
+.person-row .person-identity{min-width:0}
+.person-row .person-copy{min-width:0}
+.person-row .avatar{width:40px;height:40px}
+.person-row .person-copy strong{font-size:.78rem}
+.person-row .person-copy small{font-size:.68rem}
+.friend-requests-bar{border-bottom:1px solid var(--border-subtle);padding-bottom:22px}
+.friend-requests-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.friend-requests-list .person-row{flex-wrap:wrap;border:1px solid var(--border-subtle);padding:16px;background:var(--surface)}
+.friend-requests-list .person-identity{flex-basis:100%;margin-bottom:4px}
+.request-actions{display:flex;gap:8px;padding-left:52px}
+.request-actions button{font-size:.7rem;min-height:36px;padding:8px 13px}
+.group-friend-option{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border-subtle);border-radius:12px;cursor:pointer;color:var(--text-primary)}
+.group-friend-option:has(input:checked){border-color:#b69aff55;background:var(--accent-soft)}
+.group-friend-option input{margin-left:auto}
+.group-friend-option .avatar{width:36px;height:36px}
+.group-friend-option>span{flex:1;font-size:.8rem}
+.group-friend-option small{display:block;font-size:.7rem;color:var(--text-secondary)}
+#find-friends-modal .search-field{margin-bottom:7px}
+@media(max-width:600px){.friends-grid{grid-template-columns:1fr}.friend-card{padding:18px}.friend-card .avatar{width:46px;height:46px}.friend-interest-chips{margin:13px 0;min-height:0}.friend-card-actions{margin-top:12px;padding-top:12px}.person-row{gap:9px;padding:10px 0}.person-row>.quiet-button,.person-row>.primary-button{padding:8px;font-size:.65rem}.person-row .person-copy strong{font-size:.76rem}.person-row .avatar{width:36px;height:36px}.person-row .person-copy small{font-size:.65rem}#tab-friends>.section-header{flex-wrap:wrap}#tab-friends>.section-header .search-field{width:100%}}
 
-.friend-requests-list { display: flex; flex-direction: column; gap: 8px; }
+.friends-view-tabs{display:flex;gap:18px;border-bottom:1px solid var(--border-subtle);margin-bottom:18px}.friends-view-tabs button{font-size:.8rem;color:var(--text-secondary);min-height:44px;border-bottom:2px solid transparent}.friends-view-tabs button.active{border-color:var(--accent);color:var(--text-primary)}.friends-view-tabs button span{font-size:.7rem;padding:2px 6px;border-radius:5px;background:var(--surface-active);margin-left:4px}.friend-card{background:linear-gradient(135deg,#18141f,var(--bg-secondary) 75%);padding:18px;border-radius:14px}.friend-card .avatar{width:60px;height:60px;border-radius:50%}.friend-card-actions{padding-top:12px;margin-top:12px}.friend-interest-chips{min-height:0;margin:14px 0}.person-row>.quiet-button,.person-row>.primary-button{min-height:44px}.person-row .request-decline{color:var(--text-secondary)}
 
-.friend-request-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.friend-request-row img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-
-.request-accept-btn,
-.request-decline-btn {
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.request-accept-btn { background: var(--indigo); color: #fff; margin-right: 6px; }
-.request-decline-btn { background: var(--paper); color: var(--ink-soft); border: 1.5px solid var(--hairline); }
-
-/* ------------------------------------------------------------------
-   Mutual Statuses Row
-   ------------------------------------------------------------------ */
-
-.friends-status-container {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  overflow-x: auto;
-  padding: 4px 2px 10px;
-  scrollbar-width: none;
-}
-
-.friends-status-container::-webkit-scrollbar { display: none; }
-
-.friend-status-avatar {
-  flex-shrink: 0;
-  text-align: center;
-  width: 60px;
-}
-
-.friend-status-avatar > div {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  padding: 2.5px;
-  background: linear-gradient(135deg, var(--indigo), var(--vermillion));
-}
-
-.friend-status-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-
-.sotd-indicator {
-  position: absolute;
-  bottom: 18px;
-  right: 0;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  background: var(--indigo);
-  border: 2px solid var(--surface);
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.friend-status-avatar span.block {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  margin-top: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ------------------------------------------------------------------
-   Status Viewer (full-bleed, dark -- an immersive moment like the
-   news scroll cards, intentional contrast against the light chrome)
-   ------------------------------------------------------------------ */
-
-.status-viewer-modal {
-  position: fixed;
-  inset: 0;
-  background: var(--ink);
-  z-index: 70;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-}
-
-.status-viewer-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.status-viewer-user { display: flex; align-items: center; gap: 8px; }
-.status-viewer-user img { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); }
-.status-viewer-name { font-size: 12.5px; font-weight: 700; color: #fff; }
-.status-viewer-time { font-size: 10.5px; color: rgba(255,255,255,0.6); }
-
-#status-close-btn svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 2; }
-
-.status-media {
-  flex: 1;
-  margin: 14px 0;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: #000;
-  position: relative;
-}
-
-.status-media img,
-.status-media-img { width: 100%; height: 100%; object-fit: cover; }
-
-.status-text-post {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 24px;
-  font-size: 17px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, var(--indigo), var(--ink));
-}
-
-.status-caption-overlay {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
-  font-size: 12.5px;
-}
-
-.status-viewer-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#status-reply-input {
-  flex: 1;
-  padding: 11px 15px;
-  border-radius: var(--radius-pill);
-  border: none;
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-  font-size: 13px;
-  outline: none;
-}
-
-#status-reply-input::placeholder { color: rgba(255,255,255,0.5); }
-
-#status-quick-react-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.12);
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-#status-reply-submit-btn {
-  padding: 0 18px;
-  height: 42px;
-  border-radius: var(--radius-pill);
-  background: var(--indigo);
-  color: #fff;
-  font-weight: 700;
-  font-size: 12.5px;
-  flex-shrink: 0;
-}
-
-.find-friend-result-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-}
-
-.find-friend-result-row:hover { background: var(--paper); }
-.find-friend-result-row img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-.find-friend-result-info { flex: 1; min-width: 0; }
-.find-friend-result-name { font-size: 13.5px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.find-friend-result-handle { font-size: 11.5px; color: var(--ink-soft); }
-
-.friend-request-btn {
-  padding: 6px 16px;
-  border-radius: var(--radius-pill);
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  background: var(--paper);
-  border: 1.5px solid var(--hairline);
-  flex-shrink: 0;
-}
-
-.friend-request-btn.is-active-state { background: var(--indigo); color: #fff; border-color: var(--indigo); }
-
-.friend-request-info { flex: 1; min-width: 0; }
-.friend-request-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.friend-request-handle { font-size: 11px; color: var(--ink-soft); }
-
-/* ------------------------------------------------------------------
-   Find Friends Modal
-   ------------------------------------------------------------------ */
-
-.find-friends-modal {
-  position: fixed;
-  inset: 0;
-  background: var(--paper);
-  z-index: 70;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-}
-
-.find-friends-search-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-#find-friends-input {
-  flex: 1;
-  padding: 11px 15px;
-  border-radius: var(--radius-pill);
-  border: 1.5px solid var(--hairline);
-  background: var(--surface);
-  font-size: 13.5px;
-  color: var(--ink);
-  outline: none;
-}
-
-#find-friends-close-btn {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  flex-shrink: 0;
-}
-
-.find-friends-results { flex: 1; overflow-y: auto; }
-
-.find-friends-hint {
-  text-align: center;
-  padding: 24px 0;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-}
-
-/* ------------------------------------------------------------------
-   Share Anime of the Day — step 2 (confirm + note)
-   ------------------------------------------------------------------ */
-
-.aotd-share-confirm { padding: 16px; text-align: center; }
-
-.aotd-share-confirm-cover {
-  width: 100px;
-  height: 140px;
-  object-fit: cover;
-  border-radius: var(--radius-md);
-  border: 1.5px solid var(--hairline);
-  margin: 0 auto 12px;
-}
-
-.aotd-share-confirm-title {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 14px;
-}
-
-.aotd-share-confirm-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.aotd-share-back-btn {
-  flex: 1;
-  padding: 13px;
-  border-radius: var(--radius-md);
-  border: 1.5px solid var(--hairline);
-  background: var(--surface);
-  color: var(--ink-soft);
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.aotd-share-confirm-actions .editp-save-btn { flex: 2; }
+.friend-card-actions .quiet-button,.friend-card-actions .text-button{min-height:44px}

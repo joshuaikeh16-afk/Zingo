@@ -1,301 +1,120 @@
-/* ==========================================================================
-   Kaidra — Core Application & Event Router
-   ========================================================================== */
+import { confirmAction } from './context-menu.js';
+import { supabase, getUserPreferences, updateUserPreferences } from './supabase-client.js';
+import { account } from './session.js';
+import { openModal, closeModal, topModal, syncOverlay, notify, showError, setAvatar } from './ui.js';
+import { hydrateIcons } from './icons.js';
+import { parseRoute, goRoute, isObjectRoute } from './router.js';
 
-import { supabase, requireAuth, getUserPreferences, updateUserPreferences, getMutualFriends, getOrCreateConversation, sendMessage } from './supabase-client.js';
-
-let currentUserId = null;
-
-document.addEventListener('DOMContentLoaded', async function() {
-
-  const session = await requireAuth();
-  if (session) currentUserId = session.user.id;
-
-  // Settings mini user card — real data, not the hardcoded placeholder
-  if (currentUserId) {
-    const { data: profile } = await supabase.from('profiles').select('username, display_name, avatar_url').eq('id', currentUserId).maybeSingle();
-    if (profile) {
-      const nameEl = document.getElementById('settings-user-name');
-      const handleEl = document.getElementById('settings-user-handle');
-      const avatarEl = document.getElementById('settings-user-avatar');
-      if (nameEl) nameEl.textContent = profile.display_name || profile.username;
-      if (handleEl) handleEl.textContent = '@' + profile.username;
-      if (avatarEl) avatarEl.src = profile.avatar_url || `https://placehold.co/80x80/1a1625/f2ede4?text=${profile.username[0].toUpperCase()}`;
-    }
-  }
-
-  // Local presentation preferences are intentionally device-level. They do
-  // not affect the social or watchlist data stored in Supabase.
-  const themeSelect = document.getElementById('setting-theme');
-  const spoilerSelect = document.getElementById('setting-spoilers');
-  const savedTheme = localStorage.getItem('kaidra:theme') || 'dark';
-  const savedSpoilers = localStorage.getItem('kaidra:spoilers') || 'protected';
-  if (themeSelect) themeSelect.value = savedTheme;
-  if (spoilerSelect) spoilerSelect.value = savedSpoilers;
-  const applyTheme = (theme) => document.documentElement.dataset.theme = theme;
-  applyTheme(savedTheme);
-  themeSelect?.addEventListener('change', () => { localStorage.setItem('kaidra:theme', themeSelect.value); applyTheme(themeSelect.value); });
-  spoilerSelect?.addEventListener('change', () => localStorage.setItem('kaidra:spoilers', spoilerSelect.value));
-
-  // Real Settings: load current values, persist on change
-  if (currentUserId) {
-    const prefs = await getUserPreferences(currentUserId);
-    const toggleMap = {
-      'setting-allow-dms': 'allow_dms',
-      'setting-allow-nonfriend-dms': 'allow_nonfriend_dms',
-      'setting-allow-follower-dms': 'allow_follower_dms',
-      'setting-public-watchlist': 'public_watchlist',
-      'setting-notify-dm': 'notify_dm',
-      'setting-notify-likes': 'notify_likes',
-      'setting-notify-comments': 'notify_comments',
-      'setting-nsfw-filter': 'nsfw_filter',
-    };
-    Object.entries(toggleMap).forEach(([elId, prefKey]) => {
-      const el = document.getElementById(elId);
-      if (!el) return;
-      el.checked = !!prefs[prefKey];
-      el.addEventListener('change', () => {
-        updateUserPreferences(currentUserId, { [prefKey]: el.checked }).then(() => {
-          if (prefKey === 'nsfw_filter') {
-            document.dispatchEvent(new CustomEvent('kaidra:content-preference-change', { detail: { allowSensitive: el.checked } }));
-          }
-        }).catch((err) => {
-          console.error('Failed to save setting:', err);
-          el.checked = !el.checked; // revert on failure
-        });
-      });
-    });
-  }
-
-  // Real Logout
-  const logoutBtn = document.getElementById('settings-logout-btn');
-  logoutBtn?.addEventListener('click', async () => {
-    logoutBtn.disabled = true;
-    await supabase.auth.signOut();
-    window.location.replace('/auth.html');
+hydrateIcons();
+document.addEventListener('kaidra:profile-updated', event => {
+  for (const id of ['sidebar-avatar']) setAvatar(document.getElementById(id), event.detail);
+  document.getElementById('sidebar-name').textContent = event.detail.display_name || event.detail.username;
+});
+document.documentElement.dataset.theme = 'dark';
+let userId, currentTab = '', discardTarget;
+const names = { home: 'For you', discover: 'Discover', friends: 'Friends', inbox: 'Inbox', profile: 'My profile' };
+function applyRoute(route, restore = false) {
+  if (route.view === 'user' && route.id === userId) { goRoute('profile', { replace: true }); return; }
+  const object = isObjectRoute(route);
+  const backdrop = parseRoute(history.state?.backdrop || 'discover');
+  const tab = object ? backdrop.view : route.view;
+  if (!object) closeModal('content-detail-modal');
+  if (tab !== currentTab || (tab === 'inbox' && !route.id && !object)) document.dispatchEvent(new CustomEvent('kaidra:close-chat'));
+  const changed = tab !== currentTab;
+  currentTab = tab; document.body.dataset.activeTab = tab;
+  document.querySelectorAll('[data-tab]').forEach(button => {
+    const active = button.dataset.tab === tab;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
+  document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === `tab-${tab}`));
+  document.getElementById('header-route').textContent = names[tab] || 'Profile';
+  if (userId && names[tab]) localStorage.setItem(`kaidra:last-tab:${userId}`, tab);
+  document.dispatchEvent(new CustomEvent('kaidra:tab-change', { detail: { tab } }));
+  document.dispatchEvent(new CustomEvent('kaidra:route-change', { detail: route }));
+  if (changed && !object) window.scrollTo({ top: restore ? history.state?.scrollY || 0 : 0, behavior: 'instant' });
+}
+document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => goRoute(button.dataset.tab)));
+document.querySelectorAll('[data-navigate]').forEach(button => button.addEventListener('click', () => goRoute(button.dataset.navigate)));
+document.addEventListener('kaidra:navigate', event => goRoute(event.detail.tab));
+document.addEventListener('kaidra:route-intent', event => applyRoute(event.detail));
+window.addEventListener('popstate', () => applyRoute(parseRoute(location.hash), true));
+window.addEventListener('hashchange', () => { if (parseRoute(location.hash).path !== document.body.dataset.route) applyRoute(parseRoute(location.hash), true); });
+document.addEventListener('kaidra:route-change', event => { document.body.dataset.route = event.detail.path; });
+document.querySelectorAll('[data-action="find-people"]').forEach(button => button.addEventListener('click', () => openModal('find-friends-modal')));
+document.querySelectorAll('[data-open-settings]').forEach(button => button.addEventListener('click', () => openModal('settings-overlay')));
+document.getElementById('open-settings-btn').addEventListener('click', () => openModal('settings-overlay'));
+document.getElementById('settings-edit-profile').addEventListener('click', () => {
+  closeModal('settings-overlay'); goRoute('profile'); document.getElementById('edit-profile-btn').click();
+});
+document.getElementById('settings-sports').addEventListener('click', () => openModal('sports-settings-modal'));
+document.getElementById('open-sports-settings').addEventListener('click', () => openModal('sports-settings-modal'));
+document.getElementById('tune-recommendations').addEventListener('click', () => { location.href = '/onboarding.html?edit=1'; });
 
-  // Bottom Navigation Routing. Persist the last tab so a refresh does not
-  // always reset the user to Home.
-  const tabStorageKey = currentUserId ? `kaidra:last-tab:${currentUserId}` : 'kaidra:last-tab';
-  function activateTab(targetTab, persist = true) {
-    document.querySelectorAll('#app-bottom-nav .nav-item').forEach((button) => {
-      button.classList.toggle('active', button.getAttribute('data-tab') === targetTab);
-    });
-    document.querySelectorAll('.tab-pane').forEach((pane) => pane.classList.remove('active'));
-    document.getElementById('tab-' + targetTab)?.classList.add('active');
-    if (persist) localStorage.setItem(tabStorageKey, targetTab);
-    document.dispatchEvent(new CustomEvent('kaidra:tab-change', { detail: { tab: targetTab } }));
+function requestClose(id) {
+  const modal = document.getElementById(id);
+  if (modal?.hasAttribute('data-protect-form') && modal.dataset.dirty === 'true') {
+    discardTarget = id; openModal('discard-modal'); return;
   }
-  document.querySelectorAll('#app-bottom-nav .nav-item').forEach((btn) => {
-    btn.addEventListener('click', () => activateTab(btn.getAttribute('data-tab')));
-  });
-  const savedTab = localStorage.getItem(tabStorageKey);
-  const hasBrowseGenre = new URLSearchParams(window.location.search).has('genre');
-  if (hasBrowseGenre) activateTab('watchlist', false);
-  else if (savedTab && document.getElementById('tab-' + savedTab)) activateTab(savedTab, false);
-
-  // Home has two anime-first surfaces: recommendations and news.
-  const homeModeButtons = document.querySelectorAll('.home-mode-btn, .home-news-link');
-  const recommendationsView = document.getElementById('recommendations-view');
-  const newsView = document.getElementById('news-scroll-view');
-  homeModeButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const mode = button.dataset.homeMode;
-      homeModeButtons.forEach((item) => {
-        const active = item === button;
-        item.classList.toggle('active', active);
-        item.setAttribute('aria-selected', String(active));
-      });
-      recommendationsView?.classList.toggle('hidden', mode !== 'recommendations');
-      newsView?.classList.toggle('hidden', mode !== 'news');
-      document.dispatchEvent(new CustomEvent('kaidra:home-mode-change', { detail: { mode } }));
-    });
-  });
-
-  // Settings Slide-Over Controls
-  var settingsOverlay = document.getElementById('settings-overlay');
-  var openSettingsBtn = document.getElementById('open-settings-btn');
-  var closeSettingsBtn = document.getElementById('close-settings-btn');
-
-  function openSettings() {
-    if (settingsOverlay) settingsOverlay.classList.add('is-open');
+  closeModal(id);
+}
+document.querySelectorAll('[data-protect-form]').forEach(modal => modal.addEventListener('input', () => { modal.dataset.dirty = 'true'; }));
+document.addEventListener('kaidra:modal-close', event => { const modal = document.getElementById(event.detail.id); if (modal) delete modal.dataset.dirty; });
+document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => requestClose(button.dataset.close)));
+document.querySelectorAll('.social-modal').forEach(modal => modal.addEventListener('click', event => { if (event.target === modal) requestClose(modal.id); }));
+document.getElementById('keep-editing-btn').addEventListener('click', () => closeModal('discard-modal'));
+document.getElementById('discard-changes-btn').addEventListener('click', () => { closeModal('discard-modal'); if (discardTarget) closeModal(discardTarget); discardTarget = null; });
+document.addEventListener('keydown', event => {
+  const modalId = topModal();
+  const mobileChat = !matchMedia('(min-width: 1100px)').matches && document.querySelector('.chat-overlay.is-active');
+  const overlay = modalId ? document.getElementById(modalId) : mobileChat;
+  if (!overlay) return;
+  if (event.key === 'Escape') { event.preventDefault(); if (modalId) requestClose(modalId); else goRoute('inbox'); }
+  if (event.key === 'Tab') {
+    const nodes = [...overlay.querySelectorAll('button:not(:disabled), input, textarea, select, a[href]')].filter(node => node.getClientRects().length && !node.closest('[inert]'));
+    const first = nodes[0], last = nodes.at(-1);
+    if (event.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || !overlay.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
   }
+});
+function onlineState() { document.getElementById('offline-banner').classList.toggle('hidden', navigator.onLine); }
+onlineState(); window.addEventListener('online', onlineState); window.addEventListener('offline', onlineState);
+function viewportChanged() {
+  const viewport = window.visualViewport;
+  const mobile = !matchMedia('(min-width: 1100px)').matches;
+  const drawer = document.getElementById('chat-view-drawer');
+  drawer.style.setProperty('--chat-height', `${viewport?.height || innerHeight}px`);
+  drawer.style.setProperty('--chat-top', `${viewport?.offsetTop || 0}px`);
+  if (mobile) { drawer.setAttribute('role', 'dialog'); drawer.setAttribute('aria-modal', 'true'); }
+  else { drawer.removeAttribute('role'); drawer.removeAttribute('aria-modal'); }
+  syncOverlay();
+}
+viewportChanged(); window.visualViewport?.addEventListener('resize', viewportChanged); window.visualViewport?.addEventListener('scroll', viewportChanged); window.addEventListener('resize', viewportChanged);
 
-  function closeSettings() {
-    if (settingsOverlay) settingsOverlay.classList.remove('is-open');
-  }
-
-  if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettings);
-  if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettings);
-
-  // Watchlist Filter Pill Switcher
-  document.querySelectorAll('#watchlist-filters .status-pill').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('#watchlist-filters .status-pill').forEach(function(b) {
-        b.classList.remove('active');
-      });
-      btn.classList.add('active');
-
-      var status = btn.getAttribute('data-status');
-      document.dispatchEvent(new CustomEvent('kaidra:watchlist-filter-change', { 
-        detail: { status: status } 
-      }));
+(async () => {
+  const current = await account; if (!current) return;
+  userId = current.userId;
+  for (const id of ['sidebar-avatar']) setAvatar(document.getElementById(id), current.profile);
+  document.getElementById('sidebar-name').textContent = current.profile.display_name || current.profile.username;
+  document.getElementById('sidebar-handle').textContent = `@${current.profile.username}`;
+  document.getElementById('home-greeting').textContent = `Hey, ${(current.profile.display_name || current.profile.username).split(' ')[0]}`;
+  const legacyUser = new URLSearchParams(location.search).get('user');
+  goRoute(legacyUser ? `user/${encodeURIComponent(legacyUser)}` : location.hash.slice(1) || localStorage.getItem(`kaidra:last-tab:${userId}`) || 'home', { replace: true });
+  try {
+    const preferences = await getUserPreferences(userId), toggle = document.getElementById('setting-allow-dms');
+    toggle.checked = preferences.allow_dms;
+    toggle.addEventListener('change', async () => {
+      const value = toggle.checked; toggle.disabled = true; showError('settings-error');
+      try { await updateUserPreferences(userId, { allow_dms: value }); notify('Messaging preference saved.'); }
+      catch { toggle.checked = !value; showError('settings-error', 'Could not save that setting. Please try again.'); }
+      finally { toggle.disabled = false; }
     });
-  });
-
-  // Direct Message Drawer — close control only (opening is owned by
-  // inbox.js's openThread, and by forwardArticleToChat below)
-  var chatDrawer = document.getElementById('chat-view-drawer');
-  var closeChatBtn = document.getElementById('close-chat-btn');
-  if (closeChatBtn) {
-    closeChatBtn.addEventListener('click', function() {
-      if (chatDrawer) chatDrawer.classList.remove('is-active');
-    });
-  }
-
-  // Forward-to-DM Picker
-  // Listens for 'kaidra:news-forward-request' (dispatched by news-data.js)
-  // and lets the user pick a real friend to forward the story to.
-  var forwardOverlay = document.getElementById('forward-picker-overlay');
-  var forwardList = document.getElementById('forward-picker-list');
-  var closeForwardBtn = document.getElementById('close-forward-picker-btn');
-
-  function openForwardPicker(article) {
-    if (!forwardOverlay || !forwardList || !currentUserId) return;
-    forwardList.innerHTML = '<div class="find-friends-hint">Loading friends…</div>';
-    forwardOverlay.classList.add('is-open');
-
-    getMutualFriends(currentUserId).then(function(friends) {
-      forwardList.innerHTML = '';
-
-      if (friends.length === 0) {
-        forwardList.innerHTML = '<div class="find-friends-hint">Add a friend first to forward stories.</div>';
-        return;
-      }
-
-      friends.forEach(function(friend) {
-        var name = friend.display_name || friend.username;
-        var avatarUrl = friend.avatar_url || ('https://placehold.co/80x80/1a1625/f2ede4?text=' + name[0].toUpperCase());
-
-        var pickRow = document.createElement('div');
-        pickRow.className = 'forward-pick-row';
-        pickRow.innerHTML =
-          '<img class="avatar" src="' + avatarUrl + '" alt="' + name + '" />' +
-          '<span>' + name + '</span>';
-
-        pickRow.addEventListener('click', function() {
-          forwardArticleToFriend(friend.id, name, avatarUrl, article);
-        });
-
-        forwardList.appendChild(pickRow);
-      });
-    });
-  }
-
-  function closeForwardPicker() {
-    if (forwardOverlay) forwardOverlay.classList.remove('is-open');
-  }
-
-  function forwardArticleToFriend(friendId, name, avatarUrl, article) {
-    var content = article.kind === 'video'
-      ? 'Check out this Kaidra video: ' + (article.post.caption || article.url)
-      : 'Check out this news: ' + article.title +
-        (article.sourceUrl ? ' — ' + article.sourceUrl : '') +
-        (article.relatedAnimeTitle ? ' (About: ' + article.relatedAnimeTitle + ')' : '');
-
-    getOrCreateConversation(friendId).then(function(conversationId) {
-      return sendMessage({ conversationId: conversationId, senderId: currentUserId, content: content })
-        .then(function() { return conversationId; });
-    }).then(function(conversationId) {
-      document.dispatchEvent(new CustomEvent('kaidra:open-conversation', {
-        detail: { conversationId: conversationId, otherUserId: friendId, otherUserName: name, otherUserAvatar: avatarUrl }
-      }));
-    }).catch(function(err) {
-      console.error('Failed to forward article:', err);
-    });
-
-    closeForwardPicker();
-  }
-
-  document.addEventListener('kaidra:news-forward-request', function(e) {
-    openForwardPicker(e.detail);
-  });
-
-  document.addEventListener('kaidra:video-forward-request', function(e) {
-    openForwardPicker({ kind: 'video', post: e.detail.post, url: e.detail.url });
-  });
-
-  if (closeForwardBtn) closeForwardBtn.addEventListener('click', closeForwardPicker);
-
-  // Mobile-first dismissal: drag a sheet down instead of reaching for a
-  // tiny X. Desktop close buttons remain available through CSS.
-  document.querySelectorAll('.video-post-sheet, .video-audio-sheet, .video-comments-sheet, .video-share-sheet').forEach((sheet) => {
-    let startY = null;
-    let startX = null;
-    sheet.addEventListener('pointerdown', (event) => {
-      if (event.pointerType === 'mouse') return;
-      startY = event.clientY;
-      startX = event.clientX;
-      sheet.setPointerCapture?.(event.pointerId);
-    });
-    sheet.addEventListener('pointermove', (event) => {
-      if (startY == null) return;
-      const deltaY = event.clientY - startY;
-      if (deltaY > 0 && Math.abs(deltaY) > Math.abs(event.clientX - startX)) sheet.style.transform = `translateY(${Math.min(deltaY, 240)}px)`;
-    });
-    sheet.addEventListener('pointerup', (event) => {
-      if (startY == null) return;
-      const shouldClose = event.clientY - startY > 80;
-      const parent = sheet.parentElement;
-      startY = null; startX = null;
-      if (shouldClose) {
-        sheet.classList.add('is-swipe-closing');
-        window.setTimeout(() => {
-          parent?.querySelector('button[aria-label="Close"], .video-post-close')?.click();
-          sheet.classList.remove('is-swipe-closing');
-          sheet.style.transform = '';
-        }, 180);
-      } else {
-        sheet.style.transform = '';
-      }
-    });
-    sheet.addEventListener('pointercancel', () => { startY = null; startX = null; sheet.style.transform = ''; });
-  });
-
-  document.querySelectorAll('.chat-overlay, .settings-panel, .forward-picker-panel').forEach((panel) => {
-    let startX = null;
-    panel.addEventListener('pointerdown', (event) => {
-      if (event.pointerType === 'mouse') return;
-      startX = event.clientX;
-      panel.setPointerCapture?.(event.pointerId);
-    });
-    panel.addEventListener('pointerup', (event) => {
-      if (startX == null) return;
-      const deltaX = event.clientX - startX;
-      startX = null;
-      if (deltaX > 80) {
-        panel.querySelector('button[aria-label="Close Chat"], #close-settings-btn, #close-forward-picker-btn')?.click();
-      }
-    });
-    panel.addEventListener('pointercancel', () => { startX = null; });
-  });
-
-  // Anime Tag → Watchlist Jump
-  // Lets a user verify what a news story is actually about by jumping
-  // straight to a search for the real anime on the Watchlist tab.
-  document.addEventListener('kaidra:news-view-anime', function(e) {
-    var title = e.detail.title;
-    if (!title) return;
-
-    var watchlistNavBtn = document.querySelector('#app-bottom-nav .nav-item[data-tab="watchlist"]');
-    if (watchlistNavBtn) watchlistNavBtn.click();
-
-    var searchInput = document.getElementById('anilist-search-input');
-    if (searchInput) {
-      searchInput.value = title;
-      searchInput.dispatchEvent(new Event('input'));
-    }
-  });
-
+  } catch { document.getElementById('setting-allow-dms').disabled = true; showError('settings-error', 'Could not load messaging preferences. Refresh Kaidra to try again.'); }
+})();
+document.getElementById('settings-logout-btn').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  if (!await confirmAction('Log out of Kaidra?', 'Your conversations and library will be here when you return.', 'Log out')) return; button.disabled = true;
+  const { error } = await supabase.auth.signOut();
+  if (error) { button.disabled = false; notify('Could not log out. Please try again.'); return; }
+  location.replace('/auth.html');
 });

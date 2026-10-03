@@ -1,5 +1,6 @@
 // One small local outline icon family, shared by every screen.
 const paths = {
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
   heart: '<path d="M20 4a5 5 0 0 0-8 2 5 5 0 0 0-8-2c-5 5 1 11 8 16 7-5 13-11 8-16z"/>',
   pin: '<path d="m9 3 10 10-4 1-3 5-7-7 5-3zM8 16l-5 5"/>',
   poll: '<path d="M5 20V10m7 10V4m7 16v-7"/>',

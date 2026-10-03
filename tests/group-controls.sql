@@ -9,7 +9,7 @@ do $$
 declare owner_id uuid:=gen_random_uuid(); admin_id uuid:=gen_random_uuid(); peer_id uuid:=gen_random_uuid(); outside_id uuid:=gen_random_uuid(); cid uuid; dm uuid; poll_id uuid; msg uuid; option_a uuid; option_b uuid; content jsonb:='{"kind":"movie","id":550,"title":"QA movie","image":"https://image.tmdb.org/t/p/w500/test.jpg"}';
 begin
  insert into auth.users(id,email) select uid,uid||'@example.invalid' from unnest(array[owner_id,admin_id,peer_id,outside_id]) uid;
- insert into public.profiles(id,username,display_name) select uid,'qa_'||replace(uid::text,'-',''),'QA person' from unnest(array[owner_id,admin_id,peer_id,outside_id]) uid;
+ insert into public.profiles(id,username,display_name) select uid,'qa_'||left(replace(uid::text,'-',''),20),'QA person' from unnest(array[owner_id,admin_id,peer_id,outside_id]) uid;
  insert into public.friend_requests(requester_id,target_id,status) values(owner_id,admin_id,'accepted'),(owner_id,peer_id,'accepted'),(admin_id,outside_id,'accepted');
  perform set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'role','authenticated')::text,true); execute 'set local role authenticated';
  cid:=public.kaidra_create_group('QA group controls',array[admin_id,peer_id]); dm:=public.get_or_create_conversation(admin_id);

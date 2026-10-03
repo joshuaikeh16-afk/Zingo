@@ -97,11 +97,11 @@ export function installGroups({ getUserId, getActive, openThread, refreshList, r
       button.disabled=true;try{await run(state,'transfer',member.id);panel.close();if(leaveAfter){await chatAction('kaidra_leave_group',{target_conversation:state.id});closeModal('chat-info-modal');navigate('inbox');await refreshList();}else showInfo();}catch(err){notify(err.message);button.disabled=false;}
     });panel.card.append(button);} panel.open();
   }
-  async function showInfo() {
+  async function showInfo({fresh = true} = {}) {
     const state=getActive();if(!state)return;
     if(!state.isGroup){viewProfile(state.profile.id);return;}
-    openModal('chat-info-modal'); const container=document.getElementById('chat-members');container.replaceChildren(element('p','muted','Loading group…'));
-    try{await refreshState(state);}catch{container.replaceChildren(element('p','form-error','This group is unavailable.'));return;}if(getActive()!==state)return;
+    document.getElementById('chat-info-modal').dataset.conversationId = state.id; openModal('chat-info-modal'); const container=document.getElementById('chat-members');container.replaceChildren(element('p','muted','Loading group…'));
+    try{if(fresh)await refreshState(state);}catch{container.replaceChildren(element('p','form-error','This group is unavailable.'));return;}if(getActive()!==state)return;
     const me=state.members.find(person=>person.id===getUserId()), owner=me?.role==='owner';document.getElementById('chat-info-title').textContent='Group info';container.replaceChildren();
     const identity=element('div','group-info-identity');identity.append(avatar(state.profile,'group-info-avatar'),element('h3','',state.profile.display_name),element('span','muted',`${state.members.length} people`));if(state.description)identity.append(element('p','',state.description));container.append(identity);
     const actions=element('div','group-info-actions'),shared=actionButton('Shared','bookmark'),mute=actionButton(me?.muted?'Unmute notifications':'Mute notifications','bell');shared.addEventListener('click',()=>sharedHistory(state));mute.addEventListener('click',async()=>{mute.disabled=true;try{await run(state,'mute',null,{muted:!me.muted});showInfo();}catch{notify('Could not update notifications.');mute.disabled=false;}});actions.append(shared,mute);
@@ -124,5 +124,6 @@ export function installGroups({ getUserId, getActive, openThread, refreshList, r
     if(owner&&state.members.length>1){const change=actionButton('Transfer ownership','people');change.addEventListener('click',()=>transfer(state));const remove=actionButton('Delete group','trash','danger-button');remove.addEventListener('click',async()=>{if(!await confirmAction('Delete this group?','This permanently removes its messages, polls, and shared history for everyone.','Delete group'))return;await chatAction('kaidra_group_action',{target_conversation:state.id,action:'delete'});closeModal('chat-info-modal');navigate('inbox');await refreshList();});container.append(change,remove);}
   }
   document.getElementById('chat-info-btn').addEventListener('click',showInfo);
+  document.addEventListener('kaidra:chat-state', event => { const modal=document.getElementById('chat-info-modal'); if (!modal.classList.contains('hidden') && modal.dataset.conversationId===event.detail.id) showInfo({fresh:false}); });
   return {createGroup,showInfo};
 }

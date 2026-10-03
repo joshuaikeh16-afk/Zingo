@@ -1,186 +1,35 @@
-// Auth page logic. Sign In (auth.html) and Sign Up (signup.html) are now
-// two separate pages, not a single page with a toggle. Each sets
-// data-auth-mode="signin" or "signup" on <body> -- this file reads that
-// once and never changes it. Expects on the page:
-//
-//   #email-input          <input type="email">
-//   #password-input       <input type="password">
-//   #auth-submit-btn      <button> — triggers sign in or sign up
-//   #auth-error-message   <p> or <div> — shown on failure, hidden otherwise
-//   #auth-loading         optional — shown while a request is in flight
-
 import { supabase } from './supabase-client.js';
-
-const mode = document.body.dataset.authMode === 'signup' ? 'signup' : 'signin';
-
-const emailInput = document.getElementById('email-input');
-const passwordInput = document.getElementById('password-input');
-const submitBtn = document.getElementById('auth-submit-btn');
-const googleAuthBtn = document.getElementById('google-auth-btn');
-const errorEl = document.getElementById('auth-error-message');
-const loadingEl = document.getElementById('auth-loading');
-let isRedirecting = false;
-
-document.querySelectorAll('.password-toggle').forEach((toggle) => {
-  toggle.addEventListener('click', () => {
-    const input = document.getElementById(toggle.dataset.passwordTarget);
-    if (!input) return;
-    const showing = input.type === 'text';
-    input.type = showing ? 'password' : 'text';
-    toggle.textContent = showing ? 'Show' : 'Hide';
-    toggle.setAttribute('aria-label', `${showing ? 'Show' : 'Hide'} password`);
-  });
-});
-
-function setError(message) {
-  if (!errorEl) return;
-  errorEl.textContent = message || '';
-  errorEl.classList.toggle('hidden', !message);
-  errorEl.classList.remove('auth-success-message');
-  errorEl.classList.add('auth-error-message');
+import { authError, authDestination, passwordFeedback } from './auth-model.js';
+const signup = document.body.dataset.authMode === 'signup', email = document.getElementById('email-input'), password = document.getElementById('password-input'), submit = document.getElementById('auth-submit-btn'), form = document.getElementById('auth-form'), error = document.getElementById('auth-error-message'), loading = document.getElementById('auth-loading');
+let busy = false, redirecting = false, verifyEmail = '', cooldown = 0, slowTimer;
+const storage = { get(key) { try { return sessionStorage.getItem(key); } catch { return null; } }, set(key,value) { try { sessionStorage.setItem(key,value); } catch {} }, remove(key) { try { sessionStorage.removeItem(key); } catch {} } };
+function message(text = '', success = false) { error.textContent = text; error.classList.toggle('hidden', !text); error.classList.toggle('auth-success-message', success); }
+function setBusy(value) { busy = value; submit.disabled = value; document.getElementById('google-auth-btn').disabled = value; loading.classList.toggle('hidden', !value); form.setAttribute('aria-busy', String(value)); clearTimeout(slowTimer); loading.textContent = signup ? 'Creating your account…' : 'Logging in…'; if (value) slowTimer = setTimeout(() => { loading.textContent = 'Still connecting. Your request is in progress…'; }, 8000); }
+async function redirect(session) {
+  if (!session || redirecting) return; redirecting = true;
+  try { const {data,error} = await supabase.from('profiles').select('id,onboarding_completed').eq('id',session.user.id).maybeSingle(); if (error) throw error; storage.remove('kaidra:verify-email'); location.replace(authDestination(data)); }
+  catch { redirecting = false; message('Your session is active, but your profile could not load. Retry logging in.'); }
 }
-
-function setLoading(isLoading) {
-  if (loadingEl) loadingEl.classList.toggle('hidden', !isLoading);
-  if (submitBtn) submitBtn.disabled = isLoading;
-}
-
-async function redirectForSession(session) {
-  if (!session || isRedirecting) return;
-  isRedirecting = true;
-  const { data: existingProfile, error } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('id', session.user.id)
-    .maybeSingle();
-  if (error) { isRedirecting = false; setError('Could not load your account. Please try again.'); return; }
-  window.location.replace(existingProfile ? '/app.html' : '/onboarding.html');
-}
-
-const forgotLink = document.getElementById('forgot-password-link');
-
-function setSuccess(message) {
-  if (!errorEl) return;
-  errorEl.textContent = message || '';
-  errorEl.classList.toggle('hidden', !message);
-  errorEl.classList.toggle('auth-success-message', !!message);
-  errorEl.classList.toggle('auth-error-message', !message);
-}
-
-forgotLink?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  setError(null);
-
-  const email = emailInput?.value?.trim();
-  if (!email) {
-    setError('Enter your email above first, then tap Forgot?');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset-password.html',
-    });
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    setSuccess('Check your email for a password reset link.');
-  } catch (err) {
-    setError('Something went wrong. Try again.');
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
+function validateEmail() { const valid = email.validity.valid && !!email.value.trim(); document.getElementById('email-error').textContent = valid ? '' : 'Enter a valid email address.'; email.setAttribute('aria-invalid',String(!valid)); return valid; }
+email.addEventListener('blur',validateEmail); email.addEventListener('input',()=>{if(email.getAttribute('aria-invalid')==='true')validateEmail();});
+password.addEventListener('input',()=>{if(signup){const feedback=passwordFeedback(password.value);document.getElementById('password-hint').textContent=feedback.message;document.getElementById('password-hint').classList.toggle('valid',feedback.valid);password.removeAttribute('aria-invalid');}});
+for(const event of ['keydown','keyup'])password.addEventListener(event,e=>document.getElementById('caps-lock-note').classList.toggle('hidden',!e.getModifierState('CapsLock')));
+document.querySelector('.password-toggle').addEventListener('click',event=>{const visible=password.type==='password';password.type=visible?'text':'password';event.currentTarget.textContent=visible?'Hide':'Show';event.currentTarget.setAttribute('aria-pressed',String(visible));event.currentTarget.setAttribute('aria-label',visible?'Hide password':'Show password');});
+function tick() { const left=Math.max(0,Math.ceil((cooldown-Date.now())/1000)),button=document.getElementById('resend-verification');button.disabled=busy||left>0;button.textContent=left?`Resend in ${left}s`:'Resend link'; }
+function verification(address, fresh = false) { verifyEmail=address;storage.set('kaidra:verify-email',address);if(fresh){cooldown=Date.now()+60000;storage.set('kaidra:verify-cooldown',String(cooldown));}else cooldown=Number(storage.get('kaidra:verify-cooldown'))||0; document.getElementById('account-entry').classList.add('hidden');document.getElementById('verification-panel').classList.remove('hidden');document.getElementById('verification-email').textContent=address;password.value='';message();history.replaceState(null,'',`${location.pathname}#verify`);tick();document.getElementById('verify-title').focus(); }
+form.addEventListener('submit',async event=>{
+ event.preventDefault();if(busy||redirecting)return;message();if(!validateEmail()){email.focus();return;}if(!password.value||(signup&&!passwordFeedback(password.value).valid)){password.setAttribute('aria-invalid','true');message(signup?'Use a password with at least 8 characters.':'Enter your password.');password.focus();return;}
+ setBusy(true);const address=email.value.trim();
+ try {const {data,error}=signup?await supabase.auth.signUp({email:address,password:password.value,options:{emailRedirectTo:`${location.origin}/auth.html`}}):await supabase.auth.signInWithPassword({email:address,password:password.value});if(error){if(error.code==='email_not_confirmed'){verification(address);return;}throw error;}if(signup&&Array.isArray(data?.user?.identities)&&data.user.identities.length===0){message(authError({code:'user_already_exists'}));return;}if(data?.session)await redirect(data.session);else if(signup)verification(address,true);else message('Could not start your session. Try logging in again.');}
+ catch(problem){message(authError(problem,signup?'signup':'signin'));}finally{setBusy(false);tick();}
 });
-
-document.getElementById('auth-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setError(null);
-
-  const email = emailInput?.value?.trim();
-  const password = passwordInput?.value;
-
-  if (!email || !password) {
-    setError('Enter both an email and a password.');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const { data, error } = mode === 'signin'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${location.origin}/auth.html` } });
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    if (mode === 'signup') {
-      if (data?.session) await redirectForSession(data.session);
-      else setSuccess('Check your email to confirm your account, then sign in to choose your interests.');
-      return;
-    }
-
-    // Signing in (returning user): skip personalization and go straight
-    // to the app if a profile already exists. Only an edge case -- a
-    // session with no profile yet -- falls through to onboarding.
-    const { data: { session } } = await supabase.auth.getSession();
-    await redirectForSession(session);
-  } catch (err) {
-    setError('Something went wrong. Try again.');
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-});
-
-googleAuthBtn?.addEventListener('click', async () => {
-  setError(null);
-  setLoading(true);
-
-  try { const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${window.location.origin}/auth.html`,
-      queryParams: { prompt: 'select_account' },
-    },
-  });
-
-  // OAuth normally navigates away immediately. If it cannot start, keep the
-  // user on the page and show the provider error instead.
-  if (error) {
-    setLoading(false);
-    setError(error.message);
-  }
-  } catch { setLoading(false); setError('Google sign-in could not start. Try email sign-in or retry.'); }
-});
-
-// OAuth can finish after the initial page script has run. Handle the
-// returned SIGNED_IN event so Google users are routed reliably.
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN' && session) {
-    window.setTimeout(() => redirectForSession(session), 0);
-  }
-});
-
-// If already signed in, skip the auth page entirely. Also re-checked on
-// pageshow with persisted=true -- that fires when the browser restores
-// this page from bfcache (e.g. tapping back from the app), which does
-// NOT re-run this script normally, so without this a signed-in user
-// could land back on a stale, unredirected auth page.
-async function redirectIfSignedIn() {
-  // A user may already have a session after a previous sign-up attempt but
-  // still need to return here to correct their email or try another account.
-  if (mode === 'signup') return;
-
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) await redirectForSession(session);
-}
-
-redirectIfSignedIn();
-window.addEventListener('pageshow', (e) => {
-  if (e.persisted) redirectIfSignedIn();
-});
+document.getElementById('resend-verification').addEventListener('click',async()=>{if(busy||Date.now()<cooldown)return;setBusy(true);message();try{const {error}=await supabase.auth.resend({type:'signup',email:verifyEmail,options:{emailRedirectTo:`${location.origin}/auth.html`}});if(error)throw error;cooldown=Date.now()+60000;storage.set('kaidra:verify-cooldown',String(cooldown));message('Link requested. Check your inbox and spam folder.',true);}catch(problem){if(problem.status===429){cooldown=Date.now()+60000;storage.set('kaidra:verify-cooldown',String(cooldown));}message(authError(problem));}finally{setBusy(false);tick();}});
+document.getElementById('change-email').addEventListener('click',()=>{if(busy)return;storage.remove('kaidra:verify-email');document.getElementById('verification-panel').classList.add('hidden');document.getElementById('account-entry').classList.remove('hidden');history.replaceState(null,'',location.pathname);email.value=verifyEmail;message('Enter the correct email, then create your account.');email.focus();});
+document.getElementById('forgot-password-link')?.addEventListener('click',async event=>{event.preventDefault();if(busy||!validateEmail())return;setBusy(true);message();try{const {error}=await supabase.auth.resetPasswordForEmail(email.value.trim(),{redirectTo:`${location.origin}/reset-password.html`});if(error)throw error;message('Check your email for a password reset link.',true);}catch(problem){message(authError(problem));}finally{setBusy(false);}});
+document.getElementById('google-auth-btn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${location.origin}/auth.html`}});if(error)throw error;}catch(problem){message(authError(problem));setBusy(false);}});
+function online(){document.getElementById('auth-offline').classList.toggle('hidden',navigator.onLine);}online();window.addEventListener('online',online);window.addEventListener('offline',online);
+supabase.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session)setTimeout(()=>redirect(session),0);});
+async function boot(){try{const {data:{session}}=await supabase.auth.getSession();if(session){await redirect(session);return;}if(location.hash==='#verify'&&storage.get('kaidra:verify-email'))verification(storage.get('kaidra:verify-email'));if(/error=|error_code=/.test(location.hash)){message('That verification link is invalid or expired. Log in, or request another verification email.');}}catch{message('Could not load your session. Refresh to try again.');}}
+boot();window.addEventListener('pageshow',event=>{if(event.persisted){redirecting=false;boot();}});const interval=setInterval(tick,1000);window.addEventListener('pagehide',()=>clearInterval(interval));
+// Only expose OAuth when this project has enabled its provider.
+fetch('https://skmlktywdmsbjyybtmhm.supabase.co/auth/v1/settings',{headers:{apikey:'sb_publishable_IuCAP_wwm-rCBjCiunZUNQ_kOqmBeKC'}}).then(response=>response.ok?response.json():null).then(settings=>{const enabled=!!settings?.external?.google;document.getElementById('google-auth-btn').classList.toggle('hidden',!enabled);document.querySelector('.auth-divider').classList.toggle('hidden',!enabled);}).catch(()=>document.querySelector('.auth-divider').classList.add('hidden'));

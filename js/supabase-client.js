@@ -40,7 +40,7 @@ export async function requireProfile(session) {
   if (error) {
     throw error;
   }
-  if (!profile) {
+  if (!profile || profile.onboarding_completed === false) {
     window.location.href = '/onboarding.html';
     return null;
   }

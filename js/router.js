@@ -7,6 +7,7 @@ export function parseRoute(hash = '') {
   if (primary.has(view) && parts.length === 1) return { view, path: view };
   if (view === 'inbox' && parts.length === 2 && /^[a-zA-Z0-9-]{1,80}$/.test(type)) return { view, id: type, path: `inbox/${encodeURIComponent(type)}` };
   if (view === 'user' && parts.length === 2 && /^[a-zA-Z0-9-]{1,80}$/.test(type)) return { view, id: type, path: `user/${encodeURIComponent(type)}` };
+  if (view === 'title' && /^mal-(anime|manga|movie|tv)$/.test(type) && /^\d+$/.test(id) && parts.length === 3) return {view, type:type.slice(4), provider:'mal', id, path:`title/${type}/${id}`};
   if (view === 'title' && ['movie', 'tv'].includes(type) && /^\d+$/.test(id) && parts.length === 3) return { view, type, id, path: `title/${type}/${id}` };
   if (view === 'match' && /^\d+$/.test(type) && parts.length === 2) return { view, id: type, path: `match/${type}` };
   if (view === 'article' && parts.length === 2 && /^https:\/\//.test(type)) return { view, id: type, path: `article/${encodeURIComponent(type)}` };

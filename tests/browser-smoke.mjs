@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -10,14 +10,15 @@ const server=http.createServer(async(req,res)=>{
   try{
     let body=await readFile(path);
     if(path.endsWith('/js/supabase-client.js'))body=Buffer.from(body.toString().replace('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm','/tests/mock-supabase.js'));
-    res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml'})[extname(path)]||'text/plain');res.end(body);
+    res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'})[extname(path)]||'text/plain');res.end(body);
   }catch{res.writeHead(404);res.end('Not found');}
 });
 await new Promise((done,reject)=>{server.once('error',reject);server.listen(8765,'127.0.0.1',done);});
 let browserProcess;
+const browserDir = await mkdtemp('/tmp/kaidra-test-browser-');
 try { await fetch('http://127.0.0.1:9222/json'); }
 catch {
-  browserProcess = spawn('google-chrome',['--headless','--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--remote-debugging-port=9222',`--user-data-dir=/tmp/kaidra-test-browser-${process.pid}`,'about:blank'],{stdio:'ignore'});
+  browserProcess = spawn('google-chrome',['--headless','--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--remote-debugging-port=9222',`--user-data-dir=${browserDir}`,'about:blank'],{stdio:'ignore'});
   const start=Date.now(); while(true) { try { await fetch('http://127.0.0.1:9222/json'); break; } catch { if(Date.now()-start>10000) throw new Error('Chrome did not start'); await new Promise(resolve=>setTimeout(resolve,100)); } }
 }
 const tabs=await(await fetch('http://127.0.0.1:9222/json')).json();
@@ -26,9 +27,9 @@ const ws=new WebSocket(tab.webSocketDebuggerUrl);
 await new Promise((done,reject)=>{ws.onopen=done;ws.onerror=reject;});
 let seq=0;const pending=new Map(),errors=[];
 ws.onmessage=({data})=>{const value=JSON.parse(data);if(value.id){const item=pending.get(value.id);pending.delete(value.id);if(value.error)item.reject(value.error);else item.resolve(value.result);}else if(value.method==='Runtime.exceptionThrown')errors.push(value.params.exceptionDetails.exception?.description||value.params.exceptionDetails.text);};
-function call(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});}
+function call(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Browser command timed out: '+method));},20000);pending.set(id,{resolve:value=>{clearTimeout(timer);resolve(value)},reject:error=>{clearTimeout(timer);reject(error)}});ws.send(JSON.stringify({id,method,params}));});}
 async function evaluate(expression){const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description||result.exceptionDetails.text);return result.result.value;}
-async function wait(expression){const start=Date.now();while(Date.now()-start<10000){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,50));}throw new Error('Timed out: '+expression);}
+async function wait(expression){const start=Date.now();while(Date.now()-start<10000){if(await evaluate(`(()=>{try{return Boolean(${expression})}catch{return false}})()`))return;await new Promise(r=>setTimeout(r,50));}throw new Error('Timed out: '+expression);}
 const clickText=(selector,text)=>evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].find(node=>node.textContent.trim()===${JSON.stringify(text)}).click()`);
 const click=(selector)=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
 
@@ -127,7 +128,7 @@ try{
   await wait('[...document.querySelectorAll(".message-bubble")].some(x=>x.textContent==="Missed during reconnect")');
   await click('#close-chat-btn');
   await click('#new-group-btn'); await wait('document.querySelectorAll(".group-wizard .group-friend-picker input").length===3');
-  await evaluate('[...document.querySelectorAll(".group-wizard .group-friend-picker input")].slice(0,2).forEach(x=>x.click())');
+  await evaluate('document.querySelectorAll(".group-wizard .group-friend-picker input")[0].click();document.querySelectorAll(".group-wizard .group-friend-picker input")[1].click()');
   await clickText('.group-wizard button','Continue'); await evaluate('document.querySelector("#group-wizard-name").value="Weekend crew";document.querySelector("#group-wizard-name").dispatchEvent(new Event("input"))'); await clickText('.group-wizard button','Create group');
   await wait('document.querySelector("#dm-active-name").textContent==="Weekend crew" && document.querySelector("#chat-view-drawer").classList.contains("is-active")');
   await send('Hey @bob'); await wait('document.querySelector(".message-mention")');
@@ -141,7 +142,7 @@ try{
   await evaluate('document.querySelector(".poll-create-modal input").value="Movie night?";document.querySelectorAll(".poll-option-input input")[0].value="Movie";document.querySelectorAll(".poll-option-input input")[1].value="Series";document.querySelector(".poll-create-modal form").requestSubmit()');
   await wait('document.querySelectorAll(".poll-choice").length===2'); await click('.poll-choice'); await wait('document.querySelector(".poll-choice.selected")');
   await click('.poll-choice:last-of-type'); await wait('window.__mock.db.poll_votes[0]?.choice_ids[0]===window.__mock.db.chat_polls[0].options[1].id');
-  await evaluate('[...document.querySelectorAll(".message-row")].find(node=>node.querySelector(".poll-card")).querySelector("[aria-label=\"More message actions\"]").click()'); await clickText('.context-menu button','Pin message'); await wait('!document.querySelector("#chat-pins").classList.contains("hidden")');
+  await evaluate('[...document.querySelectorAll(".message-row")].find(node=>node.querySelector(".poll-card")).querySelector(".message-actions button:last-child").click()'); await clickText('.context-menu button','Pin message'); await wait('!document.querySelector("#chat-pins").classList.contains("hidden")');
   await click('#chat-pins'); await clickText('.social-modal:not(.hidden) button','Movie night?'); await wait('document.querySelector(".message-highlight")');
   await click('#close-chat-btn');
   await route('home');
@@ -239,12 +240,12 @@ try{
   await evaluate('document.querySelector("#email-input").value="qa@example.com"'); await click('#forgot-password-link'); await wait('document.querySelector("#auth-error-message").textContent.includes("Check your email")');
   await call('Page.navigate',{url:'http://127.0.0.1:8765/signup.html'}); await wait('location.pathname==="/signup.html" && document.readyState==="complete" && document.querySelector("#auth-form")'); await size(390,844);
   await evaluate('document.querySelector("#email-input").value="qa@example.com";document.querySelector("#password-input").value="safe-test-password";document.querySelector("#auth-form").requestSubmit()');
-  await wait('document.querySelector("#auth-error-message").textContent.includes("confirm your account")'); assert.equal(await evaluate('location.pathname'),'/signup.html'); await screenshot('390-signup');
+  await wait('!document.querySelector("#verification-panel").classList.contains("hidden")'); assert.equal(await evaluate('location.pathname'),'/signup.html'); await screenshot('390-signup');
   await call('Page.navigate',{url:'http://127.0.0.1:8765/auth.html'}); await wait('location.pathname==="/auth.html" && document.readyState==="complete" && document.querySelector("#auth-form")');
   await evaluate('document.querySelector("#email-input").value="qa@example.com";document.querySelector("#password-input").value="safe-test-password";document.querySelector("#auth-form").requestSubmit()'); await wait('location.pathname==="/app.html" && document.querySelector(".content-card")');
   await call('Page.navigate',{url:'http://127.0.0.1:8765/onboarding.html?edit=1'}); await wait('location.pathname==="/onboarding.html" && document.readyState==="complete" && document.querySelectorAll(".setup-step")[1] && !document.querySelectorAll(".setup-step")[1].classList.contains("hidden")'); await screenshot('390-tastes');
-  await click('#setup-next'); assert.equal(await evaluate('document.querySelector("#language-input option[value=en]").textContent'),'English');
-  await evaluate('document.querySelector("#country-input").value="GH";document.querySelector("#onboarding-form").requestSubmit()'); await wait('location.pathname==="/app.html" && document.querySelector(".content-card")');
+  await click('#setup-next'); await wait('!document.querySelectorAll(".setup-step")[2].classList.contains("hidden")'); assert.equal(await evaluate('document.querySelector("#language-input option[value=en]").textContent'),'English');
+  await evaluate('document.querySelector("#country-input").value="GH";document.querySelector("#onboarding-form").requestSubmit()'); await wait('!document.querySelectorAll(".setup-step")[3].classList.contains("hidden")'); await click('#skip-favorites'); await wait('location.pathname==="/app.html" && document.querySelector(".content-card")');
   await call('Page.navigate',{url:'http://127.0.0.1:8765/reset-password.html?qa-recovery=1'}); await wait('location.pathname==="/reset-password.html" && document.readyState==="complete" && document.querySelector("#reset-form") && !document.querySelector("#reset-form").classList.contains("hidden")');
   await evaluate('document.querySelector("#new-password-input").value="password1";document.querySelector("#confirm-password-input").value="password2";document.querySelector("#reset-form").requestSubmit()'); await wait('document.querySelector("#reset-error-message").textContent.includes("do not match")');
   await evaluate('document.querySelector("#confirm-password-input").value="password1";document.querySelector("#reset-form").requestSubmit()'); await wait('document.querySelector("#reset-subtitle").textContent.includes("Password updated")');

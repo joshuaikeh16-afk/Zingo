@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { normalizeUsername, usernameError, passwordFeedback, authDestination, cleanDraft, authError } from '../js/auth-model.js';
+test('usernames normalize consistently and reject reserved or invalid handles',()=>{assert.equal(normalizeUsername(' @Josh_16 '),'josh_16');for(const name of ['ab','has spaces','admin','x'.repeat(25)])assert(usernameError(name));assert.equal(usernameError('Josh_16'),'');});
+test('existing profiles remain complete, incomplete profiles resume',()=>{assert.equal(authDestination({id:'old'}),'/app.html#home');assert.equal(authDestination({id:'new',onboarding_completed:false}),'/onboarding.html');assert.equal(authDestination(null),'/onboarding.html');});
+test('drafts whitelist data and never store account credentials',()=>{const draft=cleanDraft({password:'secret',email:'private@example.com',categories:['movie','football','unknown','movie'],favorites:[{id:1,type:'movie',title:'One'}]});assert.equal(draft.password,undefined);assert.equal(draft.email,undefined);assert.deepEqual(draft.categories,['movie','football']);assert.equal(draft.country,'NG');});
+test('signup validation and errors provide actionable feedback',()=>{assert(!passwordFeedback('short').valid);assert(passwordFeedback('long passphrase').valid);assert(authError({code:'23505'}).includes('username'));assert(authError({message:'Failed to fetch'},'signup').includes('Check your inbox'));});

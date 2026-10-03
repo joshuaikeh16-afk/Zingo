@@ -1,8 +1,9 @@
-import { element, actionButton, iconButton, openModal, closeModal, notify } from './ui.js';
+import { element, actionButton, iconButton, openModal, closeModal, topModal, notify } from './ui.js';
 // One modal/focus boundary serves anchored desktop menus and mobile bottom sheets.
 let sequence = 0;
 export function dialog(title, className = '') {
   const id = `context-dialog-${++sequence}`, modal = element('div', `social-modal hidden ${className}`), card = element('div', 'social-modal-card');
+  const parent = document.getElementById(topModal()); if (parent?.dataset.conversationId) modal.dataset.conversationId = parent.dataset.conversationId;
   modal.id = id; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', `${id}-title`);
   const heading = element('div', 'modal-heading'), name = element('h2', '', title), close = iconButton('close', 'Close'); name.id = `${id}-title`;
   close.addEventListener('click', () => closeModal(id)); heading.append(name, close); card.append(heading); modal.append(card); document.body.append(modal);
@@ -32,6 +33,7 @@ export function openMenu(anchor, actions, title = 'Actions', point) {
     const buttons = [...menu.querySelectorAll('button:not(:disabled)')], at = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (at + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
   });
+  const conversation = anchor.closest('[data-conversation-id]')?.dataset.conversationId; if (conversation) panel.modal.dataset.conversationId = conversation;
   panel.card.append(menu); const box = anchor.getBoundingClientRect();
   panel.card.style.setProperty('--menu-x', `${Math.max(8, Math.min(point?.x ?? box.right - 230, innerWidth - 250))}px`);
   panel.card.style.setProperty('--menu-y', `${Math.max(8, Math.min(point?.y ?? box.bottom + 6, innerHeight - actions.length * 46 - 90))}px`);
@@ -39,9 +41,9 @@ export function openMenu(anchor, actions, title = 'Actions', point) {
 }
 export function bindContext(node, getActions, { title = 'Actions', more = false } = {}) {
   let timer, start, suppressUntil = 0;
-  const show = event => { suppressUntil = Date.now() + 800; openMenu(node, getActions(), title, event && { x: event.clientX, y: event.clientY }); };
+  const show = event => { clearTimeout(timer); if (Date.now() < suppressUntil) return; suppressUntil = Date.now() + 800; openMenu(node, getActions(), title, event && { x: event.clientX, y: event.clientY }); };
   node.addEventListener('contextmenu', event => { if (event.target.closest('audio, input, textarea')) return; event.preventDefault(); event.stopPropagation(); show(event); });
-  node.addEventListener('pointerdown', event => { if (event.pointerType === 'mouse' || event.target.closest('audio, input, textarea, .context-more')) return; start = { x: event.clientX, y: event.clientY }; timer = setTimeout(() => show(event), 500); });
+  node.addEventListener('pointerdown', event => { if (event.target.closest('[data-library-key]') && event.target.closest('[data-library-key]') !== node) return; if (event.pointerType === 'mouse' || event.target.closest('audio, input, textarea, .context-more')) return; start = { x: event.clientX, y: event.clientY }; timer = setTimeout(() => show(event), 500); });
   node.addEventListener('pointermove', event => { if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) clearTimeout(timer); });
   for (const event of ['pointerup', 'pointercancel', 'pointerleave']) node.addEventListener(event, () => clearTimeout(timer));
   node.addEventListener('click', event => { if (Date.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);

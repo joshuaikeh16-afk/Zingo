@@ -1,87 +1,81 @@
-import { supabase, requireAuth } from './supabase-client.js';
-import { element, artwork } from './ui.js';
+import { supabase, requireAuth, chatAction } from './supabase-client.js';
+import { element, artwork, setAvatar } from './ui.js';
 import { contentRequest } from './content-client.js';
 import { countries, genreChoices, preferencesFor } from './preferences.js';
-let userId, existing = null, step = 0, favorites = [], searchTimer, searchVersion = 0, usernameVersion = 0;
-const username = document.getElementById('username-input'), displayName = document.getElementById('display-name-input');
-const country = document.getElementById('country-input'), language = document.getElementById('language-input');
-const error = document.getElementById('onboarding-error'), submit = document.getElementById('onboarding-submit-btn');
-const selected = (name) => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
-function setError(message = '') { error.textContent = message; error.classList.toggle('hidden', !message); }
-for (const [key,title] of countries) { const option = element('option','',title); option.value = key; country.append(option); }
-for (const [key,title] of genreChoices) { const label = element('label'); const input = element('input'); input.type='checkbox';input.name='genre';input.value=key;label.append(input,document.createTextNode(title));document.getElementById('genre-choices').append(label); }
-function validate() {
-  if (step === 0 && !/^[a-zA-Z0-9_]{3,24}$/.test(username.value.trim())) { setError('Choose a username with 3–24 letters, numbers, or underscores.'); username.focus(); return false; }
-  if (step === 1 && (!selected('content-type').length || !selected('genre').length)) { setError('Choose at least one format and one genre so we can tailor your feed.'); return false; }
-  return true;
+import { cleanDraft, normalizeUsername, usernameError, authError } from './auth-model.js';
+let completed=false, userId, existing, step=0, draft=cleanDraft(), busy=false, booted=false, draftTimer, usernameTimer, usernameVersion=0, searchTimer, searchVersion=0, selectedFile, uploadedFile, previewUrl, uploadedUrl, availableName='', saving=Promise.resolve(), dirtyVersion=0;
+const $=id=>document.getElementById(id), names=['identity','interests','taste','favorites'], labels=['YOUR IDENTITY','YOUR INTERESTS','YOUR TASTE','YOUR FAVORITES'];
+const error=message=>{$('onboarding-error').textContent=message||'';$('onboarding-error').classList.toggle('hidden',!message);};
+function localSave(){if(!userId||completed)return;try{localStorage.setItem(`kaidra:setup:${userId}`,JSON.stringify({draft,stage:step,updatedAt:Date.now()}));}catch{}}
+function capture(){draft=cleanDraft({...draft,username:$('username-input').value,display_name:$('display-name-input').value,country:$('country-input').value,language:$('language-input').value});localSave();return draft;}
+function setBusy(value){busy=value;$('setup-next').disabled=value||!booted;$('onboarding-submit-btn').disabled=value||!booted;$('setup-back').disabled=value;$('skip-favorites').disabled=value;$('onboarding-form').setAttribute('aria-busy',String(value));$('avatar-input').disabled=value;}
+function queueSave(stage=step){
+ const value=structuredClone(capture());const version=++dirtyVersion;
+ saving=saving.catch(()=>{}).then(async()=>{await chatAction('kaidra_onboarding_save',{payload:value,next_stage:stage,finish:false});if(version===dirtyVersion)$('setup-save-status').textContent='Progress saved';});return saving;
 }
-function showStep(next) {
-  step = next; setError();
-  document.querySelectorAll('[data-step]').forEach((section) => { const active=Number(section.dataset.step)===step; section.classList.toggle('hidden',!active); section.querySelectorAll('input').forEach(input=>{ if(input.id==='username-input') input.required=active; }); });
-  document.querySelectorAll('[data-step-indicator]').forEach((node) => { node.classList.toggle('active',Number(node.dataset.stepIndicator)===step);node.setAttribute('aria-current',Number(node.dataset.stepIndicator)===step?'step':'false'); });
-  document.getElementById('setup-back').classList.toggle('hidden',step===0);document.getElementById('setup-next').classList.toggle('hidden',step===2);submit.classList.toggle('hidden',step!==2);
-  document.getElementById('setup-next').textContent=step===0?'Your taste →':'Fine-tune →';
+function scheduleSave(){if(!booted||busy)return;capture();$('setup-save-status').textContent='Saving your progress…';clearTimeout(draftTimer);draftTimer=setTimeout(()=>queueSave().catch(()=>{$('setup-save-status').textContent='Saved on this device. Reconnect to sync.';}),900);}
+function showStep(next,{historyMode='push',focus=true}={}){
+ const direction=next<step?'back':'next';step=Math.min(3,Math.max(0,next));error();
+ document.querySelectorAll('[data-step]').forEach(section=>{const current=Number(section.dataset.step)===step;section.classList.toggle('hidden',!current);section.dataset.direction=direction;});
+ document.querySelectorAll('[data-step-indicator]').forEach((node,index)=>{node.classList.toggle('active',index<=step);if(index===step)node.setAttribute('aria-current','step');else node.removeAttribute('aria-current');});
+ $('setup-step-label').textContent=`0${step+1} / ${labels[step]}`;$('setup-back').classList.toggle('hidden',step===0);$('setup-next').classList.toggle('hidden',step===3);$('onboarding-submit-btn').classList.toggle('hidden',step!==3);$('skip-favorites').classList.toggle('hidden',step!==3);
+ if(historyMode!=='none')history[historyMode==='replace'?'replaceState':'pushState']({setupStep:step},'',`${location.pathname}${location.search}#${names[step]}`);
+ if(focus)document.querySelector(`[data-step="${step}"] h2`)?.focus({preventScroll:true});if(step===2)renderGenres();if(step===3)searchFavorites();localSave();window.scrollTo({top:0,behavior:'instant'});
 }
-document.getElementById('setup-next').addEventListener('click',()=>{if(validate())showStep(step+1);});
-document.getElementById('setup-back').addEventListener('click',()=>showStep(Math.max(0,step-1)));
-username.addEventListener('input',async()=>{
-  const version=++usernameVersion,value=username.value.trim();if(value.length<3)return;
-  const response=await supabase.from('profiles').select('id').eq('username',value).neq('id',userId).limit(1);
-  if(version!==usernameVersion)return;
-  document.getElementById('username-availability').textContent=response.error?'Availability will be checked when you save.':response.data.length?'That username is taken.':'Username available';
-});
-let previewUrl;
-document.getElementById('avatar-input').addEventListener('change',event=>{
-  const file=event.target.files[0];if(!file)return;
-  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){setError('Choose a JPG, PNG, or WebP under 5 MB.');event.target.value='';return;}
-  if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(file);
-  const img=document.getElementById('avatar-preview');img.onerror=()=>{img.classList.add('hidden');setError('That photo could not be opened. Choose another image.');};img.src=previewUrl;img.classList.remove('hidden');
-});
-function renderFavorites(){
-  const target=document.getElementById('chosen-favorites');target.replaceChildren();
-  favorites.forEach(item=>{const button=element('button','favorite-chip',`${item.title} ×`);button.type='button';button.addEventListener('click',()=>{favorites=favorites.filter(value=>value.id!==item.id);renderFavorites();});target.append(button);});
+const categories=[['movie','Movies','film','Big screens. Bigger stories.'],['tv','Series','tv','Just one more episode.'],['anime','Anime','spark','Whole worlds to get lost in.'],['football','Football','ball','For every matchday.']];
+for(const [key,title,,copy] of categories){const button=element('button','interest-card');button.type='button';button.dataset.category=key;button.setAttribute('aria-pressed','false');button.append(element('span','interest-symbol',({movie:'▶',tv:'▣',anime:'✦',football:'⚽'})[key]),element('strong','',title),element('small','',copy),element('span','interest-check','✓'));button.addEventListener('click',()=>{if(busy)return;draft.categories=draft.categories.includes(key)?draft.categories.filter(item=>item!==key):[...draft.categories,key];renderCategories();scheduleSave();});$('interest-choices').append(button);}
+function renderCategories(){document.querySelectorAll('[data-category]').forEach(button=>button.setAttribute('aria-pressed',String(draft.categories.includes(button.dataset.category))));}
+function renderGenres(){
+ const narrative=draft.categories.some(value=>['movie','tv','anime'].includes(value));$('genre-choices').replaceChildren();$('football-taste-note').classList.toggle('hidden',!draft.categories.includes('football'));$('setup-services')?.classList.toggle('hidden',!narrative);
+ const allowed=genreChoices.filter(([key])=>narrative&&(!draft.categories.every(value=>value==='anime')||!['documentary','thriller'].includes(key)));
+ for(const [key,title] of allowed){const button=element('button','taste-chip',title);button.type='button';button.setAttribute('aria-pressed',String(draft.genres.includes(key)));button.addEventListener('click',()=>{draft.genres=draft.genres.includes(key)?draft.genres.filter(value=>value!==key):[...draft.genres,key];button.setAttribute('aria-pressed',String(draft.genres.includes(key)));scheduleSave();});$('genre-choices').append(button);}
 }
-document.getElementById('favorite-search').addEventListener('input',event=>{
-  clearTimeout(searchTimer);const query=event.target.value.trim(),version=++searchVersion,target=document.getElementById('favorite-results');
-  target.replaceChildren();if(query.length<2)return;
-  searchTimer=setTimeout(async()=>{
-    try{const data=await contentRequest('catalog',{category:'movie',query,region:country.value});if(version!==searchVersion)return;
-      target.replaceChildren();if(!data.configured){target.append(element('p','muted','Movie search is not connected yet. Your genre choices are enough to continue.'));return;}
-      for(const item of data.items.slice(0,5)){const button=element('button','favorite-result');button.type='button';button.append(artwork(item.image,'','favorite-artwork'));button.append(element('span','',`${item.title} · ${item.date?.slice(0,4)||''}`));
-        button.addEventListener('click',()=>{if(favorites.length>=3){setError('Choose up to three favourite movies.');return;}if(!favorites.some(value=>value.id===item.id))favorites.push({id:item.id,type:item.type,title:item.title,image:item.image});renderFavorites();target.replaceChildren();document.getElementById('favorite-search').value='';});target.append(button);}
-    }catch{if(version===searchVersion)target.replaceChildren(element('p','muted','Movie search is unavailable. You can add favourites later.'));}
-  },350);
-});
-document.getElementById('onboarding-form').addEventListener('submit',async event=>{
-  event.preventDefault();if(step<2){if(validate())showStep(step+1);return;}setError();submit.disabled=true;
-  try{
-    if(!userId)throw new Error('Sign in again to finish setting up your profile.');
-    if(!/^[a-zA-Z0-9_]{3,24}$/.test(username.value.trim())){showStep(0);throw new Error('Choose a username with 3–24 letters, numbers, or underscores.');}
-    if(!selected('content-type').length||!selected('genre').length){showStep(1);throw new Error('Choose at least one format and one genre.');}
-    let avatarUrl=existing?.avatar_url;
-    const file=document.getElementById('avatar-input').files[0];
-    if(file){if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024)throw new Error('Choose a JPG, PNG, or WebP under 5 MB.');
-      const path=`${userId}/${crypto.randomUUID()}.${file.type.split('/')[1]}`;const upload=await supabase.storage.from('avatars').upload(path,file);if(upload.error)throw upload.error;avatarUrl=supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
-    }
-    const football=document.getElementById('interest-football-input').checked;
-    const preferences={content_types:selected('content-type'),genres:selected('genre'),country:country.value,language:language.value,providers:selected('provider').map(Number),favorites};
-    const interests=[...selected('content-type'),...selected('genre'),...(football?['football']:[])];
-    const result=await supabase.from('profiles').upsert({id:userId,username:username.value.trim(),display_name:displayName.value.trim()||null,interests,recommendation_preferences:preferences,...(avatarUrl?{avatar_url:avatarUrl}:{})});
-    if(result.error)throw result.error;
-    location.replace('/app.html#home');
-  }catch(problem){setError(problem.code==='23505'?'That username is already taken.':problem.message||'Could not save your preferences. Try again.');}
-  finally{submit.disabled=false;}
-});
+for(const [key,title] of countries){const option=element('option','',title);option.value=key;$('country-input').append(option);}
+for(const [id,title] of [[8,'Netflix'],[9,'Prime Video'],[350,'Apple TV'],[337,'Disney+'],[283,'Crunchyroll']]){const label=element('label','provider-choice'),input=element('input');input.type='checkbox';input.value=id;input.addEventListener('change',()=>{draft.providers=input.checked?[...draft.providers,id]:draft.providers.filter(value=>value!==id);scheduleSave();});label.append(input,document.createTextNode(title));$('provider-choices').append(label);}
+async function checkUsername(){
+ const candidate=normalizeUsername($('username-input').value),version=++usernameVersion,problem=usernameError(candidate);availableName='';
+ if(problem){$('username-availability').textContent=problem;$('username-availability').classList.remove('valid');return false;}
+ $('username-availability').textContent='Checking availability…';
+ try{const available=await chatAction('kaidra_username_available',{candidate});if(version!==usernameVersion||candidate!==normalizeUsername($('username-input').value))return false;$('username-availability').textContent=available?`✓ @${candidate} is available`:'That username is taken. Try another.';$('username-availability').classList.toggle('valid',!!available);$('username-input').setAttribute('aria-invalid',String(!available));if(available)availableName=candidate;return !!available;}
+ catch{$('username-availability').textContent='Could not check. Reconnect and try Continue.';return false;}
+}
+$('username-input').addEventListener('input',()=>{++usernameVersion;availableName='';$('username-input').value=normalizeUsername($('username-input').value);clearTimeout(usernameTimer);usernameTimer=setTimeout(checkUsername,350);scheduleSave();});
+$('display-name-input').addEventListener('input',()=>{$('display-name-error').textContent='';if(!selectedFile&&!draft.avatar_url)setAvatar($('avatar-preview'),{display_name:$('display-name-input').value||'K'});scheduleSave();});
+for(const id of ['country-input','language-input'])$(id).addEventListener('change',scheduleSave);
+$('avatar-input').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){$('avatar-error').textContent='Choose a JPG, PNG, or WebP under 5 MB.';event.target.value='';return;}
+ const url=URL.createObjectURL(file),probe=new Image();probe.src=url;try{await probe.decode();}catch{URL.revokeObjectURL(url);$('avatar-error').textContent='That image could not open. Try another photo.';return;}if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=url;selectedFile=file;uploadedFile=null;$('avatar-preview').src=url;$('avatar-error').textContent='Photo ready. It will upload when you continue.';});
+$('remove-avatar').addEventListener('click',()=>{if(busy)return;selectedFile=null;uploadedFile=null;draft.avatar_url='';$('avatar-input').value='';if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;setAvatar($('avatar-preview'),{display_name:$('display-name-input').value||'K'});$('avatar-error').textContent='Using your initials. You can add a photo later.';scheduleSave();});
+async function uploadAvatar(){if(!selectedFile)return;if(uploadedFile===selectedFile){draft.avatar_url=uploadedUrl;return;}$('avatar-error').textContent='Uploading photo…';const path=`${userId}/${crypto.randomUUID()}.${selectedFile.type.split('/')[1]}`;const {error:problem}=await supabase.storage.from('avatars').upload(path,selectedFile);if(problem){$('avatar-error').textContent='Upload failed. Retry Continue, or use initials instead.';throw new Error('Your photo could not upload. You can continue without it.');}uploadedFile=selectedFile;uploadedUrl=supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;draft.avatar_url=uploadedUrl;$('avatar-error').textContent='Photo saved';}
+function renderFavorites(){const target=$('chosen-favorites');target.replaceChildren();for(const item of draft.favorites){const button=element('button','favorite-chip',`${item.title} ×`);button.type='button';button.addEventListener('click',()=>{draft.favorites=draft.favorites.filter(value=>`${value.kind||value.type}:${value.id}`!==`${item.kind||item.type}:${item.id}`);renderFavorites();scheduleSave();});target.append(button);}}
+async function searchFavorites(){
+ const version=++searchVersion,query=$('favorite-search').value.trim(),target=$('favorite-results');target.replaceChildren();$('favorite-status').textContent='';
+ if(!draft.categories.some(value=>['movie','tv','anime'].includes(value))){$('favorite-status').textContent='You can save matches and stories once you’re in. Skip this step to continue.';return;}
+ $('favorite-status').textContent='Finding a few picks…';
+ try{const category=draft.categories.includes('movie')&&draft.categories.includes('tv')?'for-you':draft.categories.includes('movie')?'movie':draft.categories.includes('tv')?'tv':'anime';const data=await contentRequest('catalog',{category,query,region:draft.country});if(version!==searchVersion)return;if(!data.configured)throw new Error();
+ for(const item of (data.items||[]).slice(0,6)){const button=element('button','favorite-result');button.type='button';button.append(artwork(item.image,'','favorite-artwork'),element('span','',item.title));button.setAttribute('aria-label',`Choose ${item.title}`);button.addEventListener('click',()=>{if(busy)return;if(draft.favorites.some(value=>`${value.kind||value.type}:${value.id}`===`${item.kind||item.type}:${item.id}`))return;if(draft.favorites.length>=3){$('favorite-status').textContent='Three is a great start. Remove one to choose another.';return;}draft.favorites.push({id:item.id,kind:item.kind||item.type,title:item.title,image:item.image});renderFavorites();scheduleSave();});target.append(button);}
+ $('favorite-status').textContent=data.items?.length?'Optional. Skip this step whenever you’re ready.':'No matches. Try another title or skip this step.';
+ }catch{if(version===searchVersion)$('favorite-status').textContent='Titles are unavailable right now. Your interests are enough — skip to continue.';}
+}
+$('favorite-search').addEventListener('input',()=>{clearTimeout(searchTimer);++searchVersion;searchTimer=setTimeout(searchFavorites,350);});
+async function advance(){if(busy||!booted)return;error();capture();if(step===0){if(!draft.display_name){$('display-name-error').textContent='Enter a name for your profile.';$('display-name-input').focus();return;}if(availableName!==draft.username&&!await checkUsername()){$('username-input').focus();return;}}
+ if(step===1&&!draft.categories.length){error('Choose at least one interest.');return;}setBusy(true);clearTimeout(draftTimer);
+ try{if(step===0)await uploadAvatar();await queueSave(step+1);showStep(step+1);}catch(problem){error(problem.message?.startsWith('Your photo')?problem.message:'Your account is safe. Reconnect and retry to save this step.');}finally{setBusy(false);}
+}
+$('setup-next').addEventListener('click',advance);$('setup-back').addEventListener('click',()=>{if(!busy){capture();showStep(Math.max(0,step-1));}});
+window.addEventListener('popstate',()=>{if(!booted)return;if(busy){history.pushState({setupStep:step},'',`#${names[step]}`);return;}capture();const next=names.indexOf(location.hash.slice(1));showStep(next<0?0:next,{historyMode:'none'});});
+async function finish(skip=false){if(busy||!booted)return;error();capture();if(skip)draft.favorites=[];if(!draft.categories.length){showStep(1);error('Choose at least one interest.');return;}if(usernameError(draft.username)||!draft.display_name){showStep(0);error('Finish your name and username first.');return;}setBusy(true);clearTimeout(draftTimer);++searchVersion;
+ try{await saving.catch(()=>{});await uploadAvatar();await chatAction('kaidra_onboarding_save',{payload:draft,next_stage:3,finish:true});completed=true;try{localStorage.removeItem(`kaidra:setup:${userId}`);}catch{}$('onboarding-form').classList.add('hidden');$('setup-complete').classList.remove('hidden');setTimeout(()=>location.replace('/app.html#home'),matchMedia('(prefers-reduced-motion: reduce)').matches?100:800);}
+ catch(problem){if(problem.code==='23505'){showStep(0);$('username-availability').textContent='That username was just taken. Choose another.';}error(authError(problem));setBusy(false);}
+}
+$('onboarding-form').addEventListener('submit',event=>{event.preventDefault();if(step<3)advance();else finish();});$('skip-favorites').addEventListener('click',()=>finish(true));
+$('setup-signout').addEventListener('click',async()=>{if(busy)return;setBusy(true);capture();await queueSave().catch(()=>{});const {error:problem}=await supabase.auth.signOut();if(problem){error('Could not log out. Try again.');setBusy(false);}else location.replace('/auth.html');});
 (async()=>{
-  const session=await requireAuth();if(!session)return;userId=session.user.id;
-  const {data,error:loadError}=await supabase.from('profiles').select('*').eq('id',userId).maybeSingle();
-  if(loadError){setError('Could not load your profile. Refresh to try again.');return;}
-  existing=data;
-  if(existing&&!new URLSearchParams(location.search).has('edit')){location.replace('/app.html');return;}
-  const prefs=preferencesFor(existing||{});username.value=existing?.username||'';displayName.value=existing?.display_name||'';country.value=prefs.country;language.value=prefs.language;favorites=prefs.favorites;
-  document.querySelectorAll('[name="content-type"]').forEach(input=>input.checked=prefs.content_types.includes(input.value));
-  document.querySelectorAll('[name="genre"]').forEach(input=>input.checked=prefs.genres.includes(input.value));
-  document.querySelectorAll('[name="provider"]').forEach(input=>input.checked=prefs.providers.map(String).includes(input.value));
-  document.getElementById('interest-football-input').checked=prefs.football;renderFavorites();
-  if(existing){document.title='Edit your tastes — Kaidra';showStep(1);}
-})().catch(()=>setError('Could not load your account. Please sign in again.'));
+ const session=await requireAuth();if(!session)return;userId=session.user.id;
+ const [profileResult,draftResult]=await Promise.all([supabase.from('profiles').select('*').eq('id',userId).maybeSingle(),supabase.from('onboarding_drafts').select('draft,stage,updated_at').eq('user_id',userId).maybeSingle()]);
+ if(profileResult.error||draftResult.error)throw profileResult.error||draftResult.error;existing=profileResult.data;const editing=new URLSearchParams(location.search).has('edit');if(existing?.onboarding_completed!==false&&existing&&!editing){location.replace('/app.html#home');return;}
+ const prefs=preferencesFor(existing||{});draft=cleanDraft({username:existing?.username,display_name:existing?.display_name,avatar_url:existing?.avatar_url,categories:existing?[...prefs.content_types,...(prefs.football?['football']:[])]:[],genres:prefs.genres,country:prefs.country,language:prefs.language,providers:prefs.providers,favorites:prefs.favorites});
+ let resume=draftResult.data;try{const local=JSON.parse(localStorage.getItem(`kaidra:setup:${userId}`));if(local&&(!resume||local.updatedAt>new Date(resume.updated_at).getTime()))resume={draft:local.draft,stage:local.stage};}catch{}
+ if(resume)draft=cleanDraft(resume.draft);
+ $('username-input').value=draft.username;$('display-name-input').value=draft.display_name;$('country-input').value=draft.country;$('language-input').value=draft.language;setAvatar($('avatar-preview'),{display_name:draft.display_name||'K',avatar_url:draft.avatar_url});renderCategories();renderFavorites();document.querySelectorAll('#provider-choices input').forEach(input=>input.checked=draft.providers.includes(Number(input.value)));booted=true;setBusy(false);$('setup-save-status').textContent=resume?'Welcome back. Pick up where you left off.':'';showStep(resume?.stage??(editing?1:0),{historyMode:'replace',focus:false});if(draft.username)checkUsername();
+})().catch(()=>{error('Could not load setup. Refresh to retry, or log in again.');$('setup-save-status').textContent='';});
+window.addEventListener('pagehide',()=>{capture();clearTimeout(draftTimer);if(previewUrl)URL.revokeObjectURL(previewUrl);});

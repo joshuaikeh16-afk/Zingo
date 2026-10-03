@@ -1,19 +1,9 @@
-# Focused UX overhaul checkpoint — 2026-10-03
+# Kaidra UX and chat handoff — 2026-10-03
 
-Saved for the requested urgent GitHub backup. This is an implementation checkpoint, not a production-ready release.
+The earlier urgent checkpoint has been completed and verified. The missing library/group migration **20261006 is now applied** to the linked Supabase project, along with the tested resumable onboarding and saved-media/reply identity migrations **20261007 and 20261008**. The frontend and live database now use the same message, group and library fields.
 
-Implemented locally: contextual entertainment actions; separate Favorites and Watchlist using the existing user_watchlist table; Profile library; immediate rich-content sharing; contextual message actions; reply navigation; composer menu; staged group creation; group roles, permissions, ownership transfer, polls, mentions, pins, shared history and system events. Home hero, Friends, and profile identity are preserved.
+Contextual content/message actions, private Favorites/Watchlist, immediate sharing, staged group creation, permissions/ownership, polls, pins, mentions, replies and shared history are connected. Membership revocation closes cached group views. Legacy saved MAL items retain their provider and a usable destination. Home hero, Friends and profile identity are preserved.
 
-## Database
+The full responsive browser suite passed at 320–1600 pixels. Fresh-account onboarding and PWA install/offline checks passed separately. Rolled-back authorization/regression SQL tests passed. Live authenticated WebSocket tests verified DM/group delivery, reads, reactions, polls/votes/pins, private library persistence and removed-member access revocation. Temporary live fixtures were cleaned up.
 
-`supabase/migrations/20261006_library_and_group_controls.sql` is **not applied**. New features require this migration after the existing 20261003–20261005 schema. Both new authorization tests (`tests/group-controls.sql`) and existing chat regression tests (`tests/chat-backend.sql`) passed against it in rolled-back database transactions. No test fixtures were retained.
-
-Do not run all historical migrations blindly: this project has an existing live schema and older migration history is not reconciled.
-
-## Checks and remaining work
-
-Final static syntax checks, message-state tests, feed/unread tests, and git diff whitespace checks passed. The final browser attempt could not start Chrome; the updated full browser suite has not passed. New simultaneous-account live Realtime acceptance checks have not run, and the new schema has not been deployed. Prior live checks documented elsewhere cover the previous version only.
-
-Before production: finish the browser suite (including mobile long press and keyboard menus), inspect responsive screenshots, close all cached group overlays on membership revocation, verify migrated MAL items have a usable detail destination, and verify bidirectional DM/group delivery, polls, replies, reactions, mentions, ownership transfer and private library persistence with two authenticated accounts. Review library/group realtime reconnect handling and stale group-info panels. Apply the incremental migration only after those checks are complete.
-
-No API secrets belong in GitHub. Local environment files and the local CLI installation are ignored.
+See [the current release handoff](ONBOARDING_AND_INSTALL.md) for the exact Watchlist 400 diagnosis, deployment details, changed account flow, test coverage and remaining limitations. Publish the complete static frontend together; do not blindly reapply historical migrations or commit secrets.

@@ -1,3 +1,4 @@
+import { libraryReady, libraryItems } from './library.js';
 import { attachContentActions, contentActions } from './content-actions.js';
 import { openMenu } from './context-menu.js';
 import { element, safeUrl, openModal, artwork, actionButton } from './ui.js';
@@ -40,7 +41,7 @@ const snapshotKeys = [];
 let shownPath;
 export function openContent(snapshot) {
   const kind = snapshot.kind || snapshot.type;
-  const path = kind === 'match' ? `match/${snapshot.id}` : kind === 'article' ? `article/${encodeURIComponent(snapshot.url)}` : `title/${kind}/${snapshot.id}`;
+  const path = snapshot.provider === 'mal' || ['anime','manga'].includes(kind) ? `title/mal-${kind}/${snapshot.id}` : kind === 'match' ? `match/${snapshot.id}` : kind === 'article' ? `article/${encodeURIComponent(snapshot.url)}` : `title/${kind}/${snapshot.id}`;
   const route = parseRoute(path); if (!isObjectRoute(route)) return;
   snapshots.set(route.path, snapshot);
   if (!snapshotKeys.includes(route.path)) snapshotKeys.push(route.path);
@@ -58,6 +59,15 @@ async function renderContent(snapshot) {
   const kind = snapshot.kind || snapshot.type;
   document.getElementById('content-detail-modal').dataset.kind = kind;
   document.getElementById('content-detail-kind').textContent = ({ movie: 'Movie', tv: 'Series', match: 'Match', article: 'News story' })[kind] || 'Details';
+  if (snapshot.provider === 'mal' || ['anime','manga'].includes(kind)) {
+    let item = snapshot;
+    if (!snapshot.title) { try { await libraryReady(); item = [...libraryItems('favorites'), ...libraryItems('watchlist')].find(saved => saved.provider === 'mal' && String(saved.id) === String(snapshot.id) && saved.kind === kind) || snapshot; } catch {} }
+    if (version !== detailVersion) return;
+    const name = item.title || `MyAnimeList title #${item.id}`; title.textContent = name;
+    body.replaceChildren(artwork(item.image, name, 'detail-poster'), element('h2', '', name), element('p', 'muted', 'Saved from MyAnimeList. Open the original listing for current details.'));
+    body.append(externalLink('View on MyAnimeList ↗', `https://myanimelist.net/${kind === 'manga' ? 'manga' : 'anime'}/${encodeURIComponent(item.id)}`));
+    const save = actionButton('Saved options', 'bookmark'); save.addEventListener('click', () => openMenu(save, contentActions({...item,title:name}).slice(0,2), 'Saved title')); body.append(save); return;
+  }
   if(snapshot.kind==='match'){
     let item=snapshot;
     try{const data=await contentRequest('match',{id:snapshot.id});if(version!==detailVersion)return;if(data.match)item=matchContent(data.match);}catch{}
@@ -115,7 +125,7 @@ document.addEventListener('kaidra:route-change', event => {
   shownPath = route.path;
   let snapshot = snapshots.get(route.path);
   if (!snapshot) { try { snapshot = JSON.parse(sessionStorage.getItem(`kaidra:content:${route.path}`)); } catch {} }
-  snapshot ||= route.view === 'article' ? { kind: 'article', url: route.id, title: 'News story' } : { kind: route.view === 'match' ? 'match' : route.type, id: route.id };
+  snapshot ||= route.view === 'article' ? { kind: 'article', url: route.id, title: 'News story' } : { kind: route.view === 'match' ? 'match' : route.type, id: route.id, ...(route.provider ? {provider:route.provider} : {}) };
   renderContent(snapshot).catch(() => { if (parseRoute(location.hash).path === route.path) feedError(document.getElementById('content-detail-body'), () => renderContent(snapshot), 'Could not load these details.'); });
 });
 document.addEventListener('kaidra:modal-close', event => {

@@ -66,3 +66,9 @@
  .profile-content-grid:has([data-library-tab]){grid-template-columns:1fr}.chat-input-bar{padding:8px;gap:3px}.chat-input-bar>.icon-button,.chat-send-btn{width:38px;height:42px;min-width:38px;min-height:42px}.message-row{max-width:88%}.message-bubble{font-size:.86rem}.poll-card{width:270px}.chat-messages-body{padding:14px 12px}.group-info-actions{gap:5px}
 }
 @media(prefers-reduced-motion:reduce){.context-layer>.social-modal-card,.message-highlight{animation:none}.poll-choice:before{transition:none}}
+/* Final motion and touch polish keeps the hero's existing composition. */
+.content-open,.match-open,.friend-card .person-identity,.rail-conversation{transition:background .15s ease,transform .18s ease}
+@media(hover:hover){.content-card:hover .content-cover img{transform:scale(1.025)}.content-cover img{transition:transform .3s ease}.friend-card:hover{border-color:#b994e226}.content-open:active,.match-open:active{transform:scale(.99)}}
+.chat-header,.conversation-panel-heading{flex-shrink:0}.chat-messages-body{scrollbar-gutter:stable}.social-modal-card{scrollbar-gutter:stable;overscroll-behavior:contain}button,a{-webkit-tap-highlight-color:transparent}button:focus-visible,a:focus-visible{outline:2px solid #c3a1ef;outline-offset:3px}.message-row{overflow-wrap:anywhere}
+@media(display-mode:standalone){.app-header{padding-top:calc(12px + env(safe-area-inset-top))}.bottom-nav-container{padding-bottom:env(safe-area-inset-bottom)}.auth-body,.tastes-body{overscroll-behavior-y:none}}
+@media(prefers-reduced-motion:reduce){.content-open,.match-open,.content-cover img,.friend-card .person-identity,.rail-conversation{transition:none}.content-card:hover .content-cover img{transform:none}}

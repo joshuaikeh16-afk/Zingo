@@ -50,7 +50,7 @@ async function refreshState(state = active) {
   const version = state.stateVersion = (state.stateVersion || 0) + 1;
   let data;
   try { data = await getChatState(state.id, [...state.messages.keys()].filter(id => /^[0-9a-f-]{36}$/i.test(id))); }
-  catch (error) { if (active === state && /Membership required|Group unavailable/i.test(error.message || '')) { closeModal('chat-info-modal'); navigate('inbox'); notify('You no longer have access to this conversation.'); } throw error; }
+  catch (error) { if (active === state && /Membership required|Group unavailable/i.test(error.message || '')) { for (const modal of [...document.querySelectorAll('.social-modal[data-conversation-id]')].reverse()) if (modal.dataset.conversationId === state.id) closeModal(modal.id); closeModal('chat-info-modal'); closeModal('new-chat-modal'); navigate('inbox'); notify('You no longer have access to this conversation.'); } throw error; }
   if (active !== state || version !== state.stateVersion) return;
   Object.assign(state, { members: data.members || [], reactions: data.reactions || [], reads: data.reads || [], polls: data.polls || [], pins: data.pins || [], quotes: data.quotes || [], permissions: data.conversation.permissions || {}, description: data.conversation.description, extended: data.extended, isGroup: !!data.conversation.is_group, createdBy: data.conversation.created_by });
   if (data.conversation.title) state.profile.display_name = data.conversation.title;
@@ -58,7 +58,7 @@ async function refreshState(state = active) {
   document.getElementById('dm-active-name').textContent = state.profile.display_name || state.profile.username;
   document.getElementById('chat-member-count').textContent = state.isGroup ? `${state.members.length} people` : '';
   const pins = document.getElementById('chat-pins'); pins.classList.toggle('hidden', !state.pins.length); pins.textContent = `${state.pins.length} pinned ${state.pins.length === 1 ? 'message' : 'messages'}`;
-  syncComposer(); renderMessages(state);
+  syncComposer(); renderMessages(state); document.dispatchEvent(new CustomEvent('kaidra:chat-state', {detail:{id:state.id}}));
 
 }
 async function snapshot(state) {
@@ -72,12 +72,13 @@ function closeThread() {
   voiceNotes.cancel();
   if (active) { supabase.removeChannel(active.channel); if (active.interactions) supabase.removeChannel(active.interactions); }
   if (active) for (const message of active.messages.values()) if (message.localVoiceUrl) URL.revokeObjectURL(message.localVoiceUrl);
-  active = null; drawer.classList.remove('is-active'); sharedDraft = null; replyDraft = null; renderDraft(); syncOverlay(); renderList();
+  active = null; thread.replaceChildren(); delete drawer.dataset.conversationId; document.getElementById('dm-active-name').textContent=''; document.getElementById('chat-member-count').textContent=''; document.getElementById('chat-pins').classList.add('hidden'); drawer.classList.remove('is-active'); sharedDraft = null; replyDraft = null; renderDraft(); syncOverlay(); renderList();
 }
 async function openThread(id, profile, isGroup = false) {
   if (active?.id === id) return;
   navigate(`inbox/${id}`); closeThread();
   const state = active = { initialUnread: rows.find(row => row.conversationId === id)?.unreadCount || 0, id, profile: { ...profile }, isGroup, messages: new Map(), nodes: new Map(), members: [], reactions: [], reads: [], extended: false, loading: true, hasOlder: false };
+  drawer.dataset.conversationId = id;
   input.value = ''; input.style.height = ''; showError('chat-error'); thread.replaceChildren(); skeletons(thread, 'person', 3);
   setAvatar(document.getElementById('dm-active-avatar'), profile); document.getElementById('dm-active-name').textContent = profile.display_name || profile.username;
   drawer.classList.add('is-active'); syncOverlay(); renderList(); status('chat-connection-status', 'Connecting…');
@@ -111,10 +112,11 @@ async function acknowledge(state) {
     if (newest && compareMessages(newest, through) > 0) acknowledge(state);
   }
 }
-function textContent(bubble, text, members, mentionIds = []) {
+function textContent(bubble, text, members, mentionIds = [], mentionLabels = []) {
   const tokens = String(text || '').split(/(@[a-zA-Z0-9_]+|https?:\/\/[^\s]+)/g);
   for (const token of tokens) {
-    const member = token.startsWith('@') && members.find(person => mentionIds.includes(person.id) && person.username?.toLowerCase() === token.slice(1).toLowerCase());
+    const saved = mentionLabels.find(label => label.username?.toLowerCase() === token.slice(1).toLowerCase());
+    const member = token.startsWith('@') && (saved ? {id:saved.user_id} : members.find(person => mentionIds.includes(person.id) && person.username?.toLowerCase() === token.slice(1).toLowerCase()));
     if (member) { const button = element('button', 'message-mention', token); button.type = 'button'; button.addEventListener('click', () => viewProfile(member.id)); bubble.append(button); }
     else if (/^https?:\/\//.test(token)) { const link = element('a', 'message-link', token); link.href = token; link.target = '_blank'; link.rel = 'noopener noreferrer'; bubble.append(link); }
     else bubble.append(document.createTextNode(token));
@@ -122,7 +124,7 @@ function textContent(bubble, text, members, mentionIds = []) {
 }
 for (const type of ['text', 'sticker']) registerMessageContent(type, (message, context) => {
   if (!message.content) return null;
-  const bubble = element('div', 'message-bubble'); textContent(bubble, message.content, context.members, message.mention_ids); return bubble;
+  const bubble = element('div', 'message-bubble'); textContent(bubble, message.content, context.members, message.mention_ids, message.mention_labels); return bubble;
 });
 for (const type of ['image', 'voice_note']) registerMessageContent(type, message => {
   const media = element(type === 'image' ? 'img' : 'audio', 'chat-media');
@@ -206,7 +208,7 @@ function renderDraft() {
 document.getElementById('message-form').addEventListener('submit', event => {
   event.preventDefault(); if (!active || !userId || voiceBusy) return; const content = input.value.trim(); if (!content && !sharedDraft) return;
   if (content.length > 4000) { showError('chat-error', 'Keep your message under 4,000 characters.'); return; }
-  const message = { id: crypto.randomUUID(), conversation_id: active.id, sender_id: userId, content, message_type: 'text', shared_content: sharedDraft, external_ref_id: replyDraft?.id || null, mention_ids: (active.members || []).filter(member => content.split(/\s+/).some(word => word.replace(/[.,!?;:]+$/, '') === `@${member.username}`)).map(member => member.id), created_at: new Date().toISOString(), localState: 'queued' };
+  const message = { id: crypto.randomUUID(), conversation_id: active.id, sender_id: userId, content, message_type: 'text', shared_content: sharedDraft, external_ref_id: replyDraft?.id || null, mention_ids: (active.isGroup ? active.members || [] : []).filter(member => content.split(/\s+/).some(word => word.replace(/[.,!?;:]+$/, '') === `@${member.username}`)).map(member => member.id), created_at: new Date().toISOString(), localState: 'queued' };
   input.value = ''; input.style.height = ''; sharedDraft = null; replyDraft = null; renderDraft(); document.getElementById('mention-suggestions').classList.add('hidden'); deliver(active, message);
 });
 input.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); document.getElementById('message-form').requestSubmit(); } });
@@ -214,7 +216,7 @@ input.addEventListener('input', () => {
   syncComposer();
   input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
   const target = document.getElementById('mention-suggestions'), match = input.value.slice(0, input.selectionStart).match(/(?:^|\s)@([a-zA-Z0-9_]*)$/);
-  const matches = match ? (active?.members || []).filter(member => member.id !== userId && member.username?.toLowerCase().startsWith(match[1].toLowerCase())).slice(0, 5) : [];
+  const matches = match && active?.isGroup ? (active?.members || []).filter(member => member.id !== userId && member.username?.toLowerCase().startsWith(match[1].toLowerCase())).slice(0, 5) : [];
   target.classList.toggle('hidden', !matches.length); target.replaceChildren(...matches.map(member => { const button = element('button', '', `@${member.username}`); button.type = 'button'; button.prepend(avatar(member)); button.addEventListener('click', () => { const cursor = input.selectionStart, start = cursor - match[1].length - 1, replacement = `@${member.username} `; input.value = input.value.slice(0, start) + replacement + input.value.slice(cursor); input.focus(); input.setSelectionRange(start + replacement.length, start + replacement.length); target.classList.add('hidden'); syncComposer(); }); return button; }));
 });
 async function chooseConversation(content = null, text = '') {

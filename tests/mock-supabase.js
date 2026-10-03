@@ -11,8 +11,10 @@ const db = {
   conversation_participants: [{ conversation_id: a, user_id: me }, { conversation_id: a, user_id: alice }, { conversation_id: b, user_id: me }, { conversation_id: b, user_id: bob }],
   messages: [{ id: 'm1', conversation_id: a, sender_id: alice, content: 'Any recommendations tonight?', created_at: now, message_type: 'text', read_at: null }, { id: 'm2', conversation_id: b, sender_id: bob, content: 'Ready for the match?', created_at: now, message_type: 'text', read_at: null }],
   user_preferences: [{ user_id: me, allow_dms: true }], sports_alert_settings: [], app_notifications: [], sports_events: [],
-  conversations: [{id:a,is_group:false},{id:b,is_group:false}], message_reactions: [], message_reads: [], user_watchlist: [], chat_polls: [], poll_votes: [], message_pins: [], chat_signals: [],
+  conversations: [{id:a,is_group:false},{id:b,is_group:false}], message_reactions: [], message_reads: [], user_watchlist: [], chat_polls: [], poll_votes: [], message_pins: [], chat_signals: [], onboarding_drafts: [],
 };
+try { const saved=JSON.parse(sessionStorage.getItem('qa:db')); if(saved)Object.assign(db,saved); } catch {}
+function persist(){sessionStorage.setItem('qa:db',JSON.stringify(db));}
 const channels = new Set();
 const control = { db, me, alice, bob, a, b, failNextSend: false, delayConversation: null, failCatalog: false, failFixtures: false, unconfiguredFixtures: false, calls: [] };
 control.uploads = []; const media = new Map();
@@ -25,7 +27,7 @@ function emit(table, event, row) {
     queueMicrotask(() => { if (channels.has(channel)) entry.callback({ new: structuredClone(row), eventType: event, table }); });
   }
 }
-control.emit = emit;
+control.emit = emit; control.persist = persist;
 function pieces(text) { let depth=0, start=0; const result=[]; for(let i=0;i<text.length;i++) { if(text[i]==='(')depth++;if(text[i]===')')depth--;if(text[i]===','&&!depth){result.push(text.slice(start,i));start=i+1;} } result.push(text.slice(start)); return result; }
 function expression(row, text) {
   if (text.startsWith('and(')) return pieces(text.slice(4,-1)).every((item)=>expression(row,item));
@@ -58,6 +60,10 @@ class Query {
   delete(){this.op='delete';return this;}
   then(resolve,reject){return this.run().then(resolve,reject);}
   async run(){
+    if(this.table==='user_watchlist'&&this.op==='select'){
+      control.libraryQueries=(control.libraryQueries||0)+1;
+      if(control.failLibraryLoad)return {data:null,error:{...control.failLibraryLoad},status:control.failLibraryLoad.status};
+    }
     const table=db[this.table]||[];
     let rows=table.filter(row=>this.filters.every(fn=>fn(row)));
     if(this.op==='insert'||this.op==='upsert'){
@@ -77,7 +83,9 @@ class Query {
     const count=rows.length;
     if(this.count!=null)rows=rows.slice(0,this.count);
     const result={data:this.options?.head?null:structuredClone(this.one?rows[0]||null:rows),error:null,count};
+    if(this.table==='user_watchlist'&&control.delayLibrary)await new Promise(resolve=>setTimeout(resolve,control.delayLibrary));
     if(this.table==='messages'&&this.op==='select'&&this.fields==='*'&&control.delayConversation&&rows.some(row=>row.conversation_id===control.delayConversation))await new Promise(resolve=>setTimeout(resolve,700));
+    if(this.op!=='select')persist();
     return result;
   }
 }
@@ -87,17 +95,25 @@ function channel(name){
 }
 control.reconnect=()=>{for(const item of channels)item.status?.('SUBSCRIBED');};
 export function createClient(){return {
-  auth:{getSession:async()=>({data:{session:sessionStorage.getItem('qa:signed-out')==='true'?null:{user:{id:me}}}}),getUser:async()=>({data:{user:{id:me}}}),signOut:async()=>{sessionStorage.setItem('qa:signed-out','true');return {error:null};},signInWithPassword:async()=>{sessionStorage.removeItem('qa:signed-out');return {data:{session:{user:{id:me}}},error:null};},signUp:async()=>({data:{session:null},error:null}),resetPasswordForEmail:async()=>({error:null}),signInWithOAuth:async()=>({error:{message:'OAuth is not configured in this test.'}}),updateUser:async()=>({error:null}),onAuthStateChange:callback=>{if(location.pathname==='/reset-password.html'&&location.search.includes('qa-recovery'))setTimeout(()=>callback('PASSWORD_RECOVERY',{user:{id:me}}),30);return {data:{subscription:{unsubscribe(){}}}};}},
+  auth:{getSession:async()=>({data:{session:sessionStorage.getItem('qa:signed-out')==='true'?null:{user:{id:me}}}}),getUser:async()=>({data:{user:{id:me}}}),signOut:async()=>{sessionStorage.setItem('qa:signed-out','true');return {error:null};},signInWithPassword:async()=>{sessionStorage.removeItem('qa:signed-out');return {data:{session:{user:{id:me}}},error:null};},signUp:async()=>{control.signupCalls=(control.signupCalls||0)+1;await new Promise(resolve=>setTimeout(resolve,150));return {data:{session:null},error:null};},resend:async()=>{control.resendCalls=(control.resendCalls||0)+1;return {error:null};},resetPasswordForEmail:async()=>({error:null}),signInWithOAuth:async()=>({error:{message:'OAuth is not configured in this test.'}}),updateUser:async()=>({error:null}),onAuthStateChange:callback=>{if(location.pathname==='/reset-password.html'&&location.search.includes('qa-recovery'))setTimeout(()=>callback('PASSWORD_RECOVERY',{user:{id:me}}),30);return {data:{subscription:{unsubscribe(){}}}};}},
   from:(table)=>new Query(table),channel,removeChannel:async(value)=>channels.delete(value),
   rpc:async(name,args={})=>{
     if(control.missingGroups && name.startsWith('kaidra_') && !['kaidra_mark_read','kaidra_inbox'].includes(name))return {data:null,error:{code:'PGRST202'}};
     let data=true;
+    if(name==='kaidra_username_available')data=!db.profiles.some(row=>row.id!==me&&row.username.toLowerCase()===args.candidate.toLowerCase());
+    if(name==='kaidra_onboarding_save') {
+      if(control.failOnboarding)return {error:{message:'Offline'}};
+      if(args.finish){let profile=db.profiles.find(row=>row.id===me);if(!profile){profile={id:me};db.profiles.push(profile);}Object.assign(profile,{username:args.payload.username,display_name:args.payload.display_name,avatar_url:args.payload.avatar_url,interests:[...args.payload.categories,...args.payload.genres],onboarding_completed:true,recommendation_preferences:{content_types:args.payload.categories.filter(x=>x!=='football'),genres:args.payload.genres,country:args.payload.country,language:args.payload.language,favorites:args.payload.favorites}});db.onboarding_drafts=db.onboarding_drafts.filter(row=>row.user_id!==me);}
+      else {let row=db.onboarding_drafts.find(row=>row.user_id===me);if(!row){row={user_id:me};db.onboarding_drafts.push(row);}Object.assign(row,{stage:args.next_stage,draft:args.payload,updated_at:new Date().toISOString()});}
+    }
+
     if(name==='get_or_create_conversation')data=args.other_user_id===alice?a:b;
     if(name==='kaidra_library_save') {
       if(control.failLibrary)return {error:{message:'Offline'}};
       const item=args.item,kind=item.kind||item.type,id=String(kind==='article'?item.url:item.id);
-      let row=db.user_watchlist.find(row=>row.external_id===id&&row.media_type===kind);
-      if(!row){row={user_id:me,provider:'tmdb',external_id:id,media_type:kind,title:item.title,cover_url:item.image,snapshot:item,is_favorite:false,is_watchlisted:false};db.user_watchlist.push(row);}
+      const provider=item.provider||({movie:'tmdb',tv:'tmdb',anime:'mal',manga:'mal',article:'news',match:'football-data'})[kind];
+      let row=db.user_watchlist.find(row=>row.external_id===id&&row.media_type===kind&&row.provider===provider);
+      if(!row){row={user_id:me,provider,external_id:id,media_type:kind,title:item.title,cover_url:item.image,snapshot:item,is_favorite:false,is_watchlisted:false};db.user_watchlist.push(row);}
       row[args.collection==='favorites'?'is_favorite':'is_watchlisted']=args.saved;data=row;emit('user_watchlist','UPDATE',row);
     }
     if(name==='kaidra_chat_state'){
@@ -132,7 +148,7 @@ export function createClient(){return {
       for(const message of db.messages.filter(row=>row.conversation_id===args.target_conversation&&row.sender_id!==me&&(!args.through_created_at||row.created_at<=args.through_created_at))){if(!db.message_reads.some(row=>row.message_id===message.id&&row.user_id===me)){const receipt={message_id:message.id,user_id:me,conversation_id:message.conversation_id};db.message_reads.push(receipt);emit('message_reads','INSERT',receipt);if(!db.conversations.find(row=>row.id===message.conversation_id)?.is_group){message.read_at=now;emit('messages','UPDATE',message);}}}
     }
     if(name==='kaidra_inbox')data=db.conversations.filter(row=>db.conversation_participants.some(member=>member.conversation_id===row.id&&member.user_id===me)).map(row=>{const messages=db.messages.filter(message=>message.conversation_id===row.id).sort((a,b)=>b.created_at.localeCompare(a.created_at));return {conversationId:row.id,isGroup:row.is_group,profile:row.is_group?{id:row.id,display_name:row.title,username:'group'}:db.profiles.find(profile=>db.conversation_participants.some(member=>member.conversation_id===row.id&&member.user_id!==me&&member.user_id===profile.id)),lastMessage:messages[0]||null,unreadCount:messages.filter(message=>message.sender_id!==me&&!db.message_reads.some(read=>read.message_id===message.id&&read.user_id===me)).length};}).sort((a,b)=>(b.lastMessage?.created_at||'').localeCompare(a.lastMessage?.created_at||''));
-    return {data:structuredClone(data),error:null};
+    persist(); return {data:structuredClone(data),error:null};
   },
   functions:{invoke:async(name,{body})=>{
     control.calls.push(body);

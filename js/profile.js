@@ -125,14 +125,14 @@ document.addEventListener('kaidra:friends-changed', () => { loadProfile(userId);
 (async () => { const current = await account; if (!current) return; userId = current.userId; await loadProfile(userId); })();
 
 let libraryTab = 'favorites';
-async function renderLibrary() {
+async function renderLibrary(force = false) {
   const target = document.getElementById('profile-favorites');
   try {
-    await libraryReady(); const items = libraryItems(libraryTab);
+    await libraryReady({force: force === true}); const items = libraryItems(libraryTab);
     document.getElementById('stat-favorites').textContent = libraryItems('favorites').length;
     target.replaceChildren(...items.map(mediaCard));
     if (!items.length) target.append(emptyState(libraryTab === 'favorites' ? 'Your favorites belong here' : 'Your next watch starts here', 'Save a title from its three-dot menu.', 'bookmark', { label: 'Explore Discover', run: () => navigate('discover') }));
-  } catch { target.replaceChildren(emptyState('Library unavailable', 'Your saved titles are safe. Try again.', 'bookmark', { label: 'Try again', run: renderLibrary })); }
+  } catch { target.replaceChildren(emptyState('Library unavailable', 'Your saved titles are safe. Try again.', 'bookmark', { label: 'Try again', run: () => renderLibrary(true) })); }
 }
 document.querySelectorAll('[data-library-tab]').forEach(button => button.addEventListener('click', () => { libraryTab = button.dataset.libraryTab; document.querySelectorAll('[data-library-tab]').forEach(tab => { tab.classList.toggle('active', tab === button); tab.setAttribute('aria-selected', String(tab === button)); }); renderLibrary(); }));
 document.addEventListener('kaidra:library-change', renderLibrary);

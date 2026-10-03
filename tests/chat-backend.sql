@@ -6,7 +6,7 @@ declare
  group_a uuid; group_b uuid; direct_id uuid; boundary uuid; last_id uuid; stamp timestamptz; remaining integer; total integer; successor uuid;
 begin
  insert into auth.users(id,email) values(actor,actor::text||'@example.invalid'),(friend_a,friend_a::text||'@example.invalid'),(friend_b,friend_b::text||'@example.invalid'),(outsider,outsider::text||'@example.invalid');
- insert into public.profiles(id,username,display_name) values(actor,'qa_'||replace(actor::text,'-',''),'QA Actor'),(friend_a,'qa_'||replace(friend_a::text,'-',''),'QA A'),(friend_b,'qa_'||replace(friend_b::text,'-',''),'QA B'),(outsider,'qa_'||replace(outsider::text,'-',''),'QA Outsider') on conflict(id) do nothing;
+ insert into public.profiles(id,username,display_name) values(actor,'qa_'||left(replace(actor::text,'-',''),20),'QA Actor'),(friend_a,'qa_'||left(replace(friend_a::text,'-',''),20),'QA A'),(friend_b,'qa_'||left(replace(friend_b::text,'-',''),20),'QA B'),(outsider,'qa_'||left(replace(outsider::text,'-',''),20),'QA Outsider') on conflict(id) do nothing;
  insert into public.friend_requests(requester_id,target_id,status) values(actor,friend_a,'accepted'),(actor,friend_b,'accepted');
  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated')::text,true);
  execute 'set local role authenticated';

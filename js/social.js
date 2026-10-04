@@ -1,3 +1,6 @@
+import { appendBattleConflict, challengeError } from './battle-challenge.js';
+import { openCombat } from './combat-arena.js';
+import { sportsProfile } from './sports-profile.js';
 import { supabase, chatAction, getMutualFriends, getOrCreateConversation } from './supabase-client.js';
 import { account } from './session.js';
 import { element, actionButton, avatar, notify, viewProfile, emptyState, closeModal } from './ui.js';
@@ -34,34 +37,37 @@ export async function startChallenge({conversationId,targetUser,topic='',discuss
  const panel=dialog(discussionMessage?'Discussion challenge':'Friendly challenge','challenge-dialog'),form=element('form');panel.card.append(form);
  if(conversationId)panel.modal.dataset.conversationId=conversationId;
  try {
-  let eligible;
+  let eligible, directTarget = targetUser;
   if(discussionMessage) eligible=opponents||[];
-  else if(conversationId){const state=await call('kaidra_chat_state',{target_conversation:conversationId});eligible=state.members.filter(m=>m.id!==current.userId);}
+  else if(conversationId){const state=await call('kaidra_chat_state',{target_conversation:conversationId});eligible=state.members.filter(m=>m.id!==current.userId);if(!state.conversation.is_group&&eligible.length===1)directTarget=eligible[0].id;}
   else eligible=await getMutualFriends(current.userId);
   if(!panel.modal.isConnected)return;
   if(targetUser&&!eligible.some(p=>p.id===targetUser)){panel.card.append(element('p','muted','This person is not available to challenge.'));panel.open();return;}
   if(!eligible.length){panel.card.append(element('p','muted',discussionMessage?'Take a side to find an opposing participant.':'Invite someone into the conversation first.'));panel.open();return;}
-  const opponent=select(form,'Opponent',eligible.map(p=>[p.id,p.name||p.display_name||p.username]),targetUser||eligible[0].id);
+  const chosen=eligible.find(p=>p.id===directTarget);
+  const opponent=chosen?{value:chosen.id}:select(form,'Opponent',eligible.map(p=>[p.id,p.name||p.display_name||p.username]),eligible[0].id);
+  if(chosen)form.append(element('p','challenge-recipient',`Challenging ${chosen.name||chosen.display_name||chosen.username}`));
   let flavour;
-  if(discussionMessage)form.append(element('p','discussion-statement',discussionMessage.content),element('p','muted','Your discussion and opposing positions stay attached to this challenge. They must accept.'));
-  else {form.append(element('p','muted','Challenge them for fun. No argument or position required.'));flavour=field(form,'Optional challenge text','text',topic);flavour.maxLength=240;}
+  if(discussionMessage)form.append(element('p','discussion-statement',discussionMessage.content),element('p','muted','Your discussion and opposing positions stay attached to this challenge. They must accept within 10 minutes.'));
+  else {form.append(element('p','muted','Challenge them for fun. Invitations expire after 10 minutes. Meaningful matches earn XP; repeat opponents and daily caps limit rewards.'));flavour=field(form,'Optional challenge text','text',topic);flavour.maxLength=240;}
   const error=element('p','form-error'),submit=actionButton('Send challenge','spark','primary-button');submit.type='submit';form.append(error,submit);
-  const requestId=crypto.randomUUID();let busy=false;
-  form.addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;submit.disabled=true;error.textContent='';try{const cid=conversationId||await getOrCreateConversation(opponent.value);const id=await call('kaidra_battle_create',{target_conversation:cid,target_user:opponent.value,topic:flavour?.value.trim()||'',stance:'',context:discussionMessage?{entry_type:'discussion',discussion_message_id:discussionMessage.id}:{entry_type:'direct'},request_id:requestId});panel.close();notify('Challenge sent.');goRoute(`battle/${id}`);}catch(problem){error.textContent=problem.message||'Could not send challenge.';}finally{busy=false;submit.disabled=false;}});
+  let requestId, requestKey, busy=false;
+  form.addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;submit.disabled=true;error.replaceChildren();try{const cid=conversationId||await getOrCreateConversation(opponent.value);const args={target_conversation:cid,target_user:opponent.value,topic:flavour?.value.trim()||'',stance:'',context:discussionMessage?{entry_type:'discussion',discussion_message_id:discussionMessage.id}:{entry_type:'direct'}};const key=JSON.stringify(args);if(key!==requestKey){requestKey=key;requestId=crypto.randomUUID();}const id=await call('kaidra_battle_create',{...args,request_id:requestId});panel.close();notify('Challenge sent.');goRoute(`battle/${id}`);}catch(problem){error.textContent=challengeError(problem);appendBattleConflict(error,problem,()=>panel.close());}finally{busy=false;submit.disabled=false;}});
   panel.open();
  }catch{panel.card.append(element('p','muted','Participants could not load. Please retry.'));panel.open();}
 }
 export function battleCard(id) {
  const card=element('article','battle-card');card.dataset.battleId=id;card.append(element('small','eyebrow','CHALLENGE'),element('p','muted','Loading challenge…'));
- once('kaidra_battle_state',{target_battle:id}).then(async data=>{if(!card.isConnected)return;const current=await account;if(!card.isConnected)return;const name=uid=>{const p=data.participants.find(p=>p.id===uid);return p?.display_name||p?.username||'Member';};card.replaceChildren(element('small','eyebrow',data.type==='discussion'?'DISCUSSION CHALLENGE':'CHALLENGE'),element('strong','',`${name(data.challenger_id)} challenged ${name(data.challenged_id)}`),element('p','',data.type==='direct'?'FRIENDLY BATTLE':data.topic));if(data.flavour_text)card.append(element('p','',data.flavour_text));card.append(element('small','muted',data.status));
+ once('kaidra_battle_state',{target_battle:id}).then(async data=>{if(!card.isConnected)return;const current=await account;if(!card.isConnected)return;if(['expired','cancelled','declined'].includes(data.status)){card.closest('.message-row')?.remove();card.remove();return;}const name=uid=>{const p=data.participants.find(p=>p.id===uid);return p?.display_name||p?.username||'Member';};card.replaceChildren(element('small','eyebrow',data.type==='discussion'?'DISCUSSION CHALLENGE':'CHALLENGE'),element('strong','',`${name(data.challenger_id)} challenged ${name(data.challenged_id)}`),element('p','',data.type==='direct'?'FRIENDLY BATTLE':data.topic));if(data.flavour_text)card.append(element('p','',data.flavour_text));card.append(element('small','muted',data.status));
  for(const participant of data.participants){const identity=classIdentity(participant.identity,{compact:true});if(identity){identity.append(element('span','class-fighter-name',participant.display_name||participant.username));card.append(identity);}}
- if(data.status==='pending'&&data.challenged_id===current?.userId&&data.type!=='opinion')for(const [label,action] of [['Accept','accept'],['Decline','decline']]){const button=actionButton(label,action==='accept'?'check':'close');button.addEventListener('click',async()=>{button.disabled=true;try{if(action==='accept'&&!await awakenBattleIdentity()){button.disabled=false;return;}await call('kaidra_battle_action',{target_battle:id,action});document.dispatchEvent(new Event('kaidra:social-refresh'));}catch(problem){notify(problem.message||'Could not respond.');button.disabled=false;}});card.append(button);}
+ if(data.status==='pending'&&data.challenged_id===current?.userId&&data.type!=='opinion')for(const [label,action] of [['Accept','accept'],['Decline','decline']]){const button=actionButton(label,action==='accept'?'check':'close');button.addEventListener('click',async()=>{button.disabled=true;try{if(action==='accept'&&!await awakenBattleIdentity()){button.disabled=false;return;}await call('kaidra_battle_action',{target_battle:id,action});if(action==='accept'&&data.combat_version===1)goRoute(`battle/${id}`);document.dispatchEvent(new Event('kaidra:social-refresh'));}catch(problem){notify(problem.message||'Could not respond.');button.disabled=false;}});card.append(button);}
  const view=actionButton('View challenge','arrow');view.addEventListener('click',()=>goRoute(`battle/${id}`));card.append(view);
- }).catch(()=>card.replaceChildren(element('p','muted','This challenge is no longer available.')));return card;
+ }).catch(()=>{card.replaceChildren(element('p','muted','Challenge could not load.'),actionButton('Retry','refresh'));card.querySelector('button').addEventListener('click',()=>card.replaceWith(battleCard(id)));});return card;
 }
 async function renderBattle(id) {
     const generation = ++battleVersion;
     const data = await call('kaidra_battle_state', { target_battle: id });
+    if(data.combat_version===1){await openCombat(id);return;}
     if (generation !== battleVersion || parseRoute(location.hash).id !== id)
         return;
     const current = await account;
@@ -137,7 +143,12 @@ async function renderBattle(id) {
         if (current.userId === data.challenger_id)
             action('Cancel challenge', 'cancel');
     }
-    if (data.status === 'active' && data.type==='direct') body.append(element('p','muted','Challenge accepted. Continue in your conversation.'));
+    if (data.type==='direct' && ['pending','active'].includes(data.status) && [data.challenger_id,data.challenged_id].includes(current.userId)) {
+        body.append(element('p','muted','This challenge belongs to the earlier chat system. Close it to free this matchup for a playable battle. Closing it awards no XP or win/loss.'));
+        const close = actionButton('Close old challenge', 'close');
+        close.addEventListener('click',async()=>{if(await confirmAction('Close old challenge?','This closes the old invitation without XP or a win/loss. You can then send a new battle challenge.','Close challenge'))await act('close_legacy','',close);});
+        actions.append(close);
+    }
     if (data.status === 'active' && data.type!=='direct') {
         body.append(element('p', 'muted', `Voting closes ${new Date(data.ends_at).toLocaleString()}. Participants can finish after five minutes and at least three spectator votes.`));
         for (const post of data.posts) {
@@ -255,6 +266,7 @@ export async function renderSocialProfile(targetUser, own) {
         if (generation !== profileVersion)
             return;
         target.replaceChildren();
+        const sportsIdentity=await sportsProfile(targetUser,own);if(generation!==profileVersion)return;if(sportsIdentity)target.append(sportsIdentity);
         const stats = data.stats;
         const identity=classIdentity(data.identity);if(identity)target.append(identity);
         if (own) {
@@ -479,16 +491,7 @@ async function homeSocial() {
     catch {
         target.closest('section').classList.add('hidden');
     }
-    const activity = document.getElementById('home-battles');
-    if (activity) {
-        const { data, error } = await supabase.from('battles').select('id,status,created_at').order('created_at', { ascending: false }).limit(4);
-        if (generation !== homeVersion)
-            return;
-        activity.replaceChildren();
-        activity.closest('section').classList.toggle('hidden', !!error || !data?.length);
-        if (data?.length)
-            activity.append(...data.map(b => battleCard(b.id)));
-    }
+
 }
 function refreshSocial() { requests.clear(); document.dispatchEvent(new CustomEvent('kaidra:social-refresh')); homeSocial(); if (profileTarget)
     renderSocialProfile(profileTarget.targetUser, profileTarget.own); }
@@ -570,3 +573,7 @@ finally {
     busy = false;
     more.disabled = false;
 } } more.addEventListener('click', load); load(); }
+
+document.addEventListener('kaidra:combat-rematch',event=>{const {battle,fighters}=event.detail;if(battle.context?.party_battle){document.dispatchEvent(new CustomEvent('kaidra:party-rematch',{detail:event.detail}));return;}startChallenge({conversationId:battle.conversation_id,targetUser:fighters.find(f=>f.user_id!==currentUser)?.user_id});});
+
+document.addEventListener('kaidra:new-duel',()=>startChallenge());

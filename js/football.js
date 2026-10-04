@@ -1,3 +1,4 @@
+import { goRoute } from './router.js';
 import { supabase } from './supabase-client.js';
 import { account } from './session.js';
 import { element, actionButton, skeletons, emptyState } from './ui.js';
@@ -46,4 +47,4 @@ startTimer();
 window.addEventListener('pagehide', () => clearInterval(timer));
 window.addEventListener('pageshow', event => { if (event.persisted) { startTimer(); if (ready && enabled) loadMatches(); } });
 
-document.getElementById('home-football-follow').addEventListener('click',()=>footballPreferences());document.addEventListener('kaidra:football-preferences',()=>{if(ready)showFootball();});
+document.getElementById('home-football-follow').addEventListener('click',()=>goRoute('discover/sports/clubs'));document.addEventListener('kaidra:football-preferences',()=>{if(ready)showFootball();});

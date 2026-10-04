@@ -7,7 +7,7 @@ function message(text = '', success = false) { error.textContent = text; error.c
 function setBusy(value) { busy = value; submit.disabled = value; document.getElementById('google-auth-btn').disabled = value; loading.classList.toggle('hidden', !value); form.setAttribute('aria-busy', String(value)); clearTimeout(slowTimer); loading.textContent = signup ? 'Creating your account…' : 'Logging in…'; if (value) slowTimer = setTimeout(() => { loading.textContent = 'Still connecting. Your request is in progress…'; }, 8000); }
 async function redirect(session) {
   if (!session || redirecting) return; redirecting = true;
-  try { const {data,error} = await supabase.from('profiles').select('id,onboarding_completed').eq('id',session.user.id).maybeSingle(); if (error) throw error; storage.remove('kaidra:verify-email'); location.replace(authDestination(data)); }
+  try { const {data,error} = await supabase.from('profiles').select('id,onboarding_completed').eq('id',session.user.id).maybeSingle(); if (error) throw error; storage.remove('kaidra:verify-email'); const join=storage.get('kaidra:join-destination');location.replace(data?.onboarding_completed!==false&&data&&/^#join\/[0-9a-f]{64}$/.test(join||'')?'/app.html'+join:authDestination(data)); }
   catch { redirecting = false; message('Your session is active, but your profile could not load. Retry logging in.'); }
 }
 function validateEmail() { const valid = email.validity.valid && !!email.value.trim(); document.getElementById('email-error').textContent = valid ? '' : 'Enter a valid email address.'; email.setAttribute('aria-invalid',String(!valid)); return valid; }

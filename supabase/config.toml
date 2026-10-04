@@ -420,3 +420,12 @@ verify_jwt = false
 
 [functions.football-sync]
 verify_jwt = false
+
+[functions.sports-api]
+verify_jwt = false
+
+[functions.sports-sync]
+verify_jwt = false
+
+[functions.combat-api]
+verify_jwt = false

@@ -1,3 +1,4 @@
+import { sportsPath } from './sports-client.js';
 import { libraryReady, libraryItems } from './library.js';
 import { attachContentActions, contentActions } from './content-actions.js';
 import { openMenu } from './context-menu.js';
@@ -30,18 +31,20 @@ export function matchCard(match) {
 }
 export function richCard(item, compact=false) {
   const card=element('button',`rich-content-card${compact?' compact':''}`);card.type='button';
-  if(item.kind==='match'){card.classList.add('match-share');card.append(element('small','rich-card-label',item.competitionName||'Shared match'),matchVisual(item),element('span','muted',`${(item.status||'scheduled').replaceAll('_',' ').toLowerCase()}${item.utcDate?' · '+new Date(item.utcDate).toLocaleString():''}`));if(item.senderSupport)card.append(element('small','support-snapshot',`Shared support: ${item.senderSupport==='neutral'?'Neutral':item.senderSupport==='home'?item.home:item.away}`));}
+  if(item.kind==='sports'){card.append(artwork(item.image,'','sports-logo'),element('small','rich-card-label',`Football · ${item.entity_type==='event'?'Match':item.entity_type}`),element('strong','',item.title),element('span','muted','Open in Sports →'));}
+  else if(item.kind==='match'){card.classList.add('match-share');card.append(element('small','rich-card-label',item.competitionName||'Shared match'),matchVisual(item),element('span','muted',`${(item.status||'scheduled').replaceAll('_',' ').toLowerCase()}${item.utcDate?' · '+new Date(item.utcDate).toLocaleString():''}`));if(item.senderSupport)card.append(element('small','support-snapshot',`Shared support: ${item.senderSupport==='neutral'?'Neutral':item.senderSupport==='home'?item.home:item.away}`));}
   else {
     card.append(artwork(item.image,'','rich-card-image'));
     const copy=element('span','rich-card-copy');copy.append(element('small','rich-card-label',item.kind==='article'?(item.source||'Shared story'):'Shared recommendation'),element('strong','',item.title||'Shared content'),element('span','',item.kind==='article'?'Read the story →':'Details & trailer →'));card.append(copy);
   }
-  card.addEventListener('click',()=>openContent(item));return attachContentActions(card, item, false);
+  card.addEventListener('click',()=>openContent(item));return item.kind==='sports'?card:attachContentActions(card, item, false);
 }
 const snapshots = new Map();
 const snapshotKeys = [];
 let shownPath;
 export function openContent(snapshot) {
   const kind = snapshot.kind || snapshot.type;
+  if(kind==='sports'){goRoute(sportsPath(snapshot));return;}
   const path = snapshot.provider === 'mal' || ['anime','manga'].includes(kind) ? `title/mal-${kind}/${snapshot.id}` : kind === 'match' ? `match/${snapshot.id}` : kind === 'article' ? `article/${encodeURIComponent(snapshot.url)}` : `title/${kind}/${snapshot.id}`;
   const route = parseRoute(path); if (!isObjectRoute(route)) return;
   snapshots.set(route.path, snapshot);
@@ -133,7 +136,7 @@ async function renderContent(snapshot) {
 document.addEventListener('kaidra:open-content',event=>openContent(event.detail));
 document.addEventListener('kaidra:route-change', event => {
   const route = event.detail;
-  if (!isObjectRoute(route)||route.view==='battle') { shownPath = null; return; }
+  if (!isObjectRoute(route)||['battle','sports'].includes(route.view)) { shownPath = null; return; }
   if (shownPath === route.path && !document.getElementById('content-detail-modal').classList.contains('hidden')) return;
   shownPath = route.path;
   let snapshot = snapshots.get(route.path);

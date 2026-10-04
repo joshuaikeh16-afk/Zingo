@@ -43,7 +43,7 @@ do $$declare a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();sid uuid;cid uu
   answered_steps:=answered_steps+1;if answered_steps>13 then raise exception 'Determination exceeded 14 questions';end if;
   state:=public.kaidra_awakening_answer(sid,state->'question'->>'id',state->'question'->'options'->0->>'id');
  end loop;
- old_class:=state->'identity'->>'class_id';perform pg_temp.assert_ok(old_class in('warrior','wizard','ninja','guardian','rogue'),'Invalid permanent result');
+ old_class:=state->'identity'->>'class_id';perform pg_temp.assert_ok(old_class in('warrior','wizard','ninja','guardian','rogue','healer','ranger','berserker'),'Invalid permanent result');
  perform pg_temp.assert_ok((public.kaidra_awakening_finalize(sid)->'identity'->>'class_id')=old_class,'Finalize retry changed class');
  perform pg_temp.assert_ok(public.kaidra_awakening_begin()->'question'='null'::jsonb,'Completed account received another exam');
  perform pg_temp.assert_ok(public.kaidra_awakening_progress()->'identity'->>'class_id'=old_class,'Progress lookup did not restore the permanent identity');

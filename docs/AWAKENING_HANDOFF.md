@@ -1,3 +1,5 @@
+Historical V1 report. The newer eight-class combat update is documented in [SPORTS_AND_COMBAT_HANDOFF.md](SPORTS_AND_COMBAT_HANDOFF.md), including current deployment status and pending party migration.
+
 # Permanent class Awakening — 2026-10-04
 
 Implemented and deployed to linked Supabase project `skmlktywdmsbjyybtmhm`. Frontend files still need the existing Git push/hosting publication. No new API keys are required.

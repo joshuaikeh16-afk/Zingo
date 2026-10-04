@@ -1,0 +1,22 @@
+begin;
+create function pg_temp.check_ok(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception '%',label;end if;end $$;
+create function pg_temp.refuse(statement text) returns void language plpgsql as $$begin begin execute statement;exception when insufficient_privilege or raise_exception or check_violation then return;end;raise exception using errcode='XX000',message='Unexpected permission: '||statement;end $$;
+do $$declare a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();c uuid:=gen_random_uuid();cid uuid;bid uuid;s jsonb;begin
+ insert into auth.users(id,email,created_at) select u,u||'@example.invalid',now()-interval '30 days' from unnest(array[a,b,c]) u;
+ insert into public.profiles(id,username,display_name) select u,'qa_'||left(replace(u::text,'-',''),16),'QA combat member' from unnest(array[a,b,c]) u;
+ insert into public.battle_identities(user_id,class_id,determination_version) values(a,'ninja',1),(b,'warrior',1);
+ insert into public.friend_requests(requester_id,target_id,status) values(a,b,'accepted');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);execute 'set local role authenticated';cid:=public.get_or_create_conversation(b);bid:=public.kaidra_battle_create(cid,b,'','',jsonb_build_object('entry_type','direct'));
+ perform pg_temp.refuse(format('select public.kaidra_battle_action(%L,''accept'')',bid));
+ perform pg_temp.refuse(format('update public.battle_participants set hp=999 where battle_id=%L',bid));perform pg_temp.refuse(format('select seed from public.battle_combat_state where battle_id=%L',bid));
+ perform pg_temp.refuse(format('select public.kaidra_combat_commit(%L,%L,%L,0,''{}'',''{}'')',bid,a,gen_random_uuid()));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform pg_temp.refuse(format('select public.kaidra_combat_state(%L)',bid));perform pg_temp.check_ok(not exists(select 1 from public.battle_participants where battle_id=bid),'Foreign fighter state leaked');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');s:=public.kaidra_combat_state(bid);perform pg_temp.check_ok(s#>>'{combat,phase}'='playing','Accepted duel did not start');perform pg_temp.check_ok(s#>>'{combat,active_id}'=a::text,'Initiative not authoritative');perform pg_temp.check_ok(not(s->'combat'?'seed'),'Seed leaked in state RPC');
+ perform pg_temp.refuse(format('select public.kaidra_battle_action(%L,''vote'',%L)',bid,a));perform pg_temp.refuse(format('select public.kaidra_battle_action(%L,''finish'')',bid));
+ execute 'reset role';update public.battle_participants set hp=0 where battle_id=bid and user_id=b;update public.battle_combat_state set phase='finished',winning_team=1,turn=8,active_id=null,deadline=null where battle_id=bid;
+ insert into public.battle_events(battle_id,sequence,request_id,actor,payload) select bid,n,gen_random_uuid(),case when n%2=0 then a else b end,'{"intent":{"action":"act"},"events":[]}' from generate_series(1,4) n;
+ perform public.kaidra_combat_finish(bid);perform public.kaidra_combat_finish(bid);
+ perform pg_temp.check_ok((select status='resolved' and winner_id=a from public.battles where id=bid),'HP result not recorded');perform pg_temp.check_ok((select battles=1 and wins=1 and best_streak=1 and xp=25 from public.battle_stats where user_id=a),'Winner XP/result counted incorrectly');perform pg_temp.check_ok((select battles=1 and losses=1 and xp=5 from public.battle_stats where user_id=b),'Loser XP/result counted incorrectly');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);execute 'set local role authenticated';perform pg_temp.check_ok(not exists(select 1 from public.battle_stats where user_id=a),'Other fighter progression leaked');perform pg_temp.check_ok(jsonb_array_length(public.kaidra_combat_state(bid)->'own_rewards')=1,'Own reward missing');execute 'reset role';
+end $$;
+rollback;

@@ -1,0 +1,57 @@
+-- Reversible security and consent checks. All fixtures and operations roll back.
+begin;
+create function pg_temp.check_ok(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception '%',label;end if;end $$;
+create function pg_temp.refuse(statement text) returns void language plpgsql as $$begin begin execute statement;exception when insufficient_privilege or raise_exception or check_violation then return;end;raise exception using errcode='XX000',message='Unexpected permission: '||statement;end $$;
+do $$declare a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();c uuid:=gen_random_uuid();d uuid:=gen_random_uuid();e uuid:=gen_random_uuid();pa uuid;pb uuid;ca uuid;bid uuid;state jsonb;req uuid:=gen_random_uuid();rid uuid;i integer;begin
+ insert into auth.users(id,email,created_at) select u,u||'@example.invalid',now()-interval '30 days' from unnest(array[a,b,c,d,e]) u;
+ insert into public.profiles(id,username,display_name) select u,'qa_'||left(replace(u::text,'-',''),16),'QA party member' from unnest(array[a,b,c,d,e]) u;
+ insert into public.battle_identities(user_id,class_id,determination_version) values(a,'guardian',1),(b,'healer',1),(c,'ranger',1),(d,'berserker',1),(e,'ninja',1);
+ insert into public.friend_requests(requester_id,target_id,status) values(a,b,'accepted'),(a,c,'accepted'),(c,d,'accepted'),(a,e,'accepted');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);execute 'set local role authenticated';
+ pa:=public.kaidra_party_create('QA North');state:=public.kaidra_party_state(pa);ca:=(state#>>'{party,conversation_id}')::uuid;
+ perform public.kaidra_party_invite(pa,b);
+ perform pg_temp.refuse(format('select public.kaidra_add_group_members(%L,array[%L::uuid])',ca,e));
+ perform pg_temp.refuse(format('select public.kaidra_group_action(%L,''transfer'',%L)',ca,b));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);
+ perform pg_temp.check_ok(public.kaidra_party_state(pa)#>>'{own_invite,status}'='pending','Invitation missing');perform public.kaidra_party_action(pa,'accept');
+ perform pg_temp.refuse(format('select public.kaidra_party_invite(%L,%L)',pa,e));perform pg_temp.refuse(format('select public.kaidra_party_create(''Duplicate membership'')'));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',e,'role','authenticated')::text,true);
+ perform pg_temp.refuse(format('select public.kaidra_party_state(%L)',pa));perform pg_temp.refuse(format('select public.kaidra_party_action(%L,''accept'')',pa));
+ perform pg_temp.check_ok(not exists(select 1 from public.rpg_party_members where party_id=pa),'Uninvited roster leaked');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);pb:=public.kaidra_party_create('QA South');perform public.kaidra_party_invite(pb,d);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',d,'role','authenticated')::text,true);perform public.kaidra_party_action(pb,'accept');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ bid:=public.kaidra_party_challenge(pb,b,array[c,d],req);perform pg_temp.check_ok(public.kaidra_party_challenge(pb,b,array[c,d],req)=bid,'Challenge retry not idempotent');
+ perform pg_temp.check_ok(jsonb_array_length(public.kaidra_battle_state(bid)->'participants')=4,'Challenge card lost party fighters');
+ perform pg_temp.check_ok(public.kaidra_combat_state(bid)#>>'{combat,phase}'='waiting','Battle began without all consent');
+ perform pg_temp.refuse(format('select public.kaidra_party_action(%L,''disband'')',pa));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');
+ perform pg_temp.check_ok(public.kaidra_combat_state(bid)#>>'{combat,phase}'='waiting','Three acceptances bypassed fourth fighter');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',d,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');
+ state:=public.kaidra_combat_state(bid);perform pg_temp.check_ok(state#>>'{combat,phase}'='playing','All accepted battle did not begin');perform pg_temp.check_ok(jsonb_array_length(state->'fighters')=4,'2v2 roster invalid');perform pg_temp.check_ok(not(state->'combat'?'seed'),'Private seed leaked');
+ perform pg_temp.refuse(format('select public.kaidra_combat_commit(%L,%L,%L,1,''{}'',''{}'')',bid,d,gen_random_uuid()));
+ perform pg_temp.refuse(format('update public.battle_participants set hp=999 where battle_id=%L',bid));
+ execute 'reset role';
+ for i in 1..3 loop
+ if i>1 then
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);bid:=public.kaidra_party_challenge(pb,b,array[c,d]);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',d,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept');end if;
+ insert into public.battle_events(battle_id,sequence,request_id,actor,payload) select bid,n,gen_random_uuid(),(array[a,b,c,d])[n],'{"intent":{"action":"act"},"events":[]}' from generate_series(1,4) n;
+ update public.battle_participants set hp=0 where battle_id=bid and team=2;update public.battle_combat_state set phase='finished',winning_team=1,turn=8,active_id=null,deadline=null where battle_id=bid;perform public.kaidra_combat_finish(bid);
+ end loop;
+ select id into rid from public.battle_rivalries where kind='party' and side_a=least(pa,pb) and side_b=greatest(pa,pb);
+ perform pg_temp.check_ok((select battles=3 and greatest(wins_a,wins_b)=3 and streak=3 from public.battle_rivalries where id=rid),'Meaningful rivalry record failed');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);execute 'set local role authenticated';perform pg_temp.refuse(format('select public.kaidra_rivalry_recognize(%L)',rid));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform public.kaidra_rivalry_recognize(rid);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform public.kaidra_rivalry_recognize(rid);
+ perform pg_temp.check_ok((select recognized_a and recognized_b from public.battle_rivalries where id=rid),'Mutual rivalry recognition failed');
+ execute 'reset role';update public.battles set status='cancelled' where id=bid;update public.battle_combat_state set phase='finished',active_id=null,deadline=null where battle_id=bid;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);execute 'set local role authenticated';perform public.kaidra_party_action(pa,'transfer',b);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform pg_temp.check_ok(public.kaidra_party_state(pa)#>>'{party,leader_id}'=b::text,'Leadership transfer failed');perform public.kaidra_party_action(pa,'disband');
+ perform pg_temp.check_ok(public.kaidra_is_conversation_member(ca),'Disband deleted group chat');
+ execute 'reset role';
+end $$;
+rollback;

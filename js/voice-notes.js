@@ -7,7 +7,7 @@ export function installVoiceNotes({ getActive, onBusy, onSend }) {
   const player = document.getElementById('voice-preview'), stop = document.getElementById('voice-stop-btn'), send = document.getElementById('voice-send-btn');
   let recorder, stream, interval, started = 0, duration = 0, blob, previewUrl, version = 0, phase = 'idle';
   const supported = isSecureContext && navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
-  mic.disabled = !supported;
+  mic.disabled = !supported; mic.dataset.unsupported=String(!supported);
   if (!supported) mic.title = 'Voice recording needs HTTPS or localhost and a supported browser';
   function release() {
     clearInterval(interval); interval = null;

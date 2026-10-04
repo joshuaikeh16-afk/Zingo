@@ -3,7 +3,8 @@ const primary = new Set(['home', 'discover', 'friends', 'inbox', 'profile']);
 export function parseRoute(hash = '') {
   const discovery = hash.replace(/^#/, '').split('?');
   const segments = discovery[0].split('/');
-  if(segments[0]==='discover'&&segments.length>=2&&segments.length<=3&&['movie','tv','anime','football'].includes(segments[1])){
+  if(segments[0]==='sports'&&segments.length===4&&segments[1]==='football'&&['team','player','competition','event'].includes(segments[2])&&/^[1-9]\d{0,9}$/.test(segments[3]))return {view:'sports',sport:'football',provider:'api-sports',entityType:segments[2],id:segments[3],path:segments.join('/')};
+  if(segments[0]==='discover'&&segments.length>=2&&segments.length<=3&&['movie','tv','anime','football','sports'].includes(segments[1])){
     const section=segments[2]||'popular';
     if(!/^[a-z-]{1,24}$/.test(section))return {view:'discover',path:'discover'};
     const params=new URLSearchParams(discovery[1]||'');
@@ -13,6 +14,9 @@ export function parseRoute(hash = '') {
   let parts;
   try { parts = hash.replace(/^#/, '').split('/').map(decodeURIComponent); } catch { return { view: 'home', path: 'home' }; }
   const [view, type, id] = parts;
+  if(view==='join'&&parts.length===2&&/^[0-9a-f]{64}$/.test(type))return {view:'join',id:type,path:`join/${type}`};
+  if(view==='arena'&&parts.length===1)return {view:'arena',path:'arena'};
+  if(view==='party'&&parts.length===2&&/^[0-9a-f-]{36}$/i.test(type))return {view:'party',id:type,path:`party/${type}`};
   if(view==='battle'&&parts.length===2&&/^[0-9a-f-]{36}$/i.test(type))return {view,id:type,path:`battle/${type}`};
   if (primary.has(view) && parts.length === 1) return { view, path: view };
   if (view === 'inbox' && parts.length === 2 && /^[a-zA-Z0-9-]{1,80}$/.test(type)) return { view, id: type, path: `inbox/${encodeURIComponent(type)}` };
@@ -23,7 +27,7 @@ export function parseRoute(hash = '') {
   if (view === 'article' && parts.length === 2 && /^https:\/\//.test(type)) return { view, id: type, path: `article/${encodeURIComponent(type)}` };
   return { view: 'home', path: 'home' };
 }
-export const isObjectRoute = route => ['title', 'match', 'article','battle'].includes(route.view);
+export const isObjectRoute = route => ['title', 'match', 'article','battle','sports','arena','party','join'].includes(route.view);
 export function goRoute(path, { replace = false } = {}) {
   const route = parseRoute(path), previous = parseRoute(location.hash);
   const url = new URL(location.href); url.hash = route.path; url.searchParams.delete('user');

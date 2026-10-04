@@ -1,3 +1,4 @@
+import { renderSportsHub } from './sports.js';
 import { account } from './session.js';
 import { element, actionButton, artwork, skeletons, emptyState } from './ui.js';
 import { contentRequest, clearContentCache, feedError, renderNews } from './content-client.js';
@@ -6,7 +7,7 @@ import { matchCard, matchContent, openContent, matchVisual } from './content-vie
 import { goRoute, parseRoute } from './router.js';
 import { FeedPager } from './feed-pager.js';
 const grid = document.getElementById('discover-grid'), hero = document.getElementById('discover-hero'), filters = document.getElementById('discover-filters'), search = document.getElementById('content-search'), region = document.getElementById('content-region'), more = document.getElementById('load-discover-more'), status = document.getElementById('discover-page-status');
-const names = { movie: 'Movies', tv: 'Series', anime: 'Anime', football: 'Football' };
+const names = { movie: 'Movies', tv: 'Series', anime: 'Anime', sports: 'Sports' };
 const sections = { anime: [['genres', 'Genres'], ['seasons', 'Seasons'], ['themes', 'Themes'], ['new', 'New'], ['popular', 'Popular']], movie: [['genres', 'Genres'], ['cinema', 'Cinema'], ['style', 'Style'], ['years', 'Years'], ['new', 'New releases'], ['upcoming', 'Upcoming'], ['popular', 'Popular']], tv: [['genres', 'Genres'], ['airing', 'Currently airing'], ['completed', 'Completed'], ['years', 'Release years'], ['services', 'Services'], ['popular', 'Popular']], football: [['for-you', 'For you'], ['live', 'Live'], ['fixtures', 'Fixtures'], ['competitions', 'Competitions'], ['clubs', 'Clubs'], ['news', 'News']] };
 const cinemas = [['US', 'Hollywood · US'], ['IN', 'Bollywood · Hindi cinema'], ['NG', 'Nollywood · Nigeria'], ['KR', 'Korean cinema'], ['JP', 'Japanese cinema'], ['CN', 'Chinese cinema'], ['GB', 'British cinema'], ['FR', 'French cinema']];
 let route = { view: 'discover', path: 'discover' }, version = 0, loadedPath, metadata = {}, footballData = [], pager = new FeedPager(), loading = false;
@@ -15,7 +16,7 @@ function update(values) { goRoute(destination(route.category, route.section, { .
 for (const item of categories.filter(item => item.enabled && item.id !== 'for-you')) {
     const button = actionButton(item.label, item.icon);
     button.dataset.category = item.id;
-    button.addEventListener('click', () => goRoute(destination(item.id, item.id === 'football' ? 'for-you' : 'popular')));
+    button.addEventListener('click', () => goRoute(destination(item.id, item.id === 'sports' ? 'for-you' : 'popular')));
     document.getElementById('content-categories').append(button);
 }
 function select(key, label, options, { empty = 'Any', value = route.filters?.[key] } = {}) {
@@ -46,7 +47,7 @@ function renderControls() {
         button.addEventListener('click', () => goRoute(destination(category, id, { ...values, query: '' })));
         nav.append(button);
     }
-    if (!category || category === 'football')
+    if (!category || ['football','sports'].includes(category))
         return;
     if (metadata.genres?.length)
         select('genre', 'Genre', metadata.genres.map(g => [g.id, g.name]));
@@ -137,10 +138,10 @@ async function landing(generation) {
     const hubs = document.getElementById('discover-hubs');
     hubs.replaceChildren();
     for (const [key, title] of Object.entries(names)) {
-        const button = actionButton(title, { movie: 'film', tv: 'tv', anime: 'spark', football: 'ball' }[key], 'hub-card');
+        const button = actionButton(title, { movie: 'film', tv: 'tv', anime: 'spark', sports: 'ball' }[key], 'hub-card');
         button.dataset.hub = key;
-        button.append(element('small', '', { movie: 'Stories, cinema, decades', tv: 'New obsessions, returning favourites', anime: 'Genres, themes, season archives', football: 'Matches, clubs, your people' }[key]));
-        button.addEventListener('click', () => goRoute(destination(key, key === 'football' ? 'for-you' : 'popular')));
+        button.append(element('small', '', { movie: 'Stories, cinema, decades', tv: 'New obsessions, returning favourites', anime: 'Genres, themes, season archives', sports: 'Clubs, matches, your people' }[key]));
+        button.addEventListener('click', () => goRoute(destination(key, key === 'sports' ? 'for-you' : 'popular')));
         hubs.append(button);
     }
     const data = await contentRequest('browse', { category: 'movie', page: 1 });
@@ -247,7 +248,7 @@ function seasonDirectory(){
     grid.setAttribute('aria-busy','false');return true;
 }
 async function next() {
-    if (loading || !pager.hasMore || !route.category || route.category === 'football' || route.category==='anime'&&route.section==='seasons'&&!route.filters?.season&&!route.filters?.query)
+    if (loading || !pager.hasMore || !route.category || ['football','sports'].includes(route.category) || route.category==='anime'&&route.section==='seasons'&&!route.filters?.season&&!route.filters?.query)
         return;
     loading = true;
     more.disabled = true;
@@ -305,10 +306,12 @@ async function load(force = false) {
     const generation = ++version;
     pager.reset();
     loading = false;
+    document.getElementById('content-search-form').classList.toggle('hidden',nextRoute.category==='sports');
     search.value = route.filters?.query || '';
     document.getElementById('discover-count').textContent = '';
     document.getElementById('discover-hubs').classList.toggle('hidden', !!route.category);
     document.getElementById('discover-more').classList.remove('hidden');
+    hero.className='discover-hero';grid.classList.remove('sports-grid');
     skeletons(hero, 'hero', 1);
     skeletons(grid, 'media', 6);
     try {
@@ -316,6 +319,7 @@ async function load(force = false) {
             return await landing(generation);
         metadata = {};
         renderControls();
+        if (route.category === 'sports') return await renderSportsHub(route);
         if (route.category === 'football')
             return await footballHub(generation);
         const meta = contentRequest('browse-meta', { category: route.category }).then(data => { if (generation === version) {

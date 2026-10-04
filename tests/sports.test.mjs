@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const load=async path=>import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(readFileSync(path,'utf8'))).toString('base64'));
+const {sportsOperation,sportsEntities,cachedSports}=await load('supabase/functions/_shared/sports.ts');
+const {challengeTarget}=await import('../js/challenge-target.js');
+const {parseRoute}=await import('../js/router.js');
+for(const body of [{action:'proxy',url:'http://evil'},{action:'team',id:'https://evil'},{action:'team',id:42,url:'http://evil'},{action:'team',id:-1},{action:'team',id:1,sport:'f1'},{action:'player-stats',id:1,season:2050},{action:'search',query:'ab'},{action:'fixtures',mode:'upcoming'},{action:'player-search',query:'Saka',page:100}])assert.throws(()=>sportsOperation(body));
+assert.equal(sportsOperation({action:'search',query:'Arsenal'}).path,'/teams');assert.equal(sportsOperation({action:'squad',id:42}).params.team,'42');assert.equal(sportsOperation({action:'lineups',id:22}).key,'football:lineups:22');
+assert.equal(parseRoute('#sports/football/event/22').view,'sports');assert.equal(parseRoute('#match/22').view,'match');assert.equal(parseRoute('#sports/f1/event/22').view,'home');
+const members=[{id:'a',username:'a'},{id:'b',username:'bob'}];assert.deepEqual(challengeTarget('.challenge',{members,userId:'a'}),{id:'b',flavour:''});assert.equal(challengeTarget('.challenge let’s go',{members,userId:'a'}).flavour,'let’s go');assert.equal(challengeTarget('.challenge @bob hi',{members,userId:'a',isGroup:true}).id,'b');assert.throws(()=>challengeTarget('.challenge',{members,userId:'a',isGroup:true}),/Choose someone/);assert.throws(()=>challengeTarget('.challenge @a',{members,userId:'a'}));assert.throws(()=>challengeTarget('.challenge @outsider',{members,userId:'a'}));
+assert.equal(sportsEntities({response:[{team:{id:42,name:'Arsenal',logo:'https://evil.test/a'}}]},'team')[0].snapshot.image,null);
+let fetches=0,claims=0,store;
+const client={rpc:async(name,args)=>{if(name==='kaidra_sports_cache_claim'){claims++;return {data:store?{state:'hit',data:store,fetched_at:'2026-01-01',expires_at:'2030-01-01'}:{state:'fetch'}};}if(!args.code)store=args.payload;return {data:null};},from:()=>({upsert:async()=>({error:null})})};
+const previous=globalThis.fetch;globalThis.fetch=async(url,opts)=>{fetches++;assert(url.startsWith('https://v3.football.api-sports.io/teams?'));assert.equal(opts.headers['x-apisports-key'],'test-only');return new Response(JSON.stringify({response:[{team:{id:42,name:'Arsenal'}}],errors:[],headers:{key:'never return'}}));};
+const data=await cachedSports(client,{action:'team',id:42},'test-only');assert.equal(data.response[0].team.name,'Arsenal');assert.equal(data.headers,undefined);await cachedSports(client,{action:'team',id:42},'test-only');assert.equal(fetches,1);assert.equal(claims,2);
+store=null;globalThis.fetch=async()=>new Response(JSON.stringify({errors:{plan:'Plan unavailable; secret diagnostic with test-only'},response:[]}));await assert.rejects(cachedSports(client,{action:'team',id:42},'test-only'),e=>e.code==='PROVIDER_PLAN_LIMIT'&&!e.message.includes('test-only'));
+globalThis.fetch=previous;console.log('PASS Sports action validation, provider boundary, cache reuse, sanitized errors, entity URLs, routes and DM/group challenge resolution.');

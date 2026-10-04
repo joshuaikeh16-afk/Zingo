@@ -24,10 +24,11 @@ function render() {
   for (const item of notifications) {
     const card = element('article', `notification-row${item.read_at ? '' : ' unread-alert'}`), copy = element('div', 'notification-copy');
     const matchId = /^match:(\d+):/.exec(item.event_key || '')?.[1];
-    const internal=matchId||item.category&&item.category!=='football';
+    const sportsRoute=item.payload?.sports;
+    const internal=sportsRoute||matchId||item.category&&item.category!=='football';
     const link = internal ? element('button', 'notification-title', item.title) : externalLink(item.title, item.url);
     if (internal) link.type = 'button';
-    link.addEventListener('click', async () => { if (matchId) { closeModal('alerts-modal'); openContent({ kind: 'match', id: matchId, title: item.title }); } else if(internal){closeModal('alerts-modal');if(item.payload?.item)openContent(item.payload.item);else if(item.payload?.battle_id)goRoute(`battle/${item.payload.battle_id}`);else goRoute(item.url||'home');} const result = await supabase.from('app_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id).eq('user_id', userId); if (!result.error) refresh(); });
+    link.addEventListener('click', async () => { if(sportsRoute){closeModal('alerts-modal');goRoute(`sports/${sportsRoute.sport}/${sportsRoute.entity_type}/${sportsRoute.external_id}`);} else if (matchId) { closeModal('alerts-modal'); openContent({ kind: 'match', id: matchId, title: item.title }); } else if(internal){closeModal('alerts-modal');if(item.payload?.item)openContent(item.payload.item);else if(item.payload?.battle_id)goRoute(`battle/${item.payload.battle_id}`);else goRoute(item.url||'home');} const result = await supabase.from('app_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id).eq('user_id', userId); if (!result.error) refresh(); });
     copy.append(link, element('span', '', item.body), element('small', '', new Date(item.created_at).toLocaleString())); card.append(icon(({social:'spark',battle:'spark',relationship:'people',friend:'people'})[item.category]||'ball', 'notification-symbol'), copy);const dismiss=element('button','icon-button');dismiss.type='button';dismiss.setAttribute('aria-label','Dismiss notification');dismiss.append(icon('close'));dismiss.addEventListener('click',async()=>{dismiss.disabled=true;const result=await supabase.from('app_notifications').update({dismissed_at:new Date().toISOString(),read_at:item.read_at||new Date().toISOString()}).eq('id',item.id).eq('user_id',userId);if(result.error){notify('Could not dismiss. Retry.');dismiss.disabled=false;}else refresh();});card.append(dismiss);list.append(card);
   }
   if (!pendingRequests.length && !notifications.length && !unreadMessages) list.append(emptyState('No notifications', 'Messages, friend activity and entertainment updates appear here.', 'bell'));
@@ -67,7 +68,7 @@ async function showBrowserAlert(item) {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.register('/sw.js');
       const ready = registration.active ? registration : await navigator.serviceWorker.ready;
-      await ready.showNotification(item.title, { body: item.body, tag: item.id, data: { url: `/app.html#${item.payload?.battle_id?`battle/${item.payload.battle_id}`:item.url?.startsWith('inbox/')?item.url:'home'}` } });
+      await ready.showNotification(item.title, { body: item.body, tag: item.id, data: { url: `/app.html#${item.payload?.sports?item.url:item.payload?.battle_id?`battle/${item.payload.battle_id}`:item.url?.startsWith('inbox/')?item.url:'home'}` } });
     } else {
       const notification = new Notification(item.title, { body: item.body, tag: item.id });
       notification.onclick = () => { window.focus(); notification.close(); openModal('alerts-modal'); };

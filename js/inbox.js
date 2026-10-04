@@ -1,3 +1,7 @@
+import { appendBattleConflict, challengeError } from './battle-challenge.js';
+import { installMediaRenderers, uploadMedia, mediaPicker, stickerPicker, mediaBucket } from './chat-media.js';
+import { forfeitInConversation } from './combat-commands.js';
+import { challengeTarget } from './challenge-target.js';
 import { awakenBattleIdentity } from './awakening.js';
 import { discussionCard, swipeToReply, typingPresence, receipt } from './chat-interactions.js';
 import { bindContext, openMenu, openReactions, dialog, confirmAction } from './context-menu.js';
@@ -19,7 +23,12 @@ const list = document.getElementById('conversation-list'), thread = document.get
 let userId, active, rows = [], filter = 'all', listVersion = 0, pickerVersion = 0, inboxChannel, poll, sharedDraft = null, replyDraft = null;
 let voiceBusy = false, discussionMode = false;
 const time = value => value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-function syncComposer() { document.getElementById('message-send-btn').disabled = voiceBusy || !active || (!input.value.trim() && !sharedDraft) || (active?.isGroup && !groupAllowed(active, userId, 'send_messages')); if (active) { const blocked = active.isGroup && !groupAllowed(active, userId, 'send_messages'); input.disabled = voiceBusy || blocked; input.placeholder = blocked ? 'Only admins can send messages' : discussionMode ? 'Make a statement people can agree or disagree with...' : 'Send a message…'; document.getElementById('composer-plus').disabled = blocked; } }
+function syncComposer() {
+  const blocked=!active || active.isGroup&&!groupAllowed(active,userId,'send_messages'),hasText=!!(input.value.trim()||sharedDraft),send=document.getElementById('message-send-btn'),mic=document.getElementById('voice-record-btn');
+  send.disabled=voiceBusy||blocked||!hasText;send.classList.toggle('hidden',!hasText);mic.classList.toggle('hidden',hasText);mic.disabled=voiceBusy||blocked||mic.dataset.unsupported==='true';
+  input.disabled=voiceBusy||blocked;input.placeholder=blocked?'Only admins can send messages':discussionMode?'Make a statement people can agree or disagree with...':'Message';
+  for(const id of ['composer-plus','composer-attachment','composer-camera','composer-stickers'])document.getElementById(id).disabled=voiceBusy||blocked;
+}
 function status(id, value) { const node = document.getElementById(id); node.textContent = value; node.classList.toggle('is-live', value === 'Connected'); }
 function renderList() {
   const visibleRows = rows;
@@ -68,11 +77,14 @@ async function refreshState(state = active) {
 async function snapshot(state) {
   try {
     const messages = await getMessages(state.id); if (active !== state) return;
+    const received=new Set(messages.map(message=>message.id)),oldest=messages[0]?.created_at;
+    for(const [id,stored] of state.messages)if(!stored.localState&&!received.has(id)&&(messages.length<100||stored.created_at>=oldest)){state.messages.delete(id);state.nodes.delete(id);}
     for (const message of messages) mergeMessage(state.messages, message); state.hasOlder = messages.length === 100; state.loading = false; renderMessages(state);
     acknowledgeDelivery(state); acknowledge(state);
   } catch { if (active === state) { state.loading = false; thread.setAttribute('aria-busy', 'false'); if (!state.messages.size) thread.replaceChildren(emptyState('Messages could not load.', 'Your conversation is still here. Please try again.', 'chat', { label: 'Try again', run: () => snapshot(state) })); showError('chat-error', 'Could not load messages. Reconnecting and trying again…'); } }
 }
 function closeThread() {
+  if(active)for(const modal of [...document.querySelectorAll('.social-modal[data-conversation-id]')].reverse())if(modal.dataset.conversationId===active.id)closeModal(modal.id);
   voiceNotes.cancel(); active?.typing?.close(); discussionMode = false;
   if (active) { supabase.removeChannel(active.channel); if (active.interactions) supabase.removeChannel(active.interactions); }
   if (active) for (const message of active.messages.values()) if (message.localVoiceUrl) URL.revokeObjectURL(message.localVoiceUrl);
@@ -130,36 +142,36 @@ function textContent(bubble, text, members, mentionIds = [], mentionLabels = [])
     else bubble.append(document.createTextNode(token));
   }
 }
-for (const type of ['text', 'sticker']) registerMessageContent(type, (message, context) => {
+for (const type of ['text']) registerMessageContent(type, (message, context) => {
   if (!message.content) return null;
   const bubble = element('div', 'message-bubble'); textContent(bubble, message.content, context.members, message.mention_ids, message.mention_labels); return bubble;
 });
-for (const type of ['image', 'voice_note']) registerMessageContent(type, message => {
-  const media = element(type === 'image' ? 'img' : 'audio', 'chat-media');
-  if (type === 'voice_note') { media.controls = true; media.preload = 'metadata'; media.setAttribute('aria-label', 'Voice note'); } else media.alt = 'Shared photo';
-  if (message.localVoiceUrl) media.src = message.localVoiceUrl;
-  else getSignedMediaUrl(type === 'image' ? 'chat-images' : 'voice-notes', message.media_url || message.content).then(url => { if (url) media.src = url; else media.replaceWith(element('span', 'muted', 'Media is unavailable.')); }).catch(() => { media.replaceWith(element('span', 'muted', 'Media is unavailable.')); });
-  return media;
-});
+installMediaRenderers();
 function buildMessage(message, state, consecutive = false) {
   if (message.message_type === 'system') { const row = message.event_data?.kind==='battle'?battleCard(message.event_data.battle_id):message.event_data?.kind==='relationship'?relationshipCard(message.event_data.relationship_id):element('div', 'system-message', message.content); row.dataset.messageId = message.id; return row; }
-  const mine = message.sender_id === userId, row = element('article', `message-row${consecutive ? ' is-consecutive' : ''} ${mine ? 'outgoing' : 'incoming'}${message.localState ? ` is-${message.localState}` : ''}`); row.dataset.messageId = message.id;
+  const mine = message.sender_id === userId, row = element('article', `message-row${consecutive ? ' is-consecutive' : ''} ${mine ? 'outgoing' : 'incoming'}${message.localState ? ` is-${message.localState}` : ''}`); row.dataset.messageId = message.id;row.dataset.messageType=message.message_type;
+  const member=state.members.find(person=>person.id===message.sender_id);const palette=['#85d7c0','#c3adfa','#e8c084','#94c9f0','#f1a5bf','#a7d88e'];let hue=0;for(const character of String(message.sender_id||'member'))hue=(hue*31+character.charCodeAt(0))>>>0;row.style.setProperty('--message-author-color',palette[hue%palette.length]);
+  if(state.isGroup&&!mine&&!consecutive){const photo=avatar(member||{},'message-sender-avatar');const profile=element('button','message-sender-profile');profile.type='button';profile.setAttribute('aria-label',`View ${member?.display_name||member?.username||'member'}`);profile.append(photo);profile.addEventListener('click',()=>viewProfile(message.sender_id));row.append(profile);}
+  if(state.isGroup&&!mine)row.classList.add('group-message');
   if (state.isGroup && !mine && !consecutive) { const member = state.members.find(person => person.id === message.sender_id); row.append(element('span', 'message-author', member?.display_name || member?.username || 'Member')); }
   if (message.deleted_at) { row.append(element('p','deleted-message','Message deleted')); return row; }
   if (message.external_ref_id) {
     const original = state.messages.get(message.external_ref_id) || state.quotes?.find(item => item.id === message.external_ref_id);
     const quote = element('button', 'reply-quote'); quote.type = 'button';
     const author = state.members.find(member => member.id === original?.sender_id);
-    quote.append(element('strong', '', author?.display_name || author?.username || 'Original message'), element('span', '', original ? messagePreview(original) : 'View original message'));
+    quote.append(element('strong', '', original?.sender_id===userId?'You':author?.display_name || author?.username || 'Original message'), element('span', '', original ? messagePreview(original) : 'View original message'));
     quote.addEventListener('click', () => jumpToMessage(message.external_ref_id)); row.append(quote);
   }
   if (message.shared_content) row.append(richCard(message.shared_content, true));
   const contentNode = message.message_type === 'discussion' ? discussionCard(message, state, userId, refreshState) : message.message_type === 'poll' ? pollCard(message, state, userId, refreshState) : renderMessageContent(message, { members: state.members });
+  if(message.message_type==='discussion'&&message.sports_context)contentNode.prepend(richCard(message.sports_context,true));
   if (contentNode) row.append(contentNode);
   else if (!message.shared_content) row.append(element('p', 'muted', 'This message format is unavailable.'));
   const stamp=element('small','message-time',`${time(message.created_at)}${message.edited_at?' · edited':''}`);
   if(mine){const status=receipt(message,state,userId),mark=element('span',`message-receipt${status.read?' is-read':''}`,status.text);mark.title=status.label;mark.setAttribute('aria-label',status.label);stamp.append(document.createTextNode(' '),mark);}
   row.append(stamp);
+  if(!message.localState&&['image','video','sticker'].includes(message.message_type)) {const forward=iconButton('forward','Forward '+messagePreview(message));forward.classList.add('media-forward');forward.addEventListener('click',()=>chooseConversation(null,'',message));row.append(forward);}
+
   if (message.localState === 'failed') { const retry = actionButton('Retry message', 'refresh', 'message-retry'); retry.addEventListener('click', () => deliver(state, message)); row.append(retry); }
   if (!message.localState) {
     const reply = () => { replyDraft = message; renderDraft(); input.focus(); };
@@ -171,7 +183,7 @@ function buildMessage(message, state, consecutive = false) {
       message.sender_id===userId && {label:'Delete',icon:'trash',danger:true,run:async()=>{if(await confirmAction('Delete message?','This removes the message content for everyone.','Delete')){await chatAction('kaidra_message_change',{target_message:message.id,action:'delete'});await snapshot(state);}}},
       message.sender_id!==userId&&{label:'Report message',icon:'info',run:()=>reportMessage(message)},
       message.content && ['text','discussion','sticker'].includes(message.message_type) && { label: 'Copy text', icon: 'copy', run: () => navigator.clipboard.writeText(message.content).then(() => notify('Copied')) },
-      (message.shared_content || ['text','discussion','image','voice_note'].includes(message.message_type)) && { label: 'Forward', icon: 'share', run: () => chooseConversation(message.shared_content || null, message.shared_content ? '' : ['text','discussion'].includes(message.message_type) ? message.content : '', ['image','voice_note'].includes(message.message_type) ? message : null) },
+      (message.shared_content || ['text','discussion','image','voice_note','sticker','video','document'].includes(message.message_type)) && { label: 'Forward', icon: 'share', run: () => chooseConversation(message.shared_content || null, message.shared_content ? '' : ['text','discussion'].includes(message.message_type) ? message.content : '', ['image','voice_note','sticker','video','document'].includes(message.message_type) ? message : null) },
       groupAllowed(state, userId, 'pin_messages') && { label: state.pins?.some(pin => pin.id === message.id) ? 'Unpin message' : 'Pin message', icon: 'pin', run: async () => { await chatAction('kaidra_pin', { target_message: message.id, pinned: !state.pins?.some(pin => pin.id === message.id) }); await refreshState(state); } },
       ...(message.shared_content ? contentActions(message.shared_content).slice(0, 2) : []),
     ];
@@ -184,7 +196,7 @@ function buildMessage(message, state, consecutive = false) {
   if (reactions.length) { const summary = element('div', 'reaction-summary'); for (const emoji of [...new Set(reactions.map(reaction => reaction.emoji))]) { const matching = reactions.filter(reaction => reaction.emoji === emoji); const button = element('button', `reaction-pill${matching.some(reaction => reaction.user_id === userId) ? ' mine' : ''}`, `${emoji} ${matching.length}`); button.type = 'button'; button.title = matching.map(reaction => state.members.find(member => member.id === reaction.user_id)?.display_name || 'Member').join(', '); button.addEventListener('click', async () => { try { await chatAction('kaidra_react', { target_message: message.id, reaction: emoji }); await refreshState(state); } catch { notify('Could not update your reaction.'); } }); summary.append(button); } row.append(summary); }
   return row;
 }
-document.addEventListener('kaidra:social-refresh',()=>{if(active&&!active.loading){active.nodes.clear();renderMessages(active);}});
+document.addEventListener('kaidra:social-refresh',()=>{if(active&&!active.loading){const state=active;refreshList();snapshot(state).catch(()=>{});}});
 function renderMessages(state) {
   if (!state || active !== state || state.loading) return;
   if(thread.querySelector('[data-gesture-active]')){state.pendingRender=true;return;}state.pendingRender=false;
@@ -196,7 +208,7 @@ function renderMessages(state) {
   for (const message of messages) {
     const day = new Date(message.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }); if (day !== date) { children.push(element('div', 'chat-date-divider', day)); date = day; }
     if (message.id === state.unreadStart) children.push(element('div', 'chat-unread-divider', 'Unread messages'));
-    const previous = messages[messages.indexOf(message) - 1], consecutive = previous?.sender_id === message.sender_id && previous.message_type !== 'system' && (new Date(message.created_at) - new Date(previous.created_at)) < 300000;
+    const previous = messages[messages.indexOf(message) - 1], consecutive = previous?.sender_id === message.sender_id && previous.message_type !== 'system' && new Date(previous.created_at).toDateString()===new Date(message.created_at).toDateString() && (new Date(message.created_at) - new Date(previous.created_at)) < 300000;
     const signature = JSON.stringify([message, consecutive, state.polls, state.pins, state.quotes, state.members, state.reactions.filter(item => item.message_id === message.id), state.reads.filter(item => item.message_id === message.id), state.deliveries?.filter(item => item.message_id === message.id), state.discussions?.find(item => item.message_id === message.id), state.extended]);
     let node = state.nodes.get(message.id); if (!node || node.dataset.signature !== signature) { node = buildMessage(message, state, consecutive); node.dataset.signature = signature; state.nodes.set(message.id, node); }
     children.push(node);
@@ -210,7 +222,7 @@ async function deliver(state, message) {
     if (message.message_type === 'voice_note' && !message.media_url) {
       message.media_url = await uploadVoiceNote(state.id, message.localVoiceBlob, message.id); message.content = message.media_url;
     }
-    const saved = await sendMessage({ id: message.id, conversationId: state.id, senderId: userId, content: message.content, messageType: message.message_type, mediaUrl: message.media_url, duration: message.media_duration_seconds, sharedContent: message.shared_content, replyTo: message.external_ref_id, mentionIds: message.mention_ids || [] });
+    const saved = await sendMessage({ id: message.id, conversationId: state.id, senderId: userId, content: message.content, messageType: message.message_type, mediaUrl: message.media_url, duration: message.media_duration_seconds, mediaMetadata: message.media_metadata, sharedContent: message.shared_content, replyTo: message.external_ref_id, mentionIds: message.mention_ids || [] });
     mergeMessage(state.messages, { ...saved, localState: null, localVoiceBlob: null }); if (!state.isGroup) recordFriendInteraction(state.profile.id).catch(() => {}); if (active === state) { showError('chat-error'); renderMessages(state); } refreshList();
   }
   catch { const current = state.messages.get(message.id); if (current?.localState) { current.localState = 'failed'; renderMessages(state); } }
@@ -224,8 +236,8 @@ function renderDraft() {
 }
 document.getElementById('message-form').addEventListener('submit', async event => {
   event.preventDefault(); if (!active || !userId || voiceBusy) return; let content = input.value.trim(); if (!content && !sharedDraft) return;
-  const challenge=content.match(/^\.challenge\s+@([a-zA-Z0-9_]+)(?:\s+([\s\S]*))?$/i);
-  if (/^\.challenge(?:\s|$)/i.test(content)) { if(!challenge){showError('chat-error','Use .challenge @username with optional challenge text.');return;}const state=active,member=state.members.find(m=>m.username?.toLowerCase()===challenge[1].toLowerCase()&&m.id!==userId);if(!member){showError('chat-error','Choose another member of this conversation.');return;}try{if(!await awakenBattleIdentity())return;await chatAction('kaidra_battle_create',{target_conversation:state.id,target_user:member.id,topic:challenge[2]||'',stance:'',context:{entry_type:'direct'},request_id:state.challengeRequestId ||= crypto.randomUUID()});state.challengeRequestId=null;input.value='';state.typing?.stop();renderDraft();await snapshot(state);}catch(error){showError('chat-error',error.message||'Could not send challenge.');}return;}
+  if (/^\.challenge(?:\s|$)/i.test(content)) { const state=active;try{const challenge=challengeTarget(content,{members:state.members,userId,isGroup:state.isGroup});if(!await awakenBattleIdentity())return;const args={target_conversation:state.id,target_user:challenge.id,topic:challenge.flavour,stance:'',context:{entry_type:'direct'}},key=JSON.stringify(args);if(state.challengeRequest?.key!==key)state.challengeRequest={key,id:crypto.randomUUID()};await chatAction('kaidra_battle_create',{...args,request_id:state.challengeRequest.id});state.challengeRequest=null;input.value='';state.typing?.stop();renderDraft();await snapshot(state);}catch(error){if(active===state){showError('chat-error',challengeError(error));appendBattleConflict(document.getElementById('chat-error'),error);}}return;}
+  if(/^\.forfeit(?:\s|$)/i.test(content)){if(content.trim().toLowerCase()!=='.forfeit'){showError('chat-error','Use .forfeit to concede your own fighter.');return;}try{await forfeitInConversation(active.id);input.value='';active.typing?.stop();await snapshot(active);}catch(error){showError('chat-error',error.message||'Could not forfeit.');}return;}
   const command=content.match(/^\.discuss(?:\s+([\s\S]*))?$/i); if(command){content=(command[1]||'').trim();if(!content){showError('chat-error','Add a statement after .discuss.');return;}}
   const isDiscussion=discussionMode||!!command; if(isDiscussion&&sharedDraft){showError('chat-error','Send the shared title separately from your discussion.');return;}
   if (content.length > 4000) { showError('chat-error', 'Keep your message under 4,000 characters.'); return; }
@@ -240,13 +252,13 @@ input.addEventListener('input', () => {
   const matches = match && active?.isGroup ? (active?.members || []).filter(member => member.id !== userId && member.username?.toLowerCase().startsWith(match[1].toLowerCase())).slice(0, 5) : [];
   target.classList.toggle('hidden', !matches.length); target.replaceChildren(...matches.map(member => { const button = element('button', '', `@${member.username}`); button.type = 'button'; button.prepend(avatar(member)); button.addEventListener('click', () => { const cursor = input.selectionStart, start = cursor - match[1].length - 1, replacement = `@${member.username} `; input.value = input.value.slice(0, start) + replacement + input.value.slice(cursor); input.focus(); input.setSelectionRange(start + replacement.length, start + replacement.length); target.classList.add('hidden'); syncComposer(); }); return button; }));
 });
-async function chooseConversation(content = null, text = '', sourceMessage = null) {
+async function chooseConversation(content = null, text = '', sourceMessage = null, discussionContext = null) {
   if (!userId) return; const version = ++pickerVersion, sharing = !!(content || text || sourceMessage);
   closeModal('content-detail-modal'); openModal('new-chat-modal');
   document.getElementById('new-chat-title').textContent = sharing ? 'Send to…' : 'New conversation';
   document.getElementById('chat-picker-description').textContent = sharing ? 'Choose a destination to send this now.' : 'Find your people.';
   const target = document.getElementById('new-chat-list'); target.replaceChildren();
-  if (content) target.append(richCard(content, true)); else if (text) target.append(element('p', 'share-text-preview', text));else if(sourceMessage)target.append(element('p','share-text-preview',sourceMessage.message_type==='voice_note'?'Forward voice note':'Forward photo'));
+  if (content) target.append(richCard(content, true)); else if (text) target.append(element('p', 'share-text-preview', text));else if(sourceMessage)target.append(element('p','share-text-preview',`Forward ${messagePreview(sourceMessage)}`));
   const search = element('input'), tabs = element('div', 'library-tabs'), results = element('div', 'people-list'); search.type = 'search'; search.placeholder = 'Search conversations or people'; search.setAttribute('aria-label', search.placeholder);
   let category = 'recent', friends = [], sending = false; const requestIds = new Map();
   if (!sharing) { const group = actionButton('New group', 'people'); group.addEventListener('click', () => { closeModal('new-chat-modal'); groups.createGroup(); }); target.append(group); }
@@ -265,8 +277,8 @@ async function chooseConversation(content = null, text = '', sourceMessage = nul
           if (sharing) {
             if (!requestIds.has(id)) requestIds.set(id, crypto.randomUUID());
             let path;
-            if(sourceMessage){const source=sourceMessage.media_url||sourceMessage.content,extension=source.split('.').at(-1);if(!source.startsWith(sourceMessage.conversation_id+'/')||!['jpg','jpeg','png','webp','webm','ogg','m4a','mp4','wav'].includes(extension))throw new Error('Unavailable media');path=`${id}/${requestIds.get(id)}.${extension}`;const bucket=sourceMessage.message_type==='image'?'chat-images':'voice-notes';const {error}=await supabase.storage.from(bucket).copy(source,path);if(error&&!['409','Duplicate'].includes(String(error.statusCode||error.error)))throw error;}
-            await sendMessage({ id: requestIds.get(id), conversationId: id, senderId: userId, content: text, sharedContent: content, ...(sourceMessage?{messageType:sourceMessage.message_type,mediaUrl:path,duration:sourceMessage.media_duration_seconds}: {}) });
+            if(sourceMessage){const source=sourceMessage.media_url||sourceMessage.content,extension=source.split('.').at(-1);if(!source.startsWith(sourceMessage.conversation_id+'/')||!['jpg','jpeg','png','webp','gif','webm','ogg','m4a','mp4','wav','pdf','txt','zip','doc','docx','xls','xlsx','ppt','pptx','bin'].includes(extension))throw new Error('Unavailable media');path=`${id}/${requestIds.get(id)}.${extension}`;const bucket=mediaBucket(sourceMessage.message_type);const {error}=await supabase.storage.from(bucket).copy(source,path);if(error&&!['409','Duplicate'].includes(String(error.statusCode||error.error)))throw error;}
+            await sendMessage({ id: requestIds.get(id), conversationId: id, senderId: userId, content: text, sharedContent: content, ...(discussionContext?{messageType:'discussion',sportsContext:discussionContext}:{}), ...(sourceMessage?{messageType:sourceMessage.message_type,mediaUrl:path,duration:sourceMessage.media_duration_seconds,mediaMetadata:sourceMessage.media_metadata}: {}) });
             closeModal('new-chat-modal'); notify(`Sent to ${profile.display_name || profile.username}`); refreshList(); if (active?.id === id) snapshot(active);
           } else { closeModal('new-chat-modal'); await openThread(id, profile, !!profile.isGroup); }
         } catch { notify(sharing ? 'Could not send. Try again or choose another conversation.' : 'Could not open this conversation.'); }
@@ -286,7 +298,7 @@ document.getElementById('close-chat-btn').addEventListener('click', () => naviga
 document.getElementById('chat-header-user').addEventListener('click', () => { if (active?.isGroup) document.getElementById('chat-info-btn').click(); else if (active) viewProfile(active.profile.id); });
 document.addEventListener('kaidra:open-thread', event => openThread(event.detail.conversationId, event.detail.profile, event.detail.isGroup));
 document.addEventListener('kaidra:message-user', async event => { try { const id = await getOrCreateConversation(event.detail.profile.id); await openThread(id, event.detail.profile); } catch { notify('Could not open your conversation. Check that you are friends and try again.'); } });
-document.addEventListener('kaidra:share-content', event => chooseConversation(event.detail.content, event.detail.text));
+document.addEventListener('kaidra:share-content', event => chooseConversation(event.detail.content, event.detail.text, null, event.detail.discussionContext));
 document.addEventListener('kaidra:modal-close', event => { if (event.detail.id === 'new-chat-modal') ++pickerVersion; const state=active;if(state)requestAnimationFrame(()=>acknowledge(state)); });
 document.getElementById('inbox-search').addEventListener('input', renderList);
 document.querySelectorAll('[data-inbox-filter]').forEach(button => button.addEventListener('click', () => { filter = button.dataset.inboxFilter; document.querySelectorAll('[data-inbox-filter]').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); }); renderList(); }));
@@ -344,12 +356,6 @@ document.getElementById('composer-plus').addEventListener('click', event => {
   openMenu(event.currentTarget, [
     { label: 'Start discussion', icon: 'spark', run: () => { discussionMode=true;renderDraft();input.focus(); } },
     { label: 'Challenge', icon: 'spark', run: () => startChallenge({conversationId:active.id,targetUser:active.isGroup?undefined:active.profile.id}) },
-    { label: 'Photo', icon: 'image', run: () => { const file = element('input'); file.type = 'file'; file.accept = 'image/jpeg,image/png,image/webp'; file.addEventListener('change', async () => {
-      const photo = file.files[0], state = active; if (!photo || !state) return;
-      if (!['image/jpeg','image/png','image/webp'].includes(photo.type) || photo.size > 5 * 1024 * 1024) { notify('Choose a JPG, PNG, or WebP under 5 MB.'); return; }
-      try { const path = await uploadChatImage(state.id, photo); deliver(state, { id: crypto.randomUUID(), conversation_id: state.id, sender_id: userId, content: '', message_type: 'image', media_url: path, created_at: new Date().toISOString(), localState: 'queued' }); } catch { notify('Could not upload that photo. Try again.'); }
-    }); file.click(); } },
-    { label: 'Voice note', icon: 'mic', run: () => document.getElementById('voice-record-btn').click() },
     { label: 'Share entertainment', icon: 'film', run: () => navigate('discover') },
     groupAllowed(active, userId, 'create_polls') && { label: 'Poll', icon: 'poll', run: () => { const state = active; createPoll(state, async () => { await snapshot(state); await refreshState(state); }); } },
   ], 'Add to conversation');
@@ -362,3 +368,8 @@ document.getElementById('discussion-mode-close').addEventListener('click',()=>{d
 for(const event of ['pointerup','pointercancel'])thread.addEventListener(event,()=>{const state=active;if(state?.pendingRender)requestAnimationFrame(()=>renderMessages(state));});
 
 document.addEventListener('kaidra:jump-discussion',async event=>{const {conversationId,messageId}=event.detail;try{const row=rows.find(row=>row.conversationId===conversationId)||(await getInbox(userId)).find(row=>row.conversationId===conversationId);if(!row)throw new Error('Unavailable');await openThread(row.conversationId,row.profile,row.isGroup);if(active?.loading)await snapshot(active);await jumpToMessage(messageId);}catch{notify('This discussion is unavailable.');}});
+
+mediaPicker({getActive:()=>active,onFile:async(state,file,kind)=>{
+  const id=crypto.randomUUID();try{const media=await uploadMedia(state.id,file,id,kind);const reply=active===state?replyDraft?.id:null;if(active===state){replyDraft=null;renderDraft();}await deliver(state,{id,conversation_id:state.id,sender_id:userId,content:'',...media,external_ref_id:reply||null,created_at:new Date().toISOString(),localState:'queued'});}catch(error){notify(error.message||'Could not upload this file.');}
+}});
+document.getElementById('composer-stickers').addEventListener('click',()=>stickerPicker({userId,getActive:()=>active,onSticker:async(state,media)=>{const reply=active===state?replyDraft?.id:null;if(active===state){replyDraft=null;renderDraft();}await deliver(state,{...media,conversation_id:state.id,sender_id:userId,content:'',external_ref_id:reply||null,created_at:new Date().toISOString(),localState:'queued'});}}));

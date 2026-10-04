@@ -9,7 +9,7 @@ export const categories = [
   { id: 'movie', label: 'Movies', icon: 'film', enabled: true },
   { id: 'tv', label: 'Series', icon: 'tv', enabled: true },
   { id: 'anime', label: 'Anime', icon: 'spark', enabled: true },
-  { id: 'football', label: 'Football', icon: 'ball', enabled: true },
+  { id: 'sports', label: 'Sports', icon: 'ball', enabled: true },
   { id: 'games', label: 'Games', icon: 'game', enabled: false },
   { id: 'comics', label: 'Comics', icon: 'book', enabled: false },
   { id: 'wrestling', label: 'Wrestling', icon: 'people', enabled: false },

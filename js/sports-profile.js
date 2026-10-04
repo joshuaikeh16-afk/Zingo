@@ -1,0 +1,4 @@
+import { sportsRpc, sportsPath, sportsRef } from './sports-client.js';
+import { element, artwork, actionButton } from './ui.js';
+import { goRoute } from './router.js';
+export async function sportsProfile(targetUser,own){const wrap=element('div','sports-profile-identity');try{const entities=await sportsRpc('kaidra_sports_profile',{target_user:targetUser});if(!entities?.length)return null;wrap.append(element('small','eyebrow','SPORTS'));for(const e of entities){const t=e.team,b=actionButton('Supports '+t.name,'ball');if(t.logo)b.prepend(artwork(t.logo,'','sports-logo'));b.addEventListener('click',()=>goRoute(sportsPath(sportsRef('team',t.id))));wrap.append(b);if(own)wrap.append(element('p','muted',e.is_public?'Shown on your public profile':'Private · visible only to you'));}return wrap;}catch{return null;}}

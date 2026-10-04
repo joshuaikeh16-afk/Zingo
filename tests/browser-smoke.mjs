@@ -67,7 +67,7 @@ try{
   assert(await evaluate('document.activeElement.classList.contains("search-result")'));
   await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await wait('document.querySelector("#global-search-modal").classList.contains("hidden")');
-  await route('discover'); await click('[data-category="football"]'); await wait('document.querySelector("#discover-grid .match-card")');
+  await route('discover'); await route('discover/football/for-you'); await wait('document.querySelector("#discover-grid .match-card")');
   assert.equal(await evaluate('document.body.dataset.activeTab'),'discover');
   await new Promise(resolve => setTimeout(resolve, 350));
   assert(await evaluate('!!document.querySelector("#discover-grid .match-open") && !document.querySelector("#discover-grid .content-card")'),'Background catalogue loading must not replace matches');
@@ -190,7 +190,7 @@ try{
   assert(await evaluate('window.__mock.uploads.filter(upload=>upload.bucket==="voice-notes").length===2 && window.__mock.uploads.filter(upload=>upload.bucket==="voice-notes")[0].path===window.__mock.uploads.filter(upload=>upload.bucket==="voice-notes")[1].path'));
   assert(await evaluate('window.__mock.db.messages.find(message=>message.message_type==="voice_note").media_duration_seconds>=1'));
   await click('#close-chat-btn'); await evaluate('[...document.querySelectorAll(".conversation-row")].find(row=>row.textContent.includes("Weekend crew")).click()');
-  await wait('document.querySelector("audio.chat-media")?.readyState>=1');
+  await click('.voice-message button[aria-label="Play voice note"]'); await wait('document.querySelector(".voice-message audio")?.readyState>=1');
   await click('#voice-record-btn'); await wait('document.querySelector("#voice-recorder").dataset.phase==="recording"'); await click('#voice-discard-btn');
   assert(await evaluate('window.__mock.streams.every(stream=>stream.getTracks().every(track=>track.readyState==="ended"))'));
   await click('#voice-record-btn'); await wait('document.querySelector("#voice-recorder").dataset.phase==="recording"'); await click('#close-chat-btn');

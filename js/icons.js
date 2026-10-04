@@ -1,5 +1,12 @@
 // One small local outline icon family, shared by every screen.
 const paths = {
+  camera: '<path d="M3 7h4l2-3h6l2 3h4v14H3z"/><circle cx="12" cy="13" r="4"/>',
+  paperclip: '<path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L12 3a7 7 0 0 1 10 10l-8 8"/>',
+  sticker: '<path d="M21 14V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l7-7h-5a2 2 0 0 0-2 2v5M8 8h.01M16 8h.01M8 12a4 4 0 0 0 7 2"/>',
+  file: '<path d="M14 2H5v20h14V7zM14 2v5h5M8 12h8m-8 4h8"/>',
+  link: '<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 3 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0"/>',
+  forward: '<path d="m13 4 8 7-8 7v-5c-5 0-8 2-10 6 0-8 4-11 10-11z"/>',
+
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
   heart: '<path d="M20 4a5 5 0 0 0-8 2 5 5 0 0 0-8-2c-5 5 1 11 8 16 7-5 13-11 8-16z"/>',
   pin: '<path d="m9 3 10 10-4 1-3 5-7-7 5-3zM8 16l-5 5"/>',

@@ -14,6 +14,9 @@ export function messagePreview(message) {
   if (!message) return 'Start the conversation';
   if (message.deleted_at) return 'Message deleted';
   if (message.shared_content?.title) return `Shared ${message.shared_content.title}`;
+  if (message.message_type === 'sticker') return 'Sticker';
+  if (message.message_type === 'video') return 'Video';
+  if (message.message_type === 'document') return message.media_metadata?.name || 'Document';
   if (message.message_type === 'image') return 'Photo';
   if (message.message_type === 'voice_note') return 'Voice message';
   return message.content || 'Message';

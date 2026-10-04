@@ -46,7 +46,7 @@ try{
    const accepted=responses.filter(r=>r.status<400);assert(accepted.length);if(accepted.some(r=>r.data.identity))assert(accepted.every(r=>r.data.identity.class_id===accepted[0].data.identity.class_id));state=accepted[0].data;
   }else state=await rpc('kaidra_awakening_answer',args,a.token);
  }
- const classId=state.identity.class_id;assert(['warrior','wizard','ninja','guardian','rogue'].includes(classId));assert(state.total<=14);
+ const classId=state.identity.class_id;assert(['warrior','wizard','ninja','guardian','rogue','healer','ranger','berserker'].includes(classId));assert(state.total<=14);
  const finals=await Promise.all([rpc('kaidra_awakening_finalize',{target_session:sid},a.token),rpc('kaidra_awakening_finalize',{target_session:sid},a.token)]);assert(finals.every(r=>r.identity.class_id===classId));
  await denied(`/rest/v1/battle_identities?user_id=eq.${a.id}`,'PATCH',{class_id:classId==='ninja'?'wizard':'ninja'},a.token);
  await denied(`/rest/v1/battle_identities?user_id=eq.${a.id}`,'DELETE',null,a.token);

@@ -1,3 +1,4 @@
+import { sportsRequest, sportsRef, sportsPath } from './sports-client.js';
 import { searchUsers } from './supabase-client.js';
 import { account } from './session.js';
 import { openModal, closeModal, element, artwork, avatar, viewProfile } from './ui.js';
@@ -23,7 +24,7 @@ input.addEventListener('input', () => {
   if (query.length < 2) return;
   timer = setTimeout(async () => {
     const current = await account; if (!current) return;
-    const searches=await Promise.allSettled(['movie','tv','anime'].map(category=>contentRequest('browse',{category,query,page:1,region:document.getElementById('content-region').value})).concat([searchUsers(query,current.userId),contentRequest('fixtures')]));const people=searches[3],football=searches[4];
+    const searches=await Promise.allSettled(['movie','tv','anime'].map(category=>contentRequest('browse',{category,query,page:1,region:document.getElementById('content-region').value})).concat([searchUsers(query,current.userId),query.length>=3?sportsRequest('search',{query}):Promise.resolve({response:[]})]));const people=searches[3],football=searches[4];
     if (version !== currentVersion) return;
     results.replaceChildren();
     function group(label) { const section = element('section', 'search-result-group'); section.append(element('h3', '', label)); results.append(section); return section; }
@@ -35,7 +36,7 @@ input.addEventListener('input', () => {
       }
       if (!titles.value.items.length) titleGroup.append(element('p', 'muted', 'No matching titles.'));
     } else titleGroup.append(element('p', 'muted', 'This category is temporarily unavailable. Try again.'));}
-    const clubsGroup=group('Clubs in recent fixtures');if(football.status==='fulfilled'&&football.value.configured){const clubs=[...new Map((football.value.matches||[]).flatMap(m=>[[m.homeId,m.home],[m.awayId,m.away]])).entries()].filter(([id,name])=>id&&name.toLowerCase().includes(query.toLowerCase()));for(const [id,name] of clubs.slice(0,6)){const button=element('button','search-result',name);button.type='button';button.addEventListener('click',()=>{closeModal('global-search-modal');goRoute(`discover/football/fixtures?club=${id}`);});clubsGroup.append(button);}if(!clubs.length)clubsGroup.append(element('p','muted','No matching clubs in the current fixture window.'));}else clubsGroup.append(element('p','muted','Club search is temporarily unavailable.'));
+    const clubsGroup=group('Football clubs');if(football.status==='fulfilled'){for(const row of (football.value.response||[]).slice(0,6)){const team=row.team,button=element('button','search-result');button.type='button';button.append(artwork(team.logo,'','sports-logo'),element('strong','',team.name));button.addEventListener('click',()=>{closeModal('global-search-modal');goRoute(sportsPath(sportsRef('team',team.id)));});clubsGroup.append(button);}if(!football.value.response?.length)clubsGroup.append(element('p','muted',query.length<3?'Type at least three characters for club search.':'No matching clubs.'));}else clubsGroup.append(element('p','muted',football.reason?.message||'Club search is temporarily unavailable.'));
     const peopleGroup = group('People');
     if (people.status === 'fulfilled') {
       for (const person of people.value.slice(0, 6)) {

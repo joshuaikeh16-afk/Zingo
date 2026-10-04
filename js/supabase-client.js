@@ -20,6 +20,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export async function requireAuth() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
+    if(/^#join\/[0-9a-f]{64}$/.test(location.hash))try{sessionStorage.setItem('kaidra:join-destination',location.hash);}catch{}
     window.location.href = '/auth.html';
     return null;
   }
@@ -41,6 +42,7 @@ export async function requireProfile(session) {
     throw error;
   }
   if (!profile || profile.onboarding_completed === false) {
+    if(/^#join\/[0-9a-f]{64}$/.test(location.hash))try{sessionStorage.setItem('kaidra:join-destination',location.hash);}catch{}
     window.location.href = '/onboarding.html';
     return null;
   }
@@ -112,11 +114,11 @@ export function subscribeToInboxUpdates(userId, onMessage, onStatus) {
   return channel.subscribe(onStatus);
 }
 
-export async function sendMessage({ id, conversationId, senderId, content, messageType = 'text', sharedContent = null, replyTo = null, mediaUrl = null, duration = null, mentionIds = [] }) {
+export async function sendMessage({ id, conversationId, senderId, content, messageType = 'text', sharedContent = null, replyTo = null, mediaUrl = null, duration = null, mentionIds = [], sportsContext = null, mediaMetadata = null }) {
   const { data, error } = await supabase.from('messages').insert({
     ...(id ? { id } : {}), conversation_id: conversationId, sender_id: senderId,
-    content, message_type: messageType, mention_ids: mentionIds, ...(sharedContent ? { shared_content: sharedContent } : {}), ...(replyTo ? { external_ref_id: replyTo } : {}),
-    ...(mediaUrl ? { media_url: mediaUrl, media_duration_seconds: duration } : {}),
+    content, message_type: messageType, mention_ids: mentionIds, ...(sportsContext ? {sports_context:sportsContext} : {}), ...(sharedContent ? { shared_content: sharedContent } : {}), ...(replyTo ? { external_ref_id: replyTo } : {}),
+    ...(mediaUrl ? { media_url: mediaUrl, media_duration_seconds: duration, ...(mediaMetadata ? {media_metadata:mediaMetadata} : {}) } : {}),
   }).select().single();
   if (error?.code === '23505' && id) {
     // A retry after a lost acknowledgement uses the same ID, never a second message.

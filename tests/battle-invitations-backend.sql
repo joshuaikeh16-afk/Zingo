@@ -1,0 +1,23 @@
+begin;
+create function pg_temp.check_ok(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception '%',label;end if;end $$;
+create function pg_temp.refuse(statement text) returns void language plpgsql as $$begin begin execute statement;exception when insufficient_privilege or raise_exception or unique_violation then return;end;raise exception using errcode='XX000',message='Unexpected permission: '||statement;end $$;
+do $$declare a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();c uuid:=gen_random_uuid();cid uuid;first_battle uuid;next_battle uuid;begin
+ insert into auth.users(id,email,created_at) select u,u||'@example.invalid',now()-interval '30 days' from unnest(array[a,b,c]) u;
+ insert into public.profiles(id,username,display_name) select u,'qa_'||left(replace(u::text,'-',''),16),'QA invitation member' from unnest(array[a,b,c]) u;
+ insert into public.battle_identities(user_id,class_id,determination_version) values(a,'ninja',1),(b,'warrior',1),(c,'wizard',1);
+ insert into public.friend_requests(requester_id,target_id,status) values(a,b,'accepted'),(a,c,'accepted');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);execute 'set local role authenticated';cid:=public.kaidra_create_group('QA Battle Room',array[b,c]);
+ first_battle:=public.kaidra_battle_create(cid,b,'','',jsonb_build_object('entry_type','direct'));
+ perform pg_temp.check_ok((select ends_at=created_at+interval '10 minutes' from public.battles where id=first_battle),'Invitation not ten minutes');
+ perform pg_temp.refuse(format('select public.kaidra_battle_create(%L,%L,'''','''',''{"entry_type":"direct"}'')',cid,c));
+ perform pg_temp.refuse(format('select public.kaidra_battle_create(%L,%L,''Vote wins'',''Agree'',''{"entry_type":"opinion"}'')',cid,c));
+ execute 'reset role';update public.battles set created_at=now()-interval '11 minutes' where id=first_battle;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);execute 'set local role authenticated';perform public.kaidra_battle_action(first_battle,'accept');
+ perform pg_temp.check_ok((select status='expired' from public.battles where id=first_battle),'Late acceptance revived invitation');perform pg_temp.check_ok(public.kaidra_combat_state(first_battle)#>>'{combat,phase}'='finished','Expired combat remains playable');perform pg_temp.check_ok(not exists(select 1 from public.battle_stats where user_id=b),'Expiry awarded stats');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);next_battle:=public.kaidra_battle_create(cid,c,'','',jsonb_build_object('entry_type','direct'));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform public.kaidra_battle_action(next_battle,'accept');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform pg_temp.refuse(format('select public.kaidra_battle_create(%L,%L,'''','''',''{"entry_type":"direct"}'')',cid,b));
+ execute 'reset role';delete from public.conversation_participants where conversation_id=cid and user_id=c;
+ perform pg_temp.check_ok((select phase='finished' from public.battle_combat_state where battle_id=next_battle),'Removed participant left an active combat state');
+end $$;
+rollback;

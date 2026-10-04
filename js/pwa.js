@@ -4,7 +4,7 @@ let installPrompt;
 const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 const button=document.getElementById('install-app-btn'),status=document.getElementById('install-app-status');
 function render(){if(!button)return;button.classList.toggle('hidden',standalone());if(status)status.textContent=standalone()?'Kaidra is installed on this device.':'';}
-window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;render();});
+window.addEventListener('beforeinstallprompt',event=>{if(!button)return;event.preventDefault();installPrompt=event;render();});
 window.addEventListener('appinstalled',()=>{installPrompt=null;render();notify('Kaidra is installed.');});
 button?.addEventListener('click',async()=>{
  if(installPrompt){const prompt=installPrompt;installPrompt=null;try{await prompt.prompt();await prompt.userChoice;render();}catch{if(status)status.textContent='Installation could not start. Try your browser menu or refresh.';}return;}

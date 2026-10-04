@@ -1,3 +1,4 @@
+import { startChallenge } from './social.js';
 import { chatAction, getMutualFriends, supabase } from './supabase-client.js';
 import { element, avatar, openModal, closeModal, notify, viewProfile, actionButton, iconButton, navigate } from './ui.js';
 import { dialog, openMenu, confirmAction } from './context-menu.js';
@@ -112,6 +113,7 @@ export function installGroups({ getUserId, getActive, openThread, refreshList, r
       button.addEventListener('click',()=>openMenu(button,[
         {label:'View profile',icon:'user',run:()=>{closeModal('chat-info-modal');viewProfile(member.id);}},
         member.id!==getUserId()&&{label:'Message',icon:'chat',run:()=>{closeModal('chat-info-modal');document.dispatchEvent(new CustomEvent('kaidra:message-user',{detail:{profile:member}}));}},
+        member.id!==getUserId()&&{label:'Challenge',icon:'spark',run:()=>startChallenge({conversationId:state.id,targetUser:member.id})},
         owner&&member.id!==getUserId()&&{label:member.role==='admin'?'Remove admin':'Make admin',icon:'people',run:async()=>{await run(state,member.role==='admin'?'demote':'promote',member.id);showInfo();}},
         member.id!==getUserId()&&member.role!=='owner'&&(owner||me?.role==='admin'&&member.role==='participant')&&{label:'Remove from group',icon:'trash',danger:true,run:async()=>{if(await confirmAction('Remove participant?',`${member.display_name||member.username} will lose access to this conversation.`,'Remove')){await run(state,'remove',member.id);showInfo();}}}
       ],member.display_name||member.username));container.append(button);

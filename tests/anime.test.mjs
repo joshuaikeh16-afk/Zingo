@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const source=readFileSync('supabase/functions/_shared/anime.ts','utf8').replace("import { cached, allowedUrl } from './content.ts';",`const allowedUrl=(value,domains)=>{try{const url=new URL(value);return url.protocol==='https:'&&domains.some(d=>url.hostname===d||url.hostname.endsWith('.'+d))?url.href:null;}catch{return null;}};`);
+const {animeBrowse,animeMeta,animeDetail}=await import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(source)).toString('base64'));
+const calls=[];
+const media={id:101922,idMal:38000,title:{english:'Provider fixture'},bannerImage:'https://s4.anilist.co/file/anilistcdn/media/anime/banner/101922.jpg',coverImage:{extraLarge:'https://s4.anilist.co/cover.jpg'},genres:['Action'],season:'FALL',seasonYear:2025,tags:[{name:'Isekai',isAdult:false}],averageScore:80,externalLinks:[{type:'STREAMING',site:'Crunchyroll',url:'https://www.crunchyroll.com/series/fixture'},{type:'STREAMING',site:'Unsafe',url:'https://untrusted.invalid/watch'}]};
+const query=async(q,v)=>{calls.push({q,v});return q.includes('GenreCollection')?{GenreCollection:['Action','Romance','Hentai'],MediaTagCollection:[{name:'Love Triangle',isAdult:false},{name:'Adult',isAdult:true}],oldest:{media:[{seasonYear:1970}]},newest:{media:[{seasonYear:2027}]}}:q.includes('Media(idMal:')?{Media:media}:{Page:{pageInfo:{hasNextPage:true},media:[media,{...media,idMal:null},{...media,idMal:3,genres:['Hentai']}]}}};
+const metadata=await animeMeta(query);assert.equal(metadata.genres.length,2);assert.equal(metadata.themes.length,1);assert.equal(metadata.years.at(-1).year,1970);assert.equal(metadata.years[0].year,2027);
+const page=await animeBrowse({genre:'al:genre:Romance',theme:'al:tag:Love Triangle',year:2025,season:'fall',page:2,sort:'rating'},query);
+assert.deepEqual(calls.at(-1).v,{page:2,sort:'SCORE_DESC',genre:'Romance',tag:'Love Triangle',year:2025,season:'FALL'});assert.equal(page.items.length,1);assert.equal(page.items[0].provider,'mal');assert.equal(page.items[0].id,38000);assert.equal(page.items[0].artworkId,101922);assert(page.items[0].backdrop.includes('/banner/'));assert.equal(page.items[0].streaming.length,1);assert(page.hasMore);
+await animeBrowse({section:'new'},query);assert(calls.at(-1).v.after&&calls.at(-1).v.before);await animeBrowse({section:'popular',theme:'al:tag:Isekai'},query);assert.equal(calls.at(-1).v.tag,'Isekai');assert.equal(calls.at(-1).v.sort,'POPULARITY_DESC');
+assert.equal((await animeDetail(38000,query)).id,38000);assert.equal(calls.at(-1).v.id,38000);assert(calls.at(-1).q.includes('idMal:$id'));
+await assert.rejects(()=>animeBrowse({genre:7},query),RangeError);await assert.rejects(()=>animeBrowse({page:0},query),RangeError);assert.equal((await animeBrowse({year:1990},query)).items.length,0);
+console.log('PASS real anime provider contract: taxonomy, historical seasons, popular/new, canonical MAL identity, banner artwork and verified streaming domains.');

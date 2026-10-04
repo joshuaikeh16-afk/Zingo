@@ -3,12 +3,14 @@ import { account } from './session.js';
 import { element, actionButton, skeletons, emptyState } from './ui.js';
 import { contentRequest, highlights, renderNews, feedError, externalLink } from './content-client.js';
 import { matchCard } from './content-view.js';
+import {footballPreferences} from './social.js';
 import { preferencesFor } from './preferences.js';
 const panel = document.getElementById('interest-football'), matches = document.getElementById('fixtures-list');
 const headlines = document.getElementById('football-news'), events = document.getElementById('sports-events'), league = document.getElementById('football-league');
-let data = [], version = 0, ready = false, enabled = false;
+let data = [], version = 0, ready = false, enabled = false,profile;
+function relevance(match){const prefs=profile?.recommendation_preferences||{};return ((prefs.football_clubs||[]).map(Number).some(id=>[match.homeId,match.awayId].includes(id))?4:0)+((prefs.football_competitions||[]).includes(match.competition)?2:0)+(['IN_PLAY','PAUSED'].includes(match.status)?1:0);}
 function renderMatches() {
-  const selected = data.filter(match => league.value === 'ALL' || match.competition === league.value).sort((a, b) => a.utcDate.localeCompare(b.utcDate)).slice(0, 8);
+  const selected = data.filter(match => league.value === 'ALL' || match.competition === league.value).sort((a,b)=>relevance(b)-relevance(a)||a.utcDate.localeCompare(b.utcDate)).slice(0, 8);
   matches.replaceChildren();
   if (!selected.length) { matches.append(emptyState('No upcoming fixtures', 'No fixtures are available for this competition in the next seven days.', 'ball')); return; }
   matches.append(...selected.map(matchCard));
@@ -40,6 +42,8 @@ document.addEventListener('kaidra:show-football', showFootball);
 let timer;
 function startTimer() { clearInterval(timer); timer = setInterval(() => { if (ready && enabled && !document.hidden && document.body.dataset.activeTab === 'home') loadMatches(); }, 60000); }
 startTimer();
-(async () => { const current = await account; if (!current) return; ready = true; if (preferencesFor(current.profile).football || enabled) showFootball(); })();
+(async () => { const current = await account; if (!current) return; profile=current.profile;ready = true; if (preferencesFor(current.profile).football || enabled) showFootball(); })();
 window.addEventListener('pagehide', () => clearInterval(timer));
 window.addEventListener('pageshow', event => { if (event.persisted) { startTimer(); if (ready && enabled) loadMatches(); } });
+
+document.getElementById('home-football-follow').addEventListener('click',()=>footballPreferences());document.addEventListener('kaidra:football-preferences',()=>{if(ready)showFootball();});

@@ -8,7 +8,7 @@ export function dialog(title, className = '') {
   const heading = element('div', 'modal-heading'), name = element('h2', '', title), close = iconButton('close', 'Close'); name.id = `${id}-title`;
   close.addEventListener('click', () => closeModal(id)); heading.append(name, close); card.append(heading); modal.append(card); document.body.append(modal);
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(id); });
-  const cleanup = event => { if (event.detail.id === id) { modal.remove(); document.removeEventListener('kaidra:modal-close', cleanup); } };
+  const cleanup = event => { if (event.detail.id === id) { if(modal.classList.contains('reaction-closing'))setTimeout(()=>modal.remove(),110);else modal.remove(); document.removeEventListener('kaidra:modal-close', cleanup); } };
   document.addEventListener('kaidra:modal-close', cleanup);
   return { id, modal, card, open: () => openModal(id), close: () => closeModal(id) };
 }
@@ -38,6 +38,30 @@ export function openMenu(anchor, actions, title = 'Actions', point) {
   panel.card.style.setProperty('--menu-x', `${Math.max(8, Math.min(point?.x ?? box.right - 230, innerWidth - 250))}px`);
   panel.card.style.setProperty('--menu-y', `${Math.max(8, Math.min(point?.y ?? box.bottom + 6, innerHeight - actions.length * 46 - 90))}px`);
   panel.open(); menu.querySelector('button:not(:disabled)')?.focus(); return panel;
+}
+
+export function openReactions(anchor, choices, selected, choose) {
+  const panel = dialog('React', 'reaction-popover'), strip = element('div', 'reaction-strip');
+  const conversation = anchor.closest('[data-conversation-id]')?.dataset.conversationId;
+  if (conversation) panel.modal.dataset.conversationId = conversation;
+  strip.setAttribute('aria-label', 'Message reactions');
+  for (const emoji of choices) {
+    const button = element('button', 'reaction-choice', emoji); button.type = 'button';
+    button.setAttribute('aria-label', `React ${emoji}`); button.setAttribute('aria-pressed', String(selected === emoji));
+    button.addEventListener('click', async () => { panel.close(); try { await choose(emoji); } catch { notify('Could not update your reaction. Try again.'); } }); strip.append(button);
+  }
+  panel.card.append(strip);
+  function position() {
+    const viewport = window.visualViewport, box = anchor.getBoundingClientRect();
+    const top = viewport?.offsetTop || 0, height = viewport?.height || innerHeight;
+    const width = Math.min(320, innerWidth - 24);
+    const y = box.top - 70 >= top + 8 ? box.top - 70 : Math.min(box.bottom + 8, top + height - 72);
+    panel.card.style.left = `${Math.max(12, Math.min(box.left, innerWidth - width - 12))}px`;
+    panel.card.style.top = `${Math.max(top + 8, y)}px`; panel.card.style.width = `${width}px`;
+  }
+  position(); window.visualViewport?.addEventListener('resize', position);window.visualViewport?.addEventListener('scroll', position);window.addEventListener('resize',position);
+  const cleanup = event => { if (event.detail.id === panel.id) { window.visualViewport?.removeEventListener('resize', position);window.visualViewport?.removeEventListener('scroll',position);window.removeEventListener('resize',position); document.removeEventListener('kaidra:modal-close', cleanup); } };
+  document.addEventListener('kaidra:modal-close', cleanup); panel.open(); return panel;
 }
 export function bindContext(node, getActions, { title = 'Actions', more = false } = {}) {
   let timer, start, suppressUntil = 0;

@@ -12,6 +12,7 @@ export function sortedMessages(messages) {
 }
 export function messagePreview(message) {
   if (!message) return 'Start the conversation';
+  if (message.deleted_at) return 'Message deleted';
   if (message.shared_content?.title) return `Shared ${message.shared_content.title}`;
   if (message.message_type === 'image') return 'Photo';
   if (message.message_type === 'voice_note') return 'Voice message';

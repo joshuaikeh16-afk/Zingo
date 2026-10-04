@@ -1,0 +1,64 @@
+-- Run with the incremental migrations in a single rolled-back transaction.
+begin;
+create function pg_temp.assert_ok(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception '%',label;end if;end $$;
+create function pg_temp.denied(statement text) returns void language plpgsql as $$begin begin execute statement;exception when insufficient_privilege or raise_exception then return;end;raise exception using errcode='XX000',message='Unexpected permission: '||statement;end $$;
+do $$
+declare a uuid:=gen_random_uuid();b uuid:=gen_random_uuid();c uuid:=gen_random_uuid();d uuid:=gen_random_uuid();e uuid:=gen_random_uuid();outsider uuid:=gen_random_uuid();uid uuid;cid uuid;bid uuid;rid uuid;msg uuid;result jsonb;movie jsonb:='{"kind":"movie","id":550,"title":"QA shared movie","image":"https://image.tmdb.org/t/p/w500/qa.jpg"}';match jsonb:='{"id":990000001,"homeId":10,"awayId":20,"home":"QA home","away":"QA away","status":"TIMED"}';
+begin
+ insert into auth.users(id,email,created_at) select id,id||'@example.invalid',now()-interval '30 days' from unnest(array[a,b,c,d,e,outsider]) id;
+ insert into public.profiles(id,username,display_name) select id,'qa_'||left(replace(id::text,'-',''),20),'QA person' from unnest(array[a,b,c,d,e,outsider]) id;
+ -- Privileged fixture setup only; production users awaken through the answer RPC.
+ insert into public.battle_identities(user_id,class_id,determination_version) select id,'warrior',1 from public.profiles where username like 'qa_%' and id in(select id from auth.users where email like '%@example.invalid') on conflict do nothing;
+ insert into public.friend_requests(requester_id,target_id,status) values(a,b,'accepted'),(a,c,'accepted'),(a,d,'accepted'),(a,e,'accepted'),(b,c,'accepted'),(b,d,'accepted');
+ perform public.kaidra_match_ingest(match);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);execute 'set local role authenticated';
+ cid:=public.kaidra_create_group('QA social debate',array[b,c,d,e]);
+ perform pg_temp.denied(format('select public.kaidra_notify(%L,''social'',''fake'',''fake'',''fake'',''home'')',a));
+ perform pg_temp.denied(format('select public.kaidra_match_ingest(%L)',match));
+ perform pg_temp.denied(format('insert into public.match_support values(990000001,%L,''home'',now(),now())',a));
+ perform public.kaidra_match_support(990000001,'neutral');perform public.kaidra_match_support(990000001,'home');
+ perform pg_temp.assert_ok(public.kaidra_match_social(990000001)->>'own_support'='home','Own support changes must persist');
+ foreach uid in array array[b,c,d] loop
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',uid,'role','authenticated')::text,true);
+ perform public.kaidra_social_settings('friends','{}');perform public.kaidra_library_save(movie,'watchlist',true);
+ end loop;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ result:=public.kaidra_social_recommendations();perform pg_temp.assert_ok(jsonb_array_length(result)=1 and result->0->>'friend_count'='3','Three consenting friends should qualify');
+ perform public.kaidra_social_recommendations();perform pg_temp.assert_ok((select count(*)=1 from public.app_notifications where category='social'),'Recommendation notification must deduplicate');
+ perform pg_temp.assert_ok(not exists(select 1 from public.user_watchlist where user_id=b),'Raw friends library leaked');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',d,'role','authenticated')::text,true);perform public.kaidra_social_settings('private','{}');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_social_recommendations())=0,'Privacy withdrawal must remove stale social recommendation');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',d,'role','authenticated')::text,true);perform public.kaidra_social_settings('friends','{}');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform public.kaidra_social_dismiss('tmdb','movie','550',true);perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_social_recommendations())=0,'Dismissed title resurfaced');
+ bid:=public.kaidra_battle_create(cid,b,'Best ending?','The first film wins','{}');perform pg_temp.assert_ok(public.kaidra_battle_create(cid,b,'Best ending?','The first film wins','{}',bid)=bid,'Challenge retry must be idempotent');
+ perform pg_temp.denied(format('select public.kaidra_battle_action(%L,''accept'',''No'')',bid));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',outsider,'role','authenticated')::text,true);
+ perform pg_temp.assert_ok(not exists(select 1 from public.battles where id=bid),'Outsider read battle');perform pg_temp.denied(format('select public.kaidra_battle_state(%L)',bid));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'accept','The sequel wins');perform pg_temp.denied(format('select public.kaidra_battle_action(%L,''vote'',%L)',bid,a));
+ foreach uid in array array[c,d,e] loop perform set_config('request.jwt.claims',jsonb_build_object('sub',uid,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'vote',a::text);end loop;
+ execute 'reset role';update public.battles set accepted_at=now()-interval '6 minutes' where id=bid;execute 'set local role authenticated';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform public.kaidra_battle_action(bid,'finish');
+ perform pg_temp.assert_ok((select xp=25 and wins=1 from public.battle_stats where user_id=a),'Valid vote result must award winner 25 XP');perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform pg_temp.assert_ok((select xp=5 and losses=1 from public.battle_stats where user_id=b),'Participant XP incorrect');perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ perform pg_temp.denied(format('select public.kaidra_battle_resolve(%L,%L,''community_vote'')',bid,a));perform pg_temp.denied(format('select public.kaidra_battle_action(%L,''finish'')',bid));perform pg_temp.assert_ok((select xp=25 and battles=1 from public.battle_stats where user_id=a),'Resolution replay farmed XP');
+ perform pg_temp.denied(format('select public.kaidra_battle_create(%L,%L,''Repeat'',''Repeat'')',cid,b));
+ rid:=public.kaidra_relationship_request(b,'close_friend','friends',true);
+ perform pg_temp.denied(format('select public.kaidra_relationship_action(%L,''accept'',''public'',true)',rid));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);
+ perform pg_temp.assert_ok(not exists(select 1 from public.relationships where id=rid),'Pending request leaked raw');perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_profile_social(a)->'relationships')=0,'Pending request leaked via profile');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform public.kaidra_relationship_action(rid,'accept','private',true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_profile_social(a)->'relationships')=0,'Most private consent lost');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform public.kaidra_relationship_action(rid,'privacy','friends',true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',c,'role','authenticated')::text,true);perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_profile_social(a)->'relationships')=1,'Mutual friends should see consented relationship');perform pg_temp.assert_ok(not exists(select 1 from public.relationships where id=rid),'Raw row exposes private DM identifiers');perform pg_temp.denied(format('select public.kaidra_relationship_action(%L,''privacy'',''public'',true)',rid));
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',e,'role','authenticated')::text,true);perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_profile_social(a)->'relationships')=0,'One-sided friend bypassed consent');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform public.kaidra_social_settings('friends','{"battle":false}');perform public.kaidra_match_support(990000001,'away');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);perform pg_temp.assert_ok(jsonb_array_length(public.kaidra_match_social(990000001)->'friends')=1,'Shared friend support missing');
+ execute 'reset role';perform public.kaidra_match_ingest(match||'{"status":"FINISHED"}'::jsonb);perform public.kaidra_match_ingest(match);execute 'set local role authenticated';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);perform pg_temp.denied('select public.kaidra_match_support(990000001,''home'')');perform pg_temp.assert_ok((public.kaidra_match_social(990000001)->>'locked')::boolean,'Provider final lock must be monotonic');
+ perform public.kaidra_block(b,true);perform pg_temp.assert_ok((select status='ended' from public.relationships where id=rid),'Block must end connection');
+ perform pg_temp.denied(format('insert into public.messages(conversation_id,sender_id,content) values((select conversation_id from public.relationships where id=%L),%L,''blocked DM'')',rid,a));
+ perform pg_temp.assert_ok(not public.kaidra_contact_allowed(b),'Blocked person remained contactable');
+ perform public.kaidra_group_action(cid,'delete');execute 'reset role';
+ perform pg_temp.assert_ok(not exists(select 1 from public.battles where id=bid),'Deleted group retained debate');perform pg_temp.assert_ok((select count(*)=2 from public.battle_rewards where battle_id=bid),'Group deletion erased anti-farming reward ledger: count='||(select count(*) from public.battle_rewards where battle_id=bid)||' role='||current_user);
+end $$;
+select 'Social privacy, recommendations, consent, match locks, battles and XP checks passed' as result;
+rollback;

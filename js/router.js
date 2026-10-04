@@ -1,9 +1,19 @@
 // Hash destinations work on static hosting without server rewrite rules.
 const primary = new Set(['home', 'discover', 'friends', 'inbox', 'profile']);
 export function parseRoute(hash = '') {
+  const discovery = hash.replace(/^#/, '').split('?');
+  const segments = discovery[0].split('/');
+  if(segments[0]==='discover'&&segments.length>=2&&segments.length<=3&&['movie','tv','anime','football'].includes(segments[1])){
+    const section=segments[2]||'popular';
+    if(!/^[a-z-]{1,24}$/.test(section))return {view:'discover',path:'discover'};
+    const params=new URLSearchParams(discovery[1]||'');
+    for(const key of [...params.keys()])if(!['genre','theme','year','season','cinema','format','decade','service','sort','query','competition','club'].includes(key)||params.get(key).length>100)params.delete(key);
+    params.sort();return {view:'discover',category:segments[1],section,filters:Object.fromEntries(params),path:`discover/${segments[1]}/${section}${params.size?'?'+params.toString():''}`};
+  }
   let parts;
   try { parts = hash.replace(/^#/, '').split('/').map(decodeURIComponent); } catch { return { view: 'home', path: 'home' }; }
   const [view, type, id] = parts;
+  if(view==='battle'&&parts.length===2&&/^[0-9a-f-]{36}$/i.test(type))return {view,id:type,path:`battle/${type}`};
   if (primary.has(view) && parts.length === 1) return { view, path: view };
   if (view === 'inbox' && parts.length === 2 && /^[a-zA-Z0-9-]{1,80}$/.test(type)) return { view, id: type, path: `inbox/${encodeURIComponent(type)}` };
   if (view === 'user' && parts.length === 2 && /^[a-zA-Z0-9-]{1,80}$/.test(type)) return { view, id: type, path: `user/${encodeURIComponent(type)}` };
@@ -13,7 +23,7 @@ export function parseRoute(hash = '') {
   if (view === 'article' && parts.length === 2 && /^https:\/\//.test(type)) return { view, id: type, path: `article/${encodeURIComponent(type)}` };
   return { view: 'home', path: 'home' };
 }
-export const isObjectRoute = route => ['title', 'match', 'article'].includes(route.view);
+export const isObjectRoute = route => ['title', 'match', 'article','battle'].includes(route.view);
 export function goRoute(path, { replace = false } = {}) {
   const route = parseRoute(path), previous = parseRoute(location.hash);
   const url = new URL(location.href); url.hash = route.path; url.searchParams.delete('user');

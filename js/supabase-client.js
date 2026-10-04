@@ -248,6 +248,7 @@ export function subscribeToChatInteractions(conversationId, onChange) {
   return supabase.channel(`chat-interactions:${conversationId}:${crypto.randomUUID()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions', filter: `conversation_id=eq.${conversationId}` }, onChange)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'message_reads', filter: `conversation_id=eq.${conversationId}` }, onChange)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'message_deliveries', filter: `conversation_id=eq.${conversationId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `conversation_id=eq.${conversationId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_polls', filter: `conversation_id=eq.${conversationId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes', filter: `conversation_id=eq.${conversationId}` }, onChange)

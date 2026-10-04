@@ -12,7 +12,7 @@ document.addEventListener('kaidra:profile-updated', event => {
 });
 document.documentElement.dataset.theme = 'dark';
 let userId, currentTab = '', discardTarget;
-const names = { home: 'For you', discover: 'Discover', friends: 'Friends', inbox: 'Inbox', profile: 'My profile' };
+const names = { home: 'Home', discover: 'Discover', friends: 'Friends', inbox: 'Inbox', profile: 'My profile' };
 function applyRoute(route, restore = false) {
   if (route.view === 'user' && route.id === userId) { goRoute('profile', { replace: true }); return; }
   const object = isObjectRoute(route);

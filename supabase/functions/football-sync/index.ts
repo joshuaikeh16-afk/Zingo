@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fixtures, news, json } from '../_shared/content.ts';
 
-Deno.serve(async (request) => {
+Deno.serve(async (request: Request) => {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   const secret = Deno.env.get('FOOTBALL_SYNC_SECRET');
   if (!secret || request.headers.get('x-sync-secret') !== secret) return json({ error: 'Unauthorized' }, 401);

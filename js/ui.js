@@ -52,16 +52,25 @@ export function notify(message) {
 export function viewProfile(userId) { navigate(`user/${encodeURIComponent(userId)}`); }
 const modalStack = [], modalFocus = new Map(), desktop = matchMedia('(min-width: 1100px)');
 export function topModal() { return modalStack.at(-1); }
+export function syncModalViewport() {
+  const viewport = window.visualViewport;
+  document.documentElement.style.setProperty('--modal-vh', `${viewport?.height || innerHeight}px`);
+  document.documentElement.style.setProperty('--modal-top', `${viewport?.offsetTop || 0}px`);
+}
+syncModalViewport();
+window.visualViewport?.addEventListener('resize', syncModalViewport);
+window.visualViewport?.addEventListener('scroll', syncModalViewport);
+window.addEventListener('resize', syncModalViewport);
 export function openModal(id) {
   const modal = document.getElementById(id); if (!modal || modalStack.includes(id)) return;
-  modalFocus.set(id, document.activeElement); modalStack.push(id); modal.classList.remove('hidden'); syncOverlay();
+  modalFocus.set(id, document.activeElement); modalStack.push(id); modal.classList.remove('hidden','reaction-closing'); syncOverlay();
   const focusTarget = modal.querySelector('[autofocus]') || modal.querySelector('input:not([type="file"]):not([type="checkbox"]), textarea') || modal.querySelector('button');
   focusTarget?.focus({ preventScroll: true });
   document.dispatchEvent(new CustomEvent('kaidra:modal-open', { detail: { id } }));
 }
 export function closeModal(id) {
   const modal = document.getElementById(id); if (!modal || !modalStack.includes(id)) return;
-  modalStack.splice(modalStack.indexOf(id), 1); modal.querySelectorAll('iframe').forEach(frame => frame.remove()); modal.classList.add('hidden'); modal.inert = false; syncOverlay();
+  modalStack.splice(modalStack.indexOf(id), 1); modal.querySelectorAll('iframe').forEach(frame => frame.remove()); if(modal.classList.contains('reaction-popover')&&!matchMedia('(prefers-reduced-motion: reduce)').matches){modal.classList.add('reaction-closing');modal.inert=true;setTimeout(()=>{if(!modalStack.includes(id)){modal.classList.add('hidden');modal.classList.remove('reaction-closing');}},100);}else modal.classList.add('hidden'); modal.inert = false; syncOverlay();
   const focus = modalFocus.get(id); modalFocus.delete(id); if (focus?.isConnected && !focus.closest('[inert]')) focus.focus({ preventScroll: true });
   document.dispatchEvent(new CustomEvent('kaidra:modal-close', { detail: { id } }));
 }

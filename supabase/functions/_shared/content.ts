@@ -5,17 +5,22 @@ export function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 }
 const cache = new Map<string, { until: number; value: unknown }>();
+const requests = new Map<string, Promise<any>>();
 export async function cached<T>(key: string, seconds: number, loader: () => Promise<T>): Promise<T> {
   const hit = cache.get(key);
   if (hit && hit.until > Date.now()) return hit.value as T;
-  const value = await loader();
+  if(requests.has(key))return requests.get(key)!;
+  const request=loader(); requests.set(key,request);
+  let value:T; try{value=await request;}finally{requests.delete(key);}
   if (cache.size >= 100) cache.delete(cache.keys().next().value!);
   cache.set(key, { until: Date.now() + seconds * 1000, value });
   return value;
 }
 export async function upstream(url: string, headers: Record<string, string> = {}) {
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw new Error(`Content provider returned ${response.status}`);
+  let response: Response;
+  try { response=await fetch(url,{headers,signal:AbortSignal.timeout(12000)}); }
+  catch(error){throw Object.assign(new Error('Content provider could not be reached'),{code:error instanceof Error&&['TimeoutError','AbortError'].includes(error.name)?'UPSTREAM_TIMEOUT':'UPSTREAM_NETWORK'});}
+  if(!response.ok)throw Object.assign(new Error(`Content provider returned ${response.status}`),{code:`UPSTREAM_HTTP_${response.status}`});
   return response;
 }
 export function allowedUrl(value: unknown, domains: string[]) {
@@ -40,6 +45,13 @@ export async function news(kind: 'football' | 'entertainment') {
     })).filter((item: any) => item.title && item.url);
   });
 }
+export function normalizeMatch(match: any) {
+ return {id:match.id,homeId:match.homeTeam?.id,awayId:match.awayTeam?.id,home:match.homeTeam?.name||'TBC',away:match.awayTeam?.name||'TBC',homeCrest:allowedUrl(match.homeTeam?.crest,['football-data.org']),awayCrest:allowedUrl(match.awayTeam?.crest,['football-data.org']),competition:match.competition?.code||'',competitionName:match.competition?.name||'',competitionCrest:allowedUrl(match.competition?.emblem,['football-data.org']),utcDate:match.utcDate,status:match.status,score:match.score?.fullTime||{},updatedAt:match.lastUpdated};
+}
+export async function football(path: string) {
+ const token=Deno.env.get('FOOTBALL_DATA_TOKEN');if(!token)return null;
+ return cached(`football:${path}`,path.startsWith('/matches/')?30:3600,async()=> (await upstream(`https://api.football-data.org/v4${path}`,{'X-Auth-Token':token})).json());
+}
 export async function fixtures() {
   const token = Deno.env.get('FOOTBALL_DATA_TOKEN');
   if (!token) return { configured: false, matches: [], updatedAt: null };
@@ -49,12 +61,7 @@ export async function fixtures() {
     const data = await (await upstream(`https://api.football-data.org/v4/matches?dateFrom=${from}&dateTo=${to}`, { 'X-Auth-Token': token })).json();
     return {
       configured: true, updatedAt: new Date().toISOString(),
-      matches: (data.matches || []).map((match: any) => ({
-        id: match.id, home: match.homeTeam?.name || 'TBC', away: match.awayTeam?.name || 'TBC',
-        homeCrest: allowedUrl(match.homeTeam?.crest, ['football-data.org']), awayCrest: allowedUrl(match.awayTeam?.crest, ['football-data.org']),
-        competition: match.competition?.code || '', competitionName: match.competition?.name || '',
-        utcDate: match.utcDate, status: match.status, score: match.score?.fullTime || {}, updatedAt: match.lastUpdated,
-      })),
+      matches: (data.matches || []).map(normalizeMatch),
     };
   });
 }

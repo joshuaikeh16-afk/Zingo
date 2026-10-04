@@ -1,26 +1,28 @@
-import { bindContext, openMenu, dialog } from './context-menu.js';
+import { awakenBattleIdentity } from './awakening.js';
+import { discussionCard, swipeToReply, typingPresence, receipt } from './chat-interactions.js';
+import { bindContext, openMenu, openReactions, dialog, confirmAction } from './context-menu.js';
 import { contentActions } from './content-actions.js';
 import { createPoll, pollCard } from './chat-polls.js';
-import { supabase, getInbox, getMessages, getOrCreateConversation, getMutualFriends, sendMessage, uploadVoiceNote, uploadChatImage, subscribeToMessages, subscribeToInboxUpdates, markConversationRead, getChatState, subscribeToChatInteractions, chatAction, getSignedMediaUrl, recordFriendInteraction } from './supabase-client.js';
+import { supabase, getInbox, getMessages, getOrCreateConversation, getMutualFriends, sendMessage, uploadVoiceNote, uploadChatImage, subscribeToMessages, subscribeToInboxUpdates, getChatState, subscribeToChatInteractions, chatAction, getSignedMediaUrl, recordFriendInteraction } from './supabase-client.js';
 import { account } from './session.js';
-import { element, avatar, setAvatar, actionButton, iconButton, skeletons, emptyState, showError, notify, navigate, viewProfile, openModal, closeModal, syncOverlay } from './ui.js';
+import { element, avatar, setAvatar, actionButton, iconButton, skeletons, emptyState, showError, notify, navigate, viewProfile, openModal, closeModal, syncOverlay, topModal } from './ui.js';
 import { mergeMessage, sortedMessages, messagePreview } from './message-state.js';
 import { richCard } from './content-view.js';
 import { installGroups, groupAllowed } from './chat-groups.js';
-import { unreadTotal, compareMessages, applyReadMarks } from './unread-state.js';
+import { unreadTotal } from './unread-state.js';
 import { installVoiceNotes } from './voice-notes.js';
 import { parseRoute } from './router.js';
 import { registerMessageContent, renderMessageContent } from './message-content.js';
+import {battleCard,relationshipCard,startChallenge,reportMessage} from './social.js';
 
 const list = document.getElementById('conversation-list'), thread = document.getElementById('message-thread-container'), input = document.getElementById('message-text-input'), drawer = document.getElementById('chat-view-drawer');
 let userId, active, rows = [], filter = 'all', listVersion = 0, pickerVersion = 0, inboxChannel, poll, sharedDraft = null, replyDraft = null;
-const readMarks = new Map();
-let voiceBusy = false;
+let voiceBusy = false, discussionMode = false;
 const time = value => value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-function syncComposer() { document.getElementById('message-send-btn').disabled = voiceBusy || !active || (!input.value.trim() && !sharedDraft) || (active?.isGroup && !groupAllowed(active, userId, 'send_messages')); if (active) { const blocked = active.isGroup && !groupAllowed(active, userId, 'send_messages'); input.disabled = voiceBusy || blocked; input.placeholder = blocked ? 'Only admins can send messages' : 'Send a message…'; document.getElementById('composer-plus').disabled = blocked; } }
+function syncComposer() { document.getElementById('message-send-btn').disabled = voiceBusy || !active || (!input.value.trim() && !sharedDraft) || (active?.isGroup && !groupAllowed(active, userId, 'send_messages')); if (active) { const blocked = active.isGroup && !groupAllowed(active, userId, 'send_messages'); input.disabled = voiceBusy || blocked; input.placeholder = blocked ? 'Only admins can send messages' : discussionMode ? 'Make a statement people can agree or disagree with...' : 'Send a message…'; document.getElementById('composer-plus').disabled = blocked; } }
 function status(id, value) { const node = document.getElementById(id); node.textContent = value; node.classList.toggle('is-live', value === 'Connected'); }
 function renderList() {
-  const visibleRows = applyReadMarks(rows, readMarks, active?.optimisticRead ? { id: active.id, through: active.optimisticRead } : null);
+  const visibleRows = rows;
   const query = document.getElementById('inbox-search').value.trim().toLowerCase();
   const shown = visibleRows.filter(row => (filter !== 'unread' || row.unreadCount) && `${row.profile.display_name} ${row.profile.username} ${messagePreview(row.lastMessage)}`.toLowerCase().includes(query));
   list.replaceChildren();
@@ -52,7 +54,9 @@ async function refreshState(state = active) {
   try { data = await getChatState(state.id, [...state.messages.keys()].filter(id => /^[0-9a-f-]{36}$/i.test(id))); }
   catch (error) { if (active === state && /Membership required|Group unavailable/i.test(error.message || '')) { for (const modal of [...document.querySelectorAll('.social-modal[data-conversation-id]')].reverse()) if (modal.dataset.conversationId === state.id) closeModal(modal.id); closeModal('chat-info-modal'); closeModal('new-chat-modal'); navigate('inbox'); notify('You no longer have access to this conversation.'); } throw error; }
   if (active !== state || version !== state.stateVersion) return;
-  Object.assign(state, { members: data.members || [], reactions: data.reactions || [], reads: data.reads || [], polls: data.polls || [], pins: data.pins || [], quotes: data.quotes || [], permissions: data.conversation.permissions || {}, description: data.conversation.description, extended: data.extended, isGroup: !!data.conversation.is_group, createdBy: data.conversation.created_by });
+  Object.assign(state, { members: data.members || [], reactions: data.reactions || [], reads: data.reads || [], polls: data.polls || [], pins: data.pins || [], quotes: data.quotes || [], discussions: data.discussions || [], deliveries: data.deliveries || [], permissions: data.conversation.permissions || {}, description: data.conversation.description, extended: data.extended, isGroup: !!data.conversation.is_group, createdBy: data.conversation.created_by });
+  const revision=data.conversation.typing_revision;
+  if(revision&&state.typingRevision!==revision){state.typing?.close();state.typingRevision=revision;state.typing=typingPresence(state.id,userId,()=>state.members,text=>{if(active===state)document.getElementById('chat-typing-status').textContent=text;},revision);}
   if (data.conversation.title) state.profile.display_name = data.conversation.title;
   if (state.isGroup) { state.profile.avatar_url = data.conversation.avatar_url; setAvatar(document.getElementById('dm-active-avatar'), state.profile); }
   document.getElementById('dm-active-name').textContent = state.profile.display_name || state.profile.username;
@@ -65,11 +69,11 @@ async function snapshot(state) {
   try {
     const messages = await getMessages(state.id); if (active !== state) return;
     for (const message of messages) mergeMessage(state.messages, message); state.hasOlder = messages.length === 100; state.loading = false; renderMessages(state);
-    acknowledge(state);
+    acknowledgeDelivery(state); acknowledge(state);
   } catch { if (active === state) { state.loading = false; thread.setAttribute('aria-busy', 'false'); if (!state.messages.size) thread.replaceChildren(emptyState('Messages could not load.', 'Your conversation is still here. Please try again.', 'chat', { label: 'Try again', run: () => snapshot(state) })); showError('chat-error', 'Could not load messages. Reconnecting and trying again…'); } }
 }
 function closeThread() {
-  voiceNotes.cancel();
+  voiceNotes.cancel(); active?.typing?.close(); discussionMode = false;
   if (active) { supabase.removeChannel(active.channel); if (active.interactions) supabase.removeChannel(active.interactions); }
   if (active) for (const message of active.messages.values()) if (message.localVoiceUrl) URL.revokeObjectURL(message.localVoiceUrl);
   active = null; thread.replaceChildren(); delete drawer.dataset.conversationId; document.getElementById('dm-active-name').textContent=''; document.getElementById('chat-member-count').textContent=''; document.getElementById('chat-pins').classList.add('hidden'); drawer.classList.remove('is-active'); sharedDraft = null; replyDraft = null; renderDraft(); syncOverlay(); renderList();
@@ -84,7 +88,7 @@ async function openThread(id, profile, isGroup = false) {
   drawer.classList.add('is-active'); syncOverlay(); renderList(); status('chat-connection-status', 'Connecting…');
   state.channel = subscribeToMessages(id, message => {
     if (active !== state) return; const arrived = !state.messages.has(message.id) && !state.loading; mergeMessage(state.messages, { ...message, localState: null }); renderMessages(state); if (arrived) state.nodes.get(message.id)?.classList.add('is-new'); refreshList();
-    if (message.sender_id !== userId) acknowledge(state);
+    if (message.sender_id !== userId) { acknowledgeDelivery(state); acknowledge(state); }
   }, connection => {
     if (active !== state) return;
     const live = ['SUBSCRIBED', 'LIVE'].includes(connection); status('chat-connection-status', live ? 'Connected' : 'Reconnecting…');
@@ -93,25 +97,29 @@ async function openThread(id, profile, isGroup = false) {
   state.interactions = subscribeToChatInteractions(id, () => refreshState(state).catch(() => {}));
   await Promise.allSettled([snapshot(state), refreshState(state)]); if (active === state && innerWidth >= 1100) input.focus({ preventScroll: true });
 }
-async function acknowledge(state) {
-  if (active !== state || state.loading || document.hidden || state.readPending) return;
-  const through = sortedMessages(state.messages).filter(message => !message.localState).at(-1);
-  if (!through || (readMarks.has(state.id) && compareMessages(through, readMarks.get(state.id)) <= 0)) return;
-  state.readPending = true; state.optimisticRead = through; renderList();
-  try {
-    await markConversationRead(state.id, userId, through, { isGroup: state.isGroup });
-    readMarks.set(state.id, through);
-    if (state.readFailure && active === state) showError('chat-error');
-    state.readFailure = false; await refreshList();
-  } catch {
-    state.readFailure = true;
-    if (active === state) showError('chat-error', "Couldn't mark these messages as read. We'll retry when connected.");
-  } finally {
-    state.readPending = false; state.optimisticRead = null; renderList();
-    const newest = sortedMessages(state.messages).filter(message => !message.localState).at(-1);
-    if (newest && compareMessages(newest, through) > 0) acknowledge(state);
-  }
+async function acknowledgeDelivery(state) {
+ if (!state || active !== state || state.loading) return;
+ state.deliveredIds ||= new Set();
+ const ids = sortedMessages(state.messages).filter(m => m.sender_id !== userId && !m.localState && !state.deliveredIds.has(m.id)).map(m => m.id).slice(0,1000);
+ if (!ids.length) return; ids.forEach(id => state.deliveredIds.add(id));
+ try { await chatAction('kaidra_message_ack', {target_conversation:state.id,message_ids:ids,seen:false}); acknowledgeDelivery(state); }
+ catch { ids.forEach(id => state.deliveredIds.delete(id)); }
 }
+async function acknowledge(state) {
+ if (!state || active !== state || state.loading || document.hidden || topModal() || state.readPending) return;
+ const box = thread.getBoundingClientRect(); state.seenIds ||= new Set();
+ const ids = sortedMessages(state.messages).filter(message => {
+  if (message.sender_id===userId || message.localState || state.seenIds.has(message.id)) return false;
+  const node=state.nodes.get(message.id); if(!node)return false;
+  const rect=node.getBoundingClientRect();return Math.min(rect.bottom,box.bottom)-Math.max(rect.top,box.top)>=Math.min(40,rect.height*.6);
+ }).map(m=>m.id);
+ if(!ids.length)return;
+ state.readPending=true;let saved=false;
+ try {await chatAction('kaidra_message_ack',{target_conversation:state.id,message_ids:ids.slice(-1000),seen:true});ids.forEach(id=>state.seenIds.add(id));saved=true;if(state.readFailure&&active===state)showError('chat-error');state.readFailure=false;if(active===state)await refreshList();}
+ catch {state.readFailure=true;if(active===state)showError('chat-error',"Couldn't save read receipts. We'll retry when connected.");}
+ finally {state.readPending=false;if(saved)requestAnimationFrame(()=>acknowledge(state));}
+}
+
 function textContent(bubble, text, members, mentionIds = [], mentionLabels = []) {
   const tokens = String(text || '').split(/(@[a-zA-Z0-9_]+|https?:\/\/[^\s]+)/g);
   for (const token of tokens) {
@@ -134,9 +142,10 @@ for (const type of ['image', 'voice_note']) registerMessageContent(type, message
   return media;
 });
 function buildMessage(message, state, consecutive = false) {
-  if (message.message_type === 'system') { const row = element('div', 'system-message', message.content); row.dataset.messageId = message.id; return row; }
-  const mine = message.sender_id === userId, row = element('article', `message-row ${mine ? 'outgoing' : 'incoming'}${message.localState ? ` is-${message.localState}` : ''}`); row.dataset.messageId = message.id;
+  if (message.message_type === 'system') { const row = message.event_data?.kind==='battle'?battleCard(message.event_data.battle_id):message.event_data?.kind==='relationship'?relationshipCard(message.event_data.relationship_id):element('div', 'system-message', message.content); row.dataset.messageId = message.id; return row; }
+  const mine = message.sender_id === userId, row = element('article', `message-row${consecutive ? ' is-consecutive' : ''} ${mine ? 'outgoing' : 'incoming'}${message.localState ? ` is-${message.localState}` : ''}`); row.dataset.messageId = message.id;
   if (state.isGroup && !mine && !consecutive) { const member = state.members.find(person => person.id === message.sender_id); row.append(element('span', 'message-author', member?.display_name || member?.username || 'Member')); }
+  if (message.deleted_at) { row.append(element('p','deleted-message','Message deleted')); return row; }
   if (message.external_ref_id) {
     const original = state.messages.get(message.external_ref_id) || state.quotes?.find(item => item.id === message.external_ref_id);
     const quote = element('button', 'reply-quote'); quote.type = 'button';
@@ -145,23 +154,28 @@ function buildMessage(message, state, consecutive = false) {
     quote.addEventListener('click', () => jumpToMessage(message.external_ref_id)); row.append(quote);
   }
   if (message.shared_content) row.append(richCard(message.shared_content, true));
-  const contentNode = message.message_type === 'poll' ? pollCard(message, state, userId, refreshState) : renderMessageContent(message, { members: state.members });
+  const contentNode = message.message_type === 'discussion' ? discussionCard(message, state, userId, refreshState) : message.message_type === 'poll' ? pollCard(message, state, userId, refreshState) : renderMessageContent(message, { members: state.members });
   if (contentNode) row.append(contentNode);
   else if (!message.shared_content) row.append(element('p', 'muted', 'This message format is unavailable.'));
-  const seen = message.read_at || state.reads.some(read => read.message_id === message.id && read.user_id !== userId);
-  row.append(element('small', 'message-time', `${time(message.created_at)}${mine ? ` · ${message.localState === 'sending' ? 'Sending…' : message.localState === 'failed' ? 'Not sent' : seen ? 'Seen' : 'Sent'}` : ''}`));
+  const stamp=element('small','message-time',`${time(message.created_at)}${message.edited_at?' · edited':''}`);
+  if(mine){const status=receipt(message,state,userId),mark=element('span',`message-receipt${status.read?' is-read':''}`,status.text);mark.title=status.label;mark.setAttribute('aria-label',status.label);stamp.append(document.createTextNode(' '),mark);}
+  row.append(stamp);
   if (message.localState === 'failed') { const retry = actionButton('Retry message', 'refresh', 'message-retry'); retry.addEventListener('click', () => deliver(state, message)); row.append(retry); }
   if (!message.localState) {
     const reply = () => { replyDraft = message; renderDraft(); input.focus(); };
     const actionsForMessage = () => [
       { label: 'Reply', icon: 'reply', run: reply },
       { label: 'React', icon: 'smile', run: () => reactPicker(row, message, state) },
-      message.content && { label: 'Copy text', icon: 'copy', run: () => navigator.clipboard.writeText(message.content).then(() => notify('Copied')) },
-      (message.shared_content || message.message_type === 'text') && { label: 'Forward', icon: 'share', run: () => chooseConversation(message.shared_content || null, message.shared_content ? '' : message.content) },
+      message.message_type==='discussion' && state.discussions?.find(item=>item.message_id===message.id)?.opponents?.length && {label:'Challenge',icon:'spark',run:()=>startChallenge({conversationId:state.id,discussionMessage:message,opponents:state.discussions.find(item=>item.message_id===message.id).opponents})},
+      message.sender_id===userId && ['text','discussion'].includes(message.message_type) && !message.discussion_locked_at && {label:'Edit',icon:'edit',run:()=>editMessage(message,state)},
+      message.sender_id===userId && {label:'Delete',icon:'trash',danger:true,run:async()=>{if(await confirmAction('Delete message?','This removes the message content for everyone.','Delete')){await chatAction('kaidra_message_change',{target_message:message.id,action:'delete'});await snapshot(state);}}},
+      message.sender_id!==userId&&{label:'Report message',icon:'info',run:()=>reportMessage(message)},
+      message.content && ['text','discussion','sticker'].includes(message.message_type) && { label: 'Copy text', icon: 'copy', run: () => navigator.clipboard.writeText(message.content).then(() => notify('Copied')) },
+      (message.shared_content || ['text','discussion','image','voice_note'].includes(message.message_type)) && { label: 'Forward', icon: 'share', run: () => chooseConversation(message.shared_content || null, message.shared_content ? '' : ['text','discussion'].includes(message.message_type) ? message.content : '', ['image','voice_note'].includes(message.message_type) ? message : null) },
       groupAllowed(state, userId, 'pin_messages') && { label: state.pins?.some(pin => pin.id === message.id) ? 'Unpin message' : 'Pin message', icon: 'pin', run: async () => { await chatAction('kaidra_pin', { target_message: message.id, pinned: !state.pins?.some(pin => pin.id === message.id) }); await refreshState(state); } },
       ...(message.shared_content ? contentActions(message.shared_content).slice(0, 2) : []),
     ];
-    bindContext(row, actionsForMessage, { title: 'Message actions' });
+    bindContext(row, actionsForMessage, { title: 'Message actions' }); swipeToReply(row, reply);
     const actions = element('div', 'message-actions'), reactButton = iconButton('smile', 'React to message'), replyButton = iconButton('reply', 'Reply to message'), more = iconButton('more', 'More message actions');
     reactButton.addEventListener('click', () => reactPicker(reactButton, message, state)); replyButton.addEventListener('click', reply); more.addEventListener('click', () => openMenu(more, actionsForMessage(), 'Message actions'));
     actions.append(reactButton, replyButton, more); row.append(actions);
@@ -170,26 +184,28 @@ function buildMessage(message, state, consecutive = false) {
   if (reactions.length) { const summary = element('div', 'reaction-summary'); for (const emoji of [...new Set(reactions.map(reaction => reaction.emoji))]) { const matching = reactions.filter(reaction => reaction.emoji === emoji); const button = element('button', `reaction-pill${matching.some(reaction => reaction.user_id === userId) ? ' mine' : ''}`, `${emoji} ${matching.length}`); button.type = 'button'; button.title = matching.map(reaction => state.members.find(member => member.id === reaction.user_id)?.display_name || 'Member').join(', '); button.addEventListener('click', async () => { try { await chatAction('kaidra_react', { target_message: message.id, reaction: emoji }); await refreshState(state); } catch { notify('Could not update your reaction.'); } }); summary.append(button); } row.append(summary); }
   return row;
 }
+document.addEventListener('kaidra:social-refresh',()=>{if(active&&!active.loading){active.nodes.clear();renderMessages(active);}});
 function renderMessages(state) {
-  if (active !== state || state.loading) return;
+  if (!state || active !== state || state.loading) return;
+  if(thread.querySelector('[data-gesture-active]')){state.pendingRender=true;return;}state.pendingRender=false;
   const stick = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 100, previousTop = thread.scrollTop;
   thread.setAttribute('aria-busy', 'false'); const messages = sortedMessages(state.messages), children = [];
   if (state.unreadStart === undefined && state.initialUnread) state.unreadStart = messages.filter(item => item.sender_id !== userId).slice(-state.initialUnread)[0]?.id || null;
-  if (state.hasOlder) { const older = actionButton('Load earlier messages', 'arrow', 'load-older'); older.addEventListener('click', async () => { older.disabled = true; try { const height = thread.scrollHeight, batch = await getMessages(state.id, messages[0]); if (active !== state) return; batch.forEach(message => mergeMessage(state.messages, message)); state.hasOlder = batch.length === 100; renderMessages(state); thread.scrollTop += thread.scrollHeight - height; } catch { notify('Could not load earlier messages.'); older.disabled = false; } }); children.push(older); }
+  if (state.hasOlder) { const older = actionButton('Load earlier messages', 'arrow', 'load-older'); older.addEventListener('click', async () => { older.disabled = true; try { const height = thread.scrollHeight, batch = await getMessages(state.id, messages[0]); if (active !== state) return; batch.forEach(message => mergeMessage(state.messages, message)); acknowledgeDelivery(state); state.hasOlder = batch.length === 100; renderMessages(state); thread.scrollTop += thread.scrollHeight - height; } catch { notify('Could not load earlier messages.'); older.disabled = false; } }); children.push(older); }
   let date;
   for (const message of messages) {
     const day = new Date(message.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }); if (day !== date) { children.push(element('div', 'chat-date-divider', day)); date = day; }
     if (message.id === state.unreadStart) children.push(element('div', 'chat-unread-divider', 'Unread messages'));
     const previous = messages[messages.indexOf(message) - 1], consecutive = previous?.sender_id === message.sender_id && previous.message_type !== 'system' && (new Date(message.created_at) - new Date(previous.created_at)) < 300000;
-    const signature = JSON.stringify([message, consecutive, state.polls, state.pins, state.quotes, state.members, state.reactions.filter(item => item.message_id === message.id), state.reads.filter(item => item.message_id === message.id), state.extended]);
+    const signature = JSON.stringify([message, consecutive, state.polls, state.pins, state.quotes, state.members, state.reactions.filter(item => item.message_id === message.id), state.reads.filter(item => item.message_id === message.id), state.deliveries?.filter(item => item.message_id === message.id), state.discussions?.find(item => item.message_id === message.id), state.extended]);
     let node = state.nodes.get(message.id); if (!node || node.dataset.signature !== signature) { node = buildMessage(message, state, consecutive); node.dataset.signature = signature; state.nodes.set(message.id, node); }
     children.push(node);
   }
   if (!messages.length) children.push(element('p', 'thread-empty', 'Your conversation starts with a hello.'));
-  thread.replaceChildren(...children); if (stick || state.firstRender !== false) thread.scrollTop = thread.scrollHeight; else thread.scrollTop = previousTop; state.firstRender = false; syncJump();
+  const wanted=new Set(children);for(const node of [...thread.children])if(!wanted.has(node))node.remove();children.forEach((node,index)=>{const current=thread.children[index];if(current!==node)thread.insertBefore(node,current||null);}); if (stick || state.firstRender !== false) thread.scrollTop = thread.scrollHeight; else thread.scrollTop = previousTop; state.firstRender = false; syncJump(); requestAnimationFrame(() => acknowledge(state));
 }
 async function deliver(state, message) {
-  if (message.localState === 'sending') return; message.localState = 'sending'; state.messages.set(message.id, message); renderMessages(state);
+  if (message.localState === 'sending') return; message.localState = 'sending'; state.messages.set(message.id, message); renderMessages(state); if(active===state)thread.scrollTop=thread.scrollHeight;
   try {
     if (message.message_type === 'voice_note' && !message.media_url) {
       message.media_url = await uploadVoiceNote(state.id, message.localVoiceBlob, message.id); message.content = message.media_url;
@@ -201,31 +217,36 @@ async function deliver(state, message) {
 }
 function renderDraft() {
   syncComposer();
+  const mode = document.getElementById('discussion-mode'); mode.classList.toggle('hidden',!discussionMode);
   const target = document.getElementById('share-draft-preview'); target.replaceChildren(); target.classList.toggle('hidden', !sharedDraft && !replyDraft);
-  if (sharedDraft) target.append(richCard(sharedDraft, true)); if (replyDraft) target.append(element('p', 'reply-quote', `Replying to ${active?.members.find(member => member.id === replyDraft.sender_id)?.display_name || 'message'}: ${messagePreview(replyDraft)}`));
+  if (sharedDraft) target.append(richCard(sharedDraft, true)); if (replyDraft) {const quote=element('div','reply-draft');quote.append(element('strong','',`Replying to ${active?.members.find(member => member.id === replyDraft.sender_id)?.display_name || active?.members.find(member => member.id === replyDraft.sender_id)?.username || 'message'}`),element('span','',messagePreview(replyDraft)));target.append(quote);}
   if (sharedDraft || replyDraft) { const cancel = iconButton('close', 'Remove draft'); cancel.addEventListener('click', () => { sharedDraft = null; replyDraft = null; renderDraft(); }); target.append(cancel); }
 }
-document.getElementById('message-form').addEventListener('submit', event => {
-  event.preventDefault(); if (!active || !userId || voiceBusy) return; const content = input.value.trim(); if (!content && !sharedDraft) return;
+document.getElementById('message-form').addEventListener('submit', async event => {
+  event.preventDefault(); if (!active || !userId || voiceBusy) return; let content = input.value.trim(); if (!content && !sharedDraft) return;
+  const challenge=content.match(/^\.challenge\s+@([a-zA-Z0-9_]+)(?:\s+([\s\S]*))?$/i);
+  if (/^\.challenge(?:\s|$)/i.test(content)) { if(!challenge){showError('chat-error','Use .challenge @username with optional challenge text.');return;}const state=active,member=state.members.find(m=>m.username?.toLowerCase()===challenge[1].toLowerCase()&&m.id!==userId);if(!member){showError('chat-error','Choose another member of this conversation.');return;}try{if(!await awakenBattleIdentity())return;await chatAction('kaidra_battle_create',{target_conversation:state.id,target_user:member.id,topic:challenge[2]||'',stance:'',context:{entry_type:'direct'},request_id:state.challengeRequestId ||= crypto.randomUUID()});state.challengeRequestId=null;input.value='';state.typing?.stop();renderDraft();await snapshot(state);}catch(error){showError('chat-error',error.message||'Could not send challenge.');}return;}
+  const command=content.match(/^\.discuss(?:\s+([\s\S]*))?$/i); if(command){content=(command[1]||'').trim();if(!content){showError('chat-error','Add a statement after .discuss.');return;}}
+  const isDiscussion=discussionMode||!!command; if(isDiscussion&&sharedDraft){showError('chat-error','Send the shared title separately from your discussion.');return;}
   if (content.length > 4000) { showError('chat-error', 'Keep your message under 4,000 characters.'); return; }
-  const message = { id: crypto.randomUUID(), conversation_id: active.id, sender_id: userId, content, message_type: 'text', shared_content: sharedDraft, external_ref_id: replyDraft?.id || null, mention_ids: (active.isGroup ? active.members || [] : []).filter(member => content.split(/\s+/).some(word => word.replace(/[.,!?;:]+$/, '') === `@${member.username}`)).map(member => member.id), created_at: new Date().toISOString(), localState: 'queued' };
-  input.value = ''; input.style.height = ''; sharedDraft = null; replyDraft = null; renderDraft(); document.getElementById('mention-suggestions').classList.add('hidden'); deliver(active, message);
+  const message = { id: crypto.randomUUID(), conversation_id: active.id, sender_id: userId, content, message_type: isDiscussion ? 'discussion' : 'text', shared_content: sharedDraft, external_ref_id: replyDraft?.id || null, mention_ids: (active.isGroup ? active.members || [] : []).filter(member => content.split(/\s+/).some(word => word.replace(/[.,!?;:]+$/, '') === `@${member.username}`)).map(member => member.id), created_at: new Date().toISOString(), localState: 'queued' };
+  input.value = ''; input.style.height = ''; active.typing?.stop(); discussionMode = false; sharedDraft = null; replyDraft = null; renderDraft(); document.getElementById('mention-suggestions').classList.add('hidden'); deliver(active, message);
 });
 input.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); document.getElementById('message-form').requestSubmit(); } });
 input.addEventListener('input', () => {
-  syncComposer();
-  input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+  syncComposer(); active?.typing?.update(input.value);
+  const stick=thread.scrollHeight-thread.scrollTop-thread.clientHeight<100;input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 140)}px`;if(stick)thread.scrollTop=thread.scrollHeight;
   const target = document.getElementById('mention-suggestions'), match = input.value.slice(0, input.selectionStart).match(/(?:^|\s)@([a-zA-Z0-9_]*)$/);
   const matches = match && active?.isGroup ? (active?.members || []).filter(member => member.id !== userId && member.username?.toLowerCase().startsWith(match[1].toLowerCase())).slice(0, 5) : [];
   target.classList.toggle('hidden', !matches.length); target.replaceChildren(...matches.map(member => { const button = element('button', '', `@${member.username}`); button.type = 'button'; button.prepend(avatar(member)); button.addEventListener('click', () => { const cursor = input.selectionStart, start = cursor - match[1].length - 1, replacement = `@${member.username} `; input.value = input.value.slice(0, start) + replacement + input.value.slice(cursor); input.focus(); input.setSelectionRange(start + replacement.length, start + replacement.length); target.classList.add('hidden'); syncComposer(); }); return button; }));
 });
-async function chooseConversation(content = null, text = '') {
-  if (!userId) return; const version = ++pickerVersion, sharing = !!(content || text);
+async function chooseConversation(content = null, text = '', sourceMessage = null) {
+  if (!userId) return; const version = ++pickerVersion, sharing = !!(content || text || sourceMessage);
   closeModal('content-detail-modal'); openModal('new-chat-modal');
   document.getElementById('new-chat-title').textContent = sharing ? 'Send to…' : 'New conversation';
   document.getElementById('chat-picker-description').textContent = sharing ? 'Choose a destination to send this now.' : 'Find your people.';
   const target = document.getElementById('new-chat-list'); target.replaceChildren();
-  if (content) target.append(richCard(content, true)); else if (text) target.append(element('p', 'share-text-preview', text));
+  if (content) target.append(richCard(content, true)); else if (text) target.append(element('p', 'share-text-preview', text));else if(sourceMessage)target.append(element('p','share-text-preview',sourceMessage.message_type==='voice_note'?'Forward voice note':'Forward photo'));
   const search = element('input'), tabs = element('div', 'library-tabs'), results = element('div', 'people-list'); search.type = 'search'; search.placeholder = 'Search conversations or people'; search.setAttribute('aria-label', search.placeholder);
   let category = 'recent', friends = [], sending = false; const requestIds = new Map();
   if (!sharing) { const group = actionButton('New group', 'people'); group.addEventListener('click', () => { closeModal('new-chat-modal'); groups.createGroup(); }); target.append(group); }
@@ -243,7 +264,9 @@ async function chooseConversation(content = null, text = '') {
           const id = profile.conversationId || await getOrCreateConversation(profile.id);
           if (sharing) {
             if (!requestIds.has(id)) requestIds.set(id, crypto.randomUUID());
-            await sendMessage({ id: requestIds.get(id), conversationId: id, senderId: userId, content: text, sharedContent: content });
+            let path;
+            if(sourceMessage){const source=sourceMessage.media_url||sourceMessage.content,extension=source.split('.').at(-1);if(!source.startsWith(sourceMessage.conversation_id+'/')||!['jpg','jpeg','png','webp','webm','ogg','m4a','mp4','wav'].includes(extension))throw new Error('Unavailable media');path=`${id}/${requestIds.get(id)}.${extension}`;const bucket=sourceMessage.message_type==='image'?'chat-images':'voice-notes';const {error}=await supabase.storage.from(bucket).copy(source,path);if(error&&!['409','Duplicate'].includes(String(error.statusCode||error.error)))throw error;}
+            await sendMessage({ id: requestIds.get(id), conversationId: id, senderId: userId, content: text, sharedContent: content, ...(sourceMessage?{messageType:sourceMessage.message_type,mediaUrl:path,duration:sourceMessage.media_duration_seconds}: {}) });
             closeModal('new-chat-modal'); notify(`Sent to ${profile.display_name || profile.username}`); refreshList(); if (active?.id === id) snapshot(active);
           } else { closeModal('new-chat-modal'); await openThread(id, profile, !!profile.isGroup); }
         } catch { notify(sharing ? 'Could not send. Try again or choose another conversation.' : 'Could not open this conversation.'); }
@@ -264,7 +287,7 @@ document.getElementById('chat-header-user').addEventListener('click', () => { if
 document.addEventListener('kaidra:open-thread', event => openThread(event.detail.conversationId, event.detail.profile, event.detail.isGroup));
 document.addEventListener('kaidra:message-user', async event => { try { const id = await getOrCreateConversation(event.detail.profile.id); await openThread(id, event.detail.profile); } catch { notify('Could not open your conversation. Check that you are friends and try again.'); } });
 document.addEventListener('kaidra:share-content', event => chooseConversation(event.detail.content, event.detail.text));
-document.addEventListener('kaidra:modal-close', event => { if (event.detail.id === 'new-chat-modal') ++pickerVersion; });
+document.addEventListener('kaidra:modal-close', event => { if (event.detail.id === 'new-chat-modal') ++pickerVersion; const state=active;if(state)requestAnimationFrame(()=>acknowledge(state)); });
 document.getElementById('inbox-search').addEventListener('input', renderList);
 document.querySelectorAll('[data-inbox-filter]').forEach(button => button.addEventListener('click', () => { filter = button.dataset.inboxFilter; document.querySelectorAll('[data-inbox-filter]').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); }); renderList(); }));
 const voiceNotes = installVoiceNotes({ getActive: () => active, onBusy: value => { voiceBusy = value; input.disabled = value; syncComposer(); }, onSend: (blob, duration) => {
@@ -274,20 +297,23 @@ const voiceNotes = installVoiceNotes({ getActive: () => active, onBusy: value =>
 } });
 const groups = installGroups({ jumpToMessage, getUserId: () => userId, getActive: () => active, openThread, refreshList, refreshState });
 function startRealtime() {
-  if (!userId || inboxChannel) return; inboxChannel = subscribeToInboxUpdates(userId, payload => { refreshList(); if (active && payload?.table === 'chat_signals') refreshState(active).catch(() => {}); }, connection => { const live = ['SUBSCRIBED', 'LIVE'].includes(connection); status('inbox-connection-status', live ? 'Connected' : 'Reconnecting…'); if (live) refreshList(); });
+  if (!userId || inboxChannel) return; inboxChannel = subscribeToInboxUpdates(userId, payload => { refreshList(); const message=payload?.new;if(payload?.table==='messages'&&message?.sender_id!==userId&&message?.id&&message?.conversation_id&&active?.id!==message.conversation_id)chatAction('kaidra_message_ack',{target_conversation:message.conversation_id,message_ids:[message.id],seen:false}).catch(()=>{}); if (active && payload?.table === 'chat_signals') refreshState(active).catch(() => {}); }, connection => { const live = ['SUBSCRIBED', 'LIVE'].includes(connection); status('inbox-connection-status', live ? 'Connected' : 'Reconnecting…'); if (live) refreshList(); });
   // Realtime plus reconnect/visibility snapshots; no recurring message polling.
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshList(); if (active) { snapshot(active); refreshState(active).catch(() => {}); } } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) active?.typing?.stop(); if (!document.hidden) { refreshList(); if (active) { snapshot(active); refreshState(active).catch(() => {}); } } });
 window.addEventListener('online', () => { refreshList(); if (active) snapshot(active); });
 window.addEventListener('pagehide', () => { clearInterval(poll); if (inboxChannel) supabase.removeChannel(inboxChannel); inboxChannel = null; closeThread(); }); window.addEventListener('pageshow', startRealtime);
-account.then(current => { if (!current) return; userId = current.userId; skeletons(list, 'person', 3); refreshList(); startRealtime(); });
+account.then(async current => { if (!current) return; userId = current.userId; skeletons(list, 'person', 3); await refreshList(); startRealtime(); openRoute(parseRoute(location.hash)); });
 
 function syncJump() { document.getElementById('jump-to-bottom').classList.toggle('hidden', !active || thread.scrollHeight - thread.scrollTop - thread.clientHeight < 160); }
-thread.addEventListener('scroll', syncJump, { passive: true });
+thread.addEventListener('scroll', () => { syncJump(); clearTimeout(active?.readTimer); if(active){const state=active;state.readTimer=setTimeout(()=>acknowledge(state),100);if(state.lastScrollTop!==undefined&&thread.scrollTop<state.lastScrollTop-25)state.keyboardStick=false;state.lastScrollTop=thread.scrollTop;state.nearBottom=thread.scrollHeight-thread.scrollTop-thread.clientHeight<100;} }, { passive: true });
+input.addEventListener('focus',()=>{if(active)active.keyboardStick=thread.scrollHeight-thread.scrollTop-thread.clientHeight<100;});
+input.addEventListener('blur',()=>active?.typing?.stop());
+window.visualViewport?.addEventListener('resize',()=>{const state=active;if(state?.keyboardStick)requestAnimationFrame(()=>{if(active===state&&state.keyboardStick)thread.scrollTop=thread.scrollHeight;});});
 document.getElementById('jump-to-bottom').addEventListener('click', () => { thread.scrollTo({ top: thread.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); });
 let routeVersion = 0;
-document.addEventListener('kaidra:route-change', async event => {
-  const route = event.detail, version = ++routeVersion;
+async function openRoute(route) {
+  const version = ++routeVersion;
   if (route.view !== 'inbox' || !route.id || active?.id === route.id) return;
   const current = await account; if (!current) return; userId = current.userId;
   let row = rows.find(item => item.conversationId === route.id);
@@ -296,15 +322,16 @@ document.addEventListener('kaidra:route-change', async event => {
   if (version !== routeVersion || parseRoute(location.hash).path !== route.path) return;
   if (row) openThread(row.conversationId, row.profile, row.isGroup);
   else showError('inbox-error', 'This conversation is unavailable or you are no longer a member.');
-});
+}
+document.addEventListener('kaidra:route-change', event => openRoute(event.detail));
 
 function reactPicker(anchor, message, state) {
-  openMenu(anchor, ['❤️','😂','🔥','👍','😮','👏'].map(emoji => ({ label: emoji, icon: 'smile', run: async () => { await chatAction('kaidra_react', { target_message: message.id, reaction: emoji }); await refreshState(state); } })), 'React');
+  openReactions(anchor, ['❤️','😂','🔥','👍','😮','👏'], state.reactions.find(row => row.message_id === message.id && row.user_id === userId)?.emoji, async emoji => { await chatAction('kaidra_react', { target_message: message.id, reaction: emoji }); await refreshState(state); });
 }
 async function jumpToMessage(id) {
   const state = active; if (!state) return;
   try {
-    if (!state.messages.has(id)) { const {data,error} = await supabase.from('messages').select('*').eq('id', id).eq('conversation_id', state.id).single(); if (error || !data) throw error; if (active !== state) return; mergeMessage(state.messages, data); renderMessages(state); await refreshState(state); }
+    if (!state.messages.has(id)) { const {data,error} = await supabase.from('messages').select('*').eq('id', id).eq('conversation_id', state.id).single(); if (error || !data) throw error; if (active !== state) return; mergeMessage(state.messages, data); acknowledgeDelivery(state); renderMessages(state); await refreshState(state); }
     const node = state.nodes.get(id); node?.scrollIntoView({ block: 'center', behavior: 'smooth' }); node?.classList.add('message-highlight'); setTimeout(() => node?.classList.remove('message-highlight'), 1800);
   } catch { notify('This original message is unavailable.'); }
 }
@@ -315,6 +342,8 @@ document.getElementById('chat-pins').addEventListener('click', () => {
 document.getElementById('composer-plus').addEventListener('click', event => {
   if (!active) return;
   openMenu(event.currentTarget, [
+    { label: 'Start discussion', icon: 'spark', run: () => { discussionMode=true;renderDraft();input.focus(); } },
+    { label: 'Challenge', icon: 'spark', run: () => startChallenge({conversationId:active.id,targetUser:active.isGroup?undefined:active.profile.id}) },
     { label: 'Photo', icon: 'image', run: () => { const file = element('input'); file.type = 'file'; file.accept = 'image/jpeg,image/png,image/webp'; file.addEventListener('change', async () => {
       const photo = file.files[0], state = active; if (!photo || !state) return;
       if (!['image/jpeg','image/png','image/webp'].includes(photo.type) || photo.size > 5 * 1024 * 1024) { notify('Choose a JPG, PNG, or WebP under 5 MB.'); return; }
@@ -326,3 +355,10 @@ document.getElementById('composer-plus').addEventListener('click', event => {
   ], 'Add to conversation');
 });
 document.getElementById('composer-emoji').addEventListener('click', event => openMenu(event.currentTarget, ['😊','❤️','😂','🔥','👍','🎬','⚽','✨'].map(emoji => ({label:emoji,run:()=>{const start=input.selectionStart;input.setRangeText(emoji, start, input.selectionEnd,'end');input.dispatchEvent(new Event('input'));input.focus();}})), 'Emoji'));
+
+function editMessage(message,state){const panel=dialog('Edit message'),form=element('form'),text=element('textarea'),save=actionButton('Save','check','primary-button'),error=element('p','form-error');text.value=message.content;text.maxLength=4000;text.required=true;text.setAttribute('aria-label','Message text');save.type='submit';form.append(text,error,save);panel.card.append(form);form.addEventListener('submit',async event=>{event.preventDefault();save.disabled=true;try{await chatAction('kaidra_message_change',{target_message:message.id,action:'edit',body:text.value});panel.close();await snapshot(state);}catch(problem){error.textContent=problem.message||'Could not edit.';}finally{save.disabled=false;}});panel.open();}
+document.getElementById('discussion-mode-close').addEventListener('click',()=>{discussionMode=false;renderDraft();input.focus();});
+
+for(const event of ['pointerup','pointercancel'])thread.addEventListener(event,()=>{const state=active;if(state?.pendingRender)requestAnimationFrame(()=>renderMessages(state));});
+
+document.addEventListener('kaidra:jump-discussion',async event=>{const {conversationId,messageId}=event.detail;try{const row=rows.find(row=>row.conversationId===conversationId)||(await getInbox(userId)).find(row=>row.conversationId===conversationId);if(!row)throw new Error('Unavailable');await openThread(row.conversationId,row.profile,row.isGroup);if(active?.loading)await snapshot(active);await jumpToMessage(messageId);}catch{notify('This discussion is unavailable.');}});

@@ -45,7 +45,7 @@ try{
   await call('Page.navigate',{url:'about:blank'}); await call('Storage.clearDataForOrigin',{origin:'http://127.0.0.1:8765',storageTypes:'all'});
   await size(390,844); await call('Page.navigate',{url:'http://127.0.0.1:8765/app.html#home'});
   await wait('document.querySelectorAll("#recommendations-grid .content-card").length===6 && document.querySelectorAll(".conversation-row").length===2 && document.querySelectorAll(".friend-card").length===2');
-  assert.deepEqual(await evaluate('[...document.querySelectorAll("#app-bottom-nav button")].map(x=>(x.querySelector(".nav-label")||x.children[1]).textContent)'),['For you','Discover','Friends','Inbox','Profile']);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll("#app-bottom-nav button")].map(x=>(x.querySelector(".nav-label")||x.children[1]).textContent)'),['Home','Discover','Friends','Inbox','Profile']);
   assert.equal(await evaluate('document.documentElement.dataset.theme'),'dark');
   assert.equal(await evaluate('!!document.querySelector("#setting-theme")'),false);
   assert.equal(await evaluate('document.querySelector("#content-region").value'),'NG');
@@ -62,7 +62,7 @@ try{
   await click('#user-back-btn'); await wait('document.body.dataset.activeTab==="friends"');
   await click('#open-global-search'); assert.equal(await evaluate('document.activeElement.id'),'global-search-input');
   await evaluate('document.querySelector("#global-search-input").value="alice";document.querySelector("#global-search-input").dispatchEvent(new Event("input"))');
-  await wait('document.querySelectorAll("#global-search-results .search-result-group").length===2 && document.querySelector("#global-search-results .avatar")');
+  await wait('document.querySelectorAll("#global-search-results .search-result-group").length===5 && document.querySelector("#global-search-results .avatar")');
   await call('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowDown',code:'ArrowDown',windowsVirtualKeyCode:40});
   assert(await evaluate('document.activeElement.classList.contains("search-result")'));
   await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
@@ -73,7 +73,7 @@ try{
   assert(await evaluate('!!document.querySelector("#discover-grid .match-open") && !document.querySelector("#discover-grid .content-card")'),'Background catalogue loading must not replace matches');
   await click('#discover-grid .match-open'); await wait('location.hash==="#match/1" && document.querySelector("#content-detail-body .match-visual")');
   await evaluate('history.back()'); await wait('document.querySelector("#content-detail-modal").classList.contains("hidden") && document.body.dataset.activeTab==="discover"');
-  await click('[data-category="for-you"]'); await wait('document.querySelector("#discover-grid .content-card")');
+  await click('[data-category="movie"]'); await wait('document.querySelector("#discover-grid .content-card")');
   await route('home'); await click('#recommendations-grid .content-open'); await wait('location.hash==="#title/movie/1" && document.querySelector(".provider-row")');
   await evaluate('history.back()'); await wait('document.querySelector("#content-detail-modal").classList.contains("hidden") && document.body.dataset.activeTab==="home"');
   await evaluate('history.forward()'); await wait('location.hash==="#title/movie/1" && !document.querySelector("#content-detail-modal").classList.contains("hidden") && document.querySelector(".provider-row")');
@@ -95,7 +95,7 @@ try{
   await wait('document.querySelector("#discover-grid .feed-notice button")');
   await evaluate('window.__mock.failCatalog=false'); await click('#discover-grid .feed-notice button'); await wait('document.querySelector("#discover-grid .content-card")');
   await evaluate('window.__mock.emptyCatalog=true;document.querySelector("#content-search-form").requestSubmit()'); await wait('document.querySelector("#discover-grid .empty-state")');
-  assert(await evaluate('document.querySelector("#discover-grid .empty-state").textContent.includes("Nothing matched")'));
+  assert(await evaluate('document.querySelector("#discover-grid .empty-state").textContent.includes("No titles")'));
   await evaluate('window.__mock.emptyCatalog=false;document.querySelector("#content-search-form").requestSubmit()'); await wait('document.querySelector("#discover-grid .content-card")');
   await route('friends'); await click('#find-friends-btn');
   await evaluate('document.querySelector("#find-friends-input").value="sam";document.querySelector("#find-friends-input").dispatchEvent(new Event("input"))');
@@ -118,7 +118,7 @@ try{
   assert.equal(await evaluate('window.__mock.db.messages.filter(x=>x.content==="Retry this").length'),1);
   await click('.message-actions [aria-label="Reply to message"]'); await send('My reply');
   assert(await evaluate('window.__mock.db.messages.find(x=>x.content==="My reply").external_ref_id'));
-  await click('.message-actions [aria-label="React to message"]'); await click('.context-menu button'); await wait('document.querySelector(".reaction-pill")');
+  await click('.message-actions [aria-label="React to message"]'); await click('.reaction-choice'); await wait('document.querySelector(".reaction-pill")');
   await click('#close-chat-btn');
   await evaluate('window.__mock.delayConversation=window.__mock.a;document.querySelectorAll(".conversation-row")[0].click();document.querySelector("#close-chat-btn").click();document.querySelectorAll(".conversation-row")[1].click()');
   await wait('document.querySelector("#dm-active-name").textContent==="Bob" && [...document.querySelectorAll(".message-bubble")].some(x=>x.textContent==="Ready for the match?")');
@@ -176,7 +176,7 @@ try{
   await wait('document.querySelector("#nav-inbox-count").textContent==="3"');
   assert(await evaluate('![...document.querySelectorAll(".conversation-row")].find(row=>row.textContent.includes("Alice")).querySelector(".conversation-unread-badge")'));
   await click('#close-chat-btn'); await evaluate('window.__mock.failMarkRead=true;[...document.querySelectorAll(".conversation-row")].find(row=>row.textContent.includes("Bob")).click()');
-  await wait('document.querySelector("#chat-error").textContent.includes("mark these messages")');
+  await wait('document.querySelector("#chat-error").textContent.includes("save read receipts")');
   assert.equal(await evaluate('document.querySelector("#nav-inbox-count").textContent'),'3');
   await evaluate('window.__mock.failMarkRead=false;window.__mock.reconnect()'); await wait('document.querySelector("#nav-inbox-count").classList.contains("hidden")'); await click('#close-chat-btn');
   // Real audio from Chrome's artificial microphone; retry one stable upload/message.

@@ -1,3 +1,4 @@
+import {renderSocialProfile,startChallenge,requestRelationship} from './social.js';
 import { libraryReady, libraryItems } from './library.js';
 import { confirmAction } from './context-menu.js';
 import { supabase, getFriendCount, getFriendshipStatus, sendFriendRequest, cancelFriendRequest, removeFriend, getIncomingRequests, respondToFriendRequest } from './supabase-client.js';
@@ -6,7 +7,7 @@ import { setAvatar, element, openModal, closeModal, showError, notify, navigate,
 import { mediaCard } from './media.js';
 import { preferencesFor } from './preferences.js';
 import { backRoute } from './router.js';
-let userId, viewedId, viewedProfile;
+let userId, viewedId, viewedProfile,ownBlocked=false;
 const views = { own: { version: 0, profile: null }, other: { version: 0, profile: null } };
 const button = document.getElementById('friend-action-btn');
 const editButton = document.getElementById('edit-profile-btn');
@@ -27,7 +28,7 @@ async function loadProfile(id) {
     ]);
     if (version !== state.version) return;
     if (error || !profile) throw error || new Error('Profile not found');
-    state.profile = profile;
+    let contact=true;if(!own){ownBlocked=false;const [allowed,blocks]=await Promise.all([supabase.rpc('kaidra_contact_allowed',{target_user:id}),supabase.from('user_blocks').select('blocked_user').eq('user_id',userId).eq('blocked_user',id)]);if(version!==state.version)return;contact=!allowed.error&&allowed.data===true;ownBlocked=!!blocks.data?.length;document.getElementById('profile-block-btn').textContent=ownBlocked?'Unblock':'Block';}state.profile = profile;renderSocialProfile(id,own);if(!own){document.getElementById("profile-challenge-btn").classList.toggle("hidden",status!=="friends"||!contact);document.getElementById("profile-relationship-btn").classList.toggle("hidden",status!=="friends"||!contact);}
     if (own) viewedProfile = profile;
     setAvatar(node('profile-avatar'), profile);
     node('profile-display-name').textContent = profile.display_name || profile.username;
@@ -46,9 +47,9 @@ async function loadProfile(id) {
     else { const favorites = node('profile-favorites'); favorites.replaceChildren(...tastes.favorites.map(mediaCard)); if (!tastes.favorites.length) favorites.append(element('p', 'muted', 'No favorite titles shared yet.')); }
     if (!own) {
       button.classList.remove('hidden'); button.disabled = false;
-      messageButton.classList.toggle('hidden', status !== 'friends');
+      messageButton.classList.toggle('hidden', status !== 'friends'||!contact);if(!contact){button.disabled=true;button.textContent='Unavailable';}
       button.dataset.state = status;
-      button.textContent = ({ none: 'Add friend', pending_sent: 'Cancel request', pending_received: 'Accept request', friends: 'Remove friend' })[status] || 'Add friend';
+      button.textContent = !contact?'Unavailable':({ none: 'Add friend', pending_sent: 'Cancel request', pending_received: 'Accept request', friends: 'Remove friend' })[status] || 'Add friend';
       document.getElementById('decline-user-request')?.remove();
       if (status === 'pending_received') {
         const decline = element('button', 'quiet-button', 'Decline'); decline.type = 'button'; decline.id = 'decline-user-request';
@@ -136,3 +137,7 @@ async function renderLibrary(force = false) {
 }
 document.querySelectorAll('[data-library-tab]').forEach(button => button.addEventListener('click', () => { libraryTab = button.dataset.libraryTab; document.querySelectorAll('[data-library-tab]').forEach(tab => { tab.classList.toggle('active', tab === button); tab.setAttribute('aria-selected', String(tab === button)); }); renderLibrary(); }));
 document.addEventListener('kaidra:library-change', renderLibrary);
+
+document.getElementById('profile-challenge-btn').addEventListener('click',()=>startChallenge({targetUser:viewedId}));
+document.getElementById('profile-relationship-btn').addEventListener('click',()=>requestRelationship(viewedId));
+document.getElementById('profile-block-btn').addEventListener('click',async()=>{const person=viewedId;if(!person)return;const blocked=!ownBlocked;if(await confirmAction(blocked?'Block this person?':'Unblock this person?',blocked?'They will not be able to send you direct messages or social requests. Active connections between you will end.':'They can contact you again if your messaging preferences allow it.',blocked?'Block':'Unblock')){try{const {error}=await supabase.rpc('kaidra_block',{target_user:person,blocked});if(error)throw error;notify(blocked?'Person blocked.':'Person unblocked.');document.dispatchEvent(new CustomEvent('kaidra:friends-changed'));}catch{notify('Could not block. Retry.');}}});

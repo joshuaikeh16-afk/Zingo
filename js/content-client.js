@@ -13,7 +13,17 @@ export const highlights = [
   { name: 'UEFA.tv', url: 'https://www.uefa.tv/', description: 'Official UEFA highlights', symbol: 'U' },
   { name: 'Premier League', url: 'https://www.premierleague.com/en/video/highlights', description: 'Official league highlights', symbol: 'PL' },
 ];
+const feedCache=new Map(),feedRequests=new Map();
+export function clearContentCache(){feedCache.clear();}
 export async function contentRequest(action, payload = {}) {
+  const key=JSON.stringify([action,Object.fromEntries(Object.entries(payload).sort(([a],[b])=>a.localeCompare(b)))]);
+  const cacheable=action!=='catalog',hit=feedCache.get(key);
+  if(cacheable&&hit?.until>Date.now())return structuredClone(hit.data);
+  if(feedRequests.has(key))return structuredClone(await feedRequests.get(key));
+  const request=fetchContent(action,payload);feedRequests.set(key,request);
+  try{const data=await request;if(cacheable&&data?.configured!==false){if(feedCache.size>=64)feedCache.delete(feedCache.keys().next().value);feedCache.set(key,{data:structuredClone(data),until:Date.now()+(['fixtures','match'].includes(action)?10000:60000)});}return data;}finally{feedRequests.delete(key);}
+}
+async function fetchContent(action, payload) {
   const { data, error } = await supabase.functions.invoke('content-api', { body: { action, ...payload } });
   if (error || data?.error) {
     let details = data;

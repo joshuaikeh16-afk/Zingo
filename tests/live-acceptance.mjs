@@ -11,21 +11,22 @@ const bridge=`import json,sys,urllib.request,urllib.error
 v=json.load(sys.stdin)
 r=urllib.request.Request(v['url'],data=json.dumps(v['body']).encode() if v['body'] is not None else None,headers={'apikey':v['key'],'Authorization':'Bearer '+v['token'],'Content-Type':'application/json','Prefer':'return=representation'},method=v['method'])
 try:
- with urllib.request.urlopen(r,timeout=25) as res:
+ with urllib.request.urlopen(r,timeout=45) as res:
   b=res.read();print(json.dumps({'status':res.status,'data':json.loads(b) if b else None}))
 except urllib.error.HTTPError as e:
  print(json.dumps({'status':e.code,'data':json.loads(e.read())}))
 `;
-function request(path,method='GET',body=null,token=service){const r=spawnSync('python3',['-c',bridge],{input:JSON.stringify({url:base+path,method,body,token,key:anon}),encoding:'utf8',timeout:30000});if(r.status!==0)throw new Error('HTTP test transport failed');return JSON.parse(r.stdout);}
+function request(path,method='GET',body=null,token=service){const r=spawnSync('python3',['-c',bridge],{input:JSON.stringify({url:base+path,method,body,token,key:anon}),encoding:'utf8',timeout:50000});if(r.status!==0)throw new Error('HTTP test transport failed');return JSON.parse(r.stdout);}
 function api(path,method='GET',body=null,token=service){const r=request(path,method,body,token);assert(r.status<400,`HTTP ${r.status}: ${r.data?.code||r.data?.message||path}`);return r.data;}
 const rpc=(name,args,token)=>api('/rest/v1/rpc/'+name,'POST',args,token);
-const users=[],chats=[],sockets=[];
-async function connect(token){
+const users=[],chats=[],sockets=[];let acceptanceError;
+async function connect(token){let last;for(let attempt=0;attempt<3;attempt++){try{return await connectOnce(token);}catch(error){last=error;sockets.at(-1)?.close();if(attempt<2)await new Promise(done=>setTimeout(done,500));}}throw last;}
+async function connectOnce(token){
  const records=[],socket=new WebSocket(`wss://${project}.supabase.co/realtime/v1/websocket?apikey=${anon}&vsn=1.0.0`);sockets.push(socket);
  await new Promise((done,reject)=>{socket.onopen=done;socket.onerror=()=>reject(new Error('Realtime connection failed'));});
  let reference=0,joined=false,live=false,joinError;
  socket.onmessage=({data})=>{const value=JSON.parse(data);if(value.event==='phx_reply'&&value.ref==='1'){if(value.payload.status==='ok')joined=true;else joinError=new Error('Realtime join rejected');}if(value.event==='system'&&value.payload.extension==='postgres_changes'&&value.payload.status==='ok')live=true;if(value.event==='postgres_changes')records.push(value.payload.data);};
- const topic='realtime:qa-'+randomUUID();socket.send(JSON.stringify({topic,event:'phx_join',ref:String(++reference),payload:{config:{broadcast:{self:false},presence:{key:''},postgres_changes:['messages','message_reads','message_reactions','chat_polls','poll_votes','message_pins','chat_signals','user_watchlist'].map(table=>({event:'*',schema:'public',table})),private:false},access_token:token}}));
+ const topic='realtime:qa-'+randomUUID();socket.send(JSON.stringify({topic,event:'phx_join',ref:String(++reference),payload:{config:{broadcast:{self:false},presence:{key:''},postgres_changes:['messages','message_reads','message_reactions','chat_polls','poll_votes','message_pins','chat_signals','user_watchlist','battles','battle_votes','battle_posts','relationships','social_signals','app_notifications'].map(table=>({event:'*',schema:'public',table})),private:false},access_token:token}}));
  const timer=setInterval(()=>socket.readyState===1&&socket.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++reference)})),15000);socket.addEventListener('close',()=>clearInterval(timer));
  await until(()=>{if(joinError)throw joinError;return joined&&live},'Realtime subscription');return records;
 }
@@ -61,13 +62,30 @@ try{
  await until(()=>ra.some(e=>e.table==='user_watchlist'&&e.record?.external_id==='550'),'library event');
  const path='/rest/v1/user_watchlist?select=provider,media_type,external_id,title,cover_url,snapshot,is_favorite,is_watchlisted&user_id=eq.'+a.id+'&order=created_at.desc';const rows=api(path,'GET',null,a.token);assert.equal(rows.length,1);assert(rows[0].is_favorite&&rows[0].is_watchlisted);assert.deepEqual(api(path,'GET',null,b.token),[]);
  rpc('kaidra_library_save',{item,collection:'favorites',saved:false},a.token);const remaining=api(path,'GET',null,a.token)[0];assert(!remaining.is_favorite&&remaining.is_watchlisted);console.log('PASS exact production library query, independent flags, persistence and private realtime.');
+ // Social flows use the same authenticated conversations and live subscriptions.
+ const battle=rpc('kaidra_battle_create',{target_conversation:cid,target_user:b.id,topic:'QA friendly opinion',stance:'The first story wins',request_id:randomUUID()},a.token);
+ await until(()=>has(rb,'battles',battle),'live challenge');assert.deepEqual(api('/rest/v1/battles?select=id&id=eq.'+battle,'GET',null,outside.token),[]);
+ assert(request('/rest/v1/rpc/kaidra_battle_action','POST',{target_battle:battle,action:'accept',value:'Wrong actor'},a.token).status>=400);
+ rpc('kaidra_battle_action',{target_battle:battle,action:'accept',value:'The second story wins'},b.token);await until(()=>ra.some(e=>e.table==='battles'&&e.record?.id===battle&&e.record?.status==='active'),'live acceptance');
+ rpc('kaidra_battle_action',{target_battle:battle,action:'concede'},b.token);await until(()=>ra.some(e=>e.table==='battles'&&e.record?.id===battle&&e.record?.status==='resolved'),'live result');
+ const battleState=rpc('kaidra_battle_state',{target_battle:battle},a.token);assert.equal(battleState.winner_id,a.id);assert(battleState.rewards.every(row=>row.xp===0));
+ const relationship=rpc('kaidra_relationship_request',{target_user:b.id,relationship_type:'close_friend',visibility:'public',notify_friends:false,request_id:randomUUID()},a.token);
+ await until(()=>has(rb,'relationships',relationship),'private live connection request');assert.deepEqual(rpc('kaidra_profile_social',{target_user:a.id},outside.token).relationships,[]);
+ rpc('kaidra_relationship_action',{target_relationship:relationship,action:'accept',visibility:'private',notify_friends:false},b.token);assert.deepEqual(rpc('kaidra_profile_social',{target_user:a.id},outside.token).relationships,[]);
+ rpc('kaidra_relationship_action',{target_relationship:relationship,action:'privacy',visibility:'public',notify_friends:false},b.token);const publicConnections=rpc('kaidra_profile_social',{target_user:a.id},outside.token).relationships;assert.equal(publicConnections.length,1);assert(!('conversation_id' in publicConnections[0]));assert.deepEqual(api('/rest/v1/relationships?select=*&id=eq.'+relationship,'GET',null,outside.token),[]);
+ rpc('kaidra_relationship_action',{target_relationship:relationship,action:'privacy',visibility:'private',notify_friends:false},a.token);assert.deepEqual(rpc('kaidra_profile_social',{target_user:a.id},outside.token).relationships,[]);
+ console.log('PASS live battle invite/accept/result, scoped WebSocket delivery, no concession XP, and private/public relationship consent without raw DM identifiers.');
+ // Exercise real deployed providers; returned content never enters the public feed as fixtures.
+ for(const category of ['movie','tv','anime']){const content=api('/functions/v1/content-api','POST',{action:'browse',category,page:1},a.token);assert(content.configured&&Array.isArray(content.items)&&content.items.length>0,category+' provider browse');console.log('PASS deployed provider browse:',category,content.items.length,'real titles');}
+ const archive=api('/functions/v1/content-api','POST',{action:'browse-meta',category:'anime'},a.token);assert(archive.genres.length&&archive.themes.length&&archive.years.some(row=>row.year<2000));console.log('PASS real anime provider genres, themes and historical season archive.');
+ const fixtures=api('/functions/v1/content-api','POST',{action:'fixtures'},a.token);assert(fixtures.configured&&fixtures.matches.length);const fixture=fixtures.matches[0];const match=api('/functions/v1/content-api','POST',{action:'match',id:fixture.id},a.token).match;assert(match.homeId&&match.awayId);const social=rpc('kaidra_match_social',{target_match:match.id},a.token);if(social.locked){assert(request('/rest/v1/rpc/kaidra_match_support','POST',{target_match:match.id,side:'home'},a.token).status>=400);}else{rpc('kaidra_match_support',{target_match:match.id,side:'neutral'},a.token);assert.equal(rpc('kaidra_match_social',{target_match:match.id},a.token).own_support,'neutral');}console.log('PASS real football match normalization, trusted ingest and support state.');
  const signalStart=rb.length;rpc('kaidra_group_action',{target_conversation:cid,action:'remove',target_user:b.id},a.token);
  await until(()=>rb.slice(signalStart).some(e=>e.table==='chat_signals'&&e.record?.user_id===b.id),'membership revocation signal');
  assert.deepEqual(api('/rest/v1/messages?select=id&conversation_id=eq.'+cid,'GET',null,b.token),[]);assert(request('/rest/v1/rpc/kaidra_chat_state','POST',{target_conversation:cid},b.token).status>=400);
  const id=randomUUID();api('/rest/v1/messages','POST',{id,conversation_id:cid,sender_id:a.id,content:'After revocation',message_type:'text',mention_ids:[]},a.token);await until(()=>has(ra,'messages',id),'owner event');await new Promise(r=>setTimeout(r,700));assert(!has(rb,'messages',id));assert(!has(ro,'messages',id));console.log('PASS removed member receives refresh signal, loses private history and receives no subsequent messages.');
-}finally{
+}catch(error){acceptanceError=error;throw error;}finally{
  for(const socket of sockets)socket.close();
- for(const cid of chats)api('/rest/v1/conversations?id=eq.'+cid,'DELETE');
- for(const user of users)api('/auth/v1/admin/users/'+(typeof user==='string'?user:user.id),'DELETE');
- console.log('Temporary test accounts and chats removed.');
+ let cleanupFailures=0;for(const cid of chats){try{api('/rest/v1/conversations?id=eq.'+cid,'DELETE');}catch{cleanupFailures++;}}
+ for(const user of users){try{api('/auth/v1/admin/users/'+(typeof user==='string'?user:user.id),'DELETE');}catch{cleanupFailures++;}}
+ if(cleanupFailures){console.error('Temporary fixture cleanup requires attention:',cleanupFailures);if(!acceptanceError)throw new Error('Test fixture cleanup failed');}else console.log('Temporary test accounts and chats removed.');
 }

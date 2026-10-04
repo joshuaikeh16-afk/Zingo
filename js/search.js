@@ -4,6 +4,7 @@ import { openModal, closeModal, element, artwork, avatar, viewProfile } from './
 import { contentRequest } from './content-client.js';
 import { openContent } from './content-view.js';
 import { metadata, kindLabel } from './media.js';
+import {goRoute} from './router.js';
 const input = document.getElementById('global-search-input'), results = document.getElementById('global-search-results');
 let timer, version = 0;
 document.getElementById('open-global-search').addEventListener('click', () => openModal('global-search-modal'));
@@ -22,18 +23,19 @@ input.addEventListener('input', () => {
   if (query.length < 2) return;
   timer = setTimeout(async () => {
     const current = await account; if (!current) return;
-    const [titles, people] = await Promise.allSettled([contentRequest('catalog', { category: 'for-you', query, region: document.getElementById('content-region').value }), searchUsers(query, current.userId)]);
+    const searches=await Promise.allSettled(['movie','tv','anime'].map(category=>contentRequest('browse',{category,query,page:1,region:document.getElementById('content-region').value})).concat([searchUsers(query,current.userId),contentRequest('fixtures')]));const people=searches[3],football=searches[4];
     if (version !== currentVersion) return;
     results.replaceChildren();
     function group(label) { const section = element('section', 'search-result-group'); section.append(element('h3', '', label)); results.append(section); return section; }
-    const titleGroup = group('Movies & series');
+    for(const [index,label] of ['Movies','Series','Anime'].entries()){const titles=searches[index],titleGroup=group(label);
     if (titles.status === 'fulfilled' && titles.value.configured) {
-      for (const item of titles.value.items.slice(0, 8)) {
+      for (const item of titles.value.items.slice(0, 4)) {
         const button = element('button', 'search-result'); button.type = 'button'; const copy = element('span', 'search-result-copy'); copy.append(element('strong', '', item.title), element('small', '', [kindLabel(item), metadata(item)].filter(Boolean).join(' · '))); button.append(artwork(item.image, '', ''), copy);
         button.addEventListener('click', () => { closeModal('global-search-modal'); openContent(item); }); titleGroup.append(button);
       }
       if (!titles.value.items.length) titleGroup.append(element('p', 'muted', 'No matching titles.'));
-    } else titleGroup.append(element('p', 'muted', 'Title search is temporarily unavailable. Try again.'));
+    } else titleGroup.append(element('p', 'muted', 'This category is temporarily unavailable. Try again.'));}
+    const clubsGroup=group('Clubs in recent fixtures');if(football.status==='fulfilled'&&football.value.configured){const clubs=[...new Map((football.value.matches||[]).flatMap(m=>[[m.homeId,m.home],[m.awayId,m.away]])).entries()].filter(([id,name])=>id&&name.toLowerCase().includes(query.toLowerCase()));for(const [id,name] of clubs.slice(0,6)){const button=element('button','search-result',name);button.type='button';button.addEventListener('click',()=>{closeModal('global-search-modal');goRoute(`discover/football/fixtures?club=${id}`);});clubsGroup.append(button);}if(!clubs.length)clubsGroup.append(element('p','muted','No matching clubs in the current fixture window.'));}else clubsGroup.append(element('p','muted','Club search is temporarily unavailable.'));
     const peopleGroup = group('People');
     if (people.status === 'fulfilled') {
       for (const person of people.value.slice(0, 6)) {

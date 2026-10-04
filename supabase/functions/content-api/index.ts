@@ -1,6 +1,8 @@
+import { animeDetail } from '../_shared/anime.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { cors, json, cached, upstream, allowedUrl, news, fixtures } from '../_shared/content.ts';
+import { cors, json, cached, upstream, allowedUrl, news, fixtures, football, normalizeMatch } from '../_shared/content.ts';
 import { catalog } from '../_shared/catalog.ts';
+import { browse, browseMeta, jikan, animeItem } from '../_shared/browse.ts';
 
 const tmdbToken = () => Deno.env.get('TMDB_API_READ_TOKEN')?.trim();
 const tmdbConfigured = () => !!(tmdbToken() || Deno.env.get('TMDB_API_KEY')?.trim());
@@ -13,7 +15,7 @@ async function tmdb(path: string, parameters: Record<string, string> = {}) {
   const headers: Record<string,string> = url.searchParams.has('api_key') ? {} : { Authorization: `Bearer ${token}` };
   return cached(url.href, 300, async () => (await upstream(url.href, headers)).json());
 }
-Deno.serve(async (request) => {
+Deno.serve(async (request: Request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   try {
@@ -24,6 +26,23 @@ Deno.serve(async (request) => {
     const region = ['NG', 'GH', 'ZA', 'KE', 'GB', 'US', 'CA', 'IN'].includes(body.region) ? body.region : 'NG';
     if (body.action === 'news') return json({ items: await news(body.kind === 'football' ? 'football' : 'entertainment') });
     if (body.action === 'fixtures') return json(await fixtures());
+    if(body.action==='browse-meta')return json(await browseMeta(body.category,tmdb));
+    if(body.action==='browse'){
+      if(body.category!=='anime'&&!tmdbConfigured())return json({configured:false,items:[],hasMore:false});
+      return json(await browse(body,tmdb));
+    }
+    if(body.action==='anime-detail'){
+      if(!/^\d+$/.test(String(body.id)))return json({error:'Invalid anime'},400);
+      try { return json(await animeDetail(Number(body.id))); } catch {
+      const data=await jikan(`/anime/${body.id}/full`),item=data.data;
+      if(!item||String(item.rating||'').startsWith('Rx')||(item.genres||[]).some((g:any)=>[9,12,49].includes(g.mal_id)))return json({error:'Title unavailable'},404);
+      return json({configured:true,...animeItem(item),season:item.season,year:item.year,streaming:(item.streaming||[]).map((s:any)=>({name:s.name,url:allowedUrl(s.url,['crunchyroll.com','netflix.com','primevideo.com','hulu.com','disneyplus.com'])})).filter((s:any)=>s.url)});
+      }
+    }
+    if(body.action==='football-meta'){
+      const data=await football(body.competition&&/^[A-Z0-9]{2,8}$/.test(body.competition)?`/competitions/${body.competition}/teams`:'/competitions');
+      return json({configured:!!data,competitions:(data?.competitions||[]).filter((c:any)=>c.plan==='TIER_ONE').map((c:any)=>({id:c.id,code:c.code,name:c.name,image:allowedUrl(c.emblem,['football-data.org'])})),clubs:(data?.teams||[]).map((t:any)=>({id:t.id,name:t.name,image:allowedUrl(t.crest,['football-data.org'])}))});
+    }
     if (body.action === 'catalog') {
       if (!tmdbConfigured()) return json({ configured: false, items: [], hasMore: false, code: 'TMDB_NOT_CONFIGURED' });
       const { data: profile, error } = await client.from('profiles').select('interests,recommendation_preferences').eq('id', user.id).maybeSingle();
@@ -45,9 +64,10 @@ Deno.serve(async (request) => {
         trailerKey: trailer?.key || null, url: `https://www.themoviedb.org/${body.type}/${item.id}` });
     }
     if (body.action === 'match') {
-      const data = await fixtures();
-      const match = data.matches.find((match: any) => String(match.id) === String(body.id));
-      return json({ configured: data.configured, match: match || null, updatedAt: data.updatedAt });
+      if(!/^\d+$/.test(String(body.id)))return json({error:'Invalid match'},400);
+      const data=await football(`/matches/${body.id}`),match=data?normalizeMatch(data):null;
+      if(match){const trusted=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);const {error}=await trusted.rpc('kaidra_match_ingest',{snapshot:match});if(error)console.warn('Match social snapshot unavailable',{code:error.code});}
+      return json({configured:!!data,match,updatedAt:match?.updatedAt});
     }
     if (body.action === 'providers') {
       if (!tmdbConfigured()) return json({ configured: false, providers: [] });
@@ -61,6 +81,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     console.error('Content request failed:', error instanceof Error ? error.message : 'Unknown provider error');
     if (error instanceof RangeError) return json({ error: 'Invalid catalog page' },400);
-    return json({ error: 'This feed is temporarily unavailable. Please try again.' }, 502);
+    const code=error&&typeof error==='object'&&'code' in error&&typeof error.code==='string'&&/^UPSTREAM_(HTTP_[0-9]{3}|TIMEOUT|NETWORK)$/.test(error.code)?error.code:'CONTENT_UNAVAILABLE';
+    return json({ error: 'This feed is temporarily unavailable. Please try again.',code }, 502);
   }
 });

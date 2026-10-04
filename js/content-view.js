@@ -4,10 +4,11 @@ import { openMenu } from './context-menu.js';
 import { element, safeUrl, openModal, artwork, actionButton } from './ui.js';
 import { contentRequest, platforms, highlights, externalLink, feedError } from './content-client.js';
 import { parseRoute, goRoute, backRoute, isObjectRoute } from './router.js';
+import {matchSocialPanel,titleSocialPanel,startChallenge} from './social.js';
 let detailVersion = 0;
 export function shareContent(item) { document.dispatchEvent(new CustomEvent('kaidra:share-content', { detail: { text: '', content: item } })); }
 export function matchContent(match) {
-  return { kind:'match', id:match.id, title:`${match.home} vs ${match.away}`, home:match.home, away:match.away, homeCrest:match.homeCrest, awayCrest:match.awayCrest, score:match.score, status:match.status, competition:match.competition, competitionName:match.competitionName, utcDate:match.utcDate, updatedAt:match.updatedAt };
+  return { kind:'match', id:match.id, title:`${match.home} vs ${match.away}`, homeId:match.homeId,awayId:match.awayId,home:match.home, away:match.away, homeCrest:match.homeCrest, awayCrest:match.awayCrest, score:match.score, status:match.status, competition:match.competition, competitionName:match.competitionName, utcDate:match.utcDate, updatedAt:match.updatedAt };
 }
 export function matchVisual(match) {
   const wrap=element('div','match-visual');
@@ -29,7 +30,7 @@ export function matchCard(match) {
 }
 export function richCard(item, compact=false) {
   const card=element('button',`rich-content-card${compact?' compact':''}`);card.type='button';
-  if(item.kind==='match'){card.classList.add('match-share');card.append(element('small','rich-card-label',item.competitionName||'Shared match'),matchVisual(item),element('span','muted',item.utcDate?new Date(item.utcDate).toLocaleString():''));}
+  if(item.kind==='match'){card.classList.add('match-share');card.append(element('small','rich-card-label',item.competitionName||'Shared match'),matchVisual(item),element('span','muted',`${(item.status||'scheduled').replaceAll('_',' ').toLowerCase()}${item.utcDate?' · '+new Date(item.utcDate).toLocaleString():''}`));if(item.senderSupport)card.append(element('small','support-snapshot',`Shared support: ${item.senderSupport==='neutral'?'Neutral':item.senderSupport==='home'?item.home:item.away}`));}
   else {
     card.append(artwork(item.image,'','rich-card-image'));
     const copy=element('span','rich-card-copy');copy.append(element('small','rich-card-label',item.kind==='article'?(item.source||'Shared story'):'Shared recommendation'),element('strong','',item.title||'Shared content'),element('span','',item.kind==='article'?'Read the story →':'Details & trailer →'));card.append(copy);
@@ -60,12 +61,22 @@ async function renderContent(snapshot) {
   document.getElementById('content-detail-modal').dataset.kind = kind;
   document.getElementById('content-detail-kind').textContent = ({ movie: 'Movie', tv: 'Series', match: 'Match', article: 'News story' })[kind] || 'Details';
   if (snapshot.provider === 'mal' || ['anime','manga'].includes(kind)) {
-    let item = snapshot;
-    if (!snapshot.title) { try { await libraryReady(); item = [...libraryItems('favorites'), ...libraryItems('watchlist')].find(saved => saved.provider === 'mal' && String(saved.id) === String(snapshot.id) && saved.kind === kind) || snapshot; } catch {} }
+    let item = snapshot,detailsLoaded=false;
+    if(kind!=='manga'){try{const details=await contentRequest('anime-detail',{id:snapshot.id});if(details.configured){item={...snapshot,...details,kind:kind||details.kind,type:snapshot.type||kind||details.type};detailsLoaded=true;}}catch{}}
+    if (!item.title) { try { await libraryReady(); item = [...libraryItems('favorites'), ...libraryItems('watchlist')].find(saved => saved.provider === 'mal' && String(saved.id) === String(snapshot.id) && saved.kind === kind) || snapshot; } catch {} }
     if (version !== detailVersion) return;
-    const name = item.title || `MyAnimeList title #${item.id}`; title.textContent = name;
-    body.replaceChildren(artwork(item.image, name, 'detail-poster'), element('h2', '', name), element('p', 'muted', 'Saved from MyAnimeList. Open the original listing for current details.'));
+    if(!item.title){feedError(body,()=>renderContent(snapshot),'Title details are unavailable right now.');body.append(externalLink('View on MyAnimeList ↗',`https://myanimelist.net/${kind==='manga'?'manga':'anime'}/${encodeURIComponent(item.id)}`));return;}
+    const name = item.title; title.textContent = name;
+    body.replaceChildren(artwork(item.image, name, 'detail-poster'), element('h2', '', name), element('p','muted',detailsLoaded?'Metadata from MyAnimeList via Jikan.':'Saved or shared MyAnimeList listing. Open the original for current details.'));
     body.append(externalLink('View on MyAnimeList ↗', `https://myanimelist.net/${kind === 'manga' ? 'manga' : 'anime'}/${encodeURIComponent(item.id)}`));
+    if(item.subtitle)body.append(element('p','detail-description',item.subtitle));
+    if(item.genres?.length)body.append(element('p','detail-meta',item.genres.join(' · ')));
+    if(item.themes?.length)body.append(element('p','muted',`Themes: ${item.themes.join(' · ')}`));
+    if(item.streaming?.length){const providers=element('section','streaming-options');providers.append(element('h3','', 'Streaming links from MyAnimeList'));for(const provider of item.streaming)providers.append(externalLink(provider.name,provider.url));providers.append(element('p','muted','These are provider listing links; regional availability is not verified by Jikan.'));body.append(providers);}
+    if(item.trailerKey){const trailer=actionButton('Watch trailer','play');trailer.addEventListener('click',()=>{const iframe=element('iframe','trailer-player');iframe.src=`https://www.youtube-nocookie.com/embed/${item.trailerKey}`;iframe.title=`${name} trailer`;iframe.allowFullscreen=true;body.prepend(iframe);});body.append(trailer);}
+    const share=actionButton('Send to…','share');share.addEventListener('click',()=>shareContent(item));body.append(share);
+    const social=await titleSocialPanel(item);if(version!==detailVersion)return;body.append(social);
+    const challenge=actionButton('Discuss a friendly comparison','spark');challenge.addEventListener('click',()=>startChallenge({topic:name,context:{item}}));body.append(challenge);
     const save = actionButton('Saved options', 'bookmark'); save.addEventListener('click', () => openMenu(save, contentActions({...item,title:name}).slice(0,2), 'Saved title')); body.append(save); return;
   }
   if(snapshot.kind==='match'){
@@ -76,7 +87,7 @@ async function renderContent(snapshot) {
     title.textContent = item.title;
     body.replaceChildren(matchVisual(item),element('p','detail-meta',`${item.competitionName||'Football'} · ${(item.status||'scheduled').replaceAll('_',' ').toLowerCase()}`),element('p','muted',item.utcDate?new Date(item.utcDate).toLocaleString():''));
     body.append(element('p','muted',item.updatedAt?`Score last updated ${new Date(item.updatedAt).toLocaleString()}`:'Shared match snapshot. Live score data may be unavailable for this match.'));
-    const send=element('button','primary-button','Send to…');send.type='button';send.addEventListener('click',()=>shareContent(item));body.append(send);return;
+    const social=await matchSocialPanel(item);if(version!==detailVersion)return;body.append(social);return;
   }
   if(snapshot.kind==='article'){
     body.replaceChildren();if(snapshot.image)body.append(artwork(snapshot.image,'','detail-backdrop',true));
@@ -116,11 +127,13 @@ async function renderContent(snapshot) {
     panel.append(element('p','muted','Availability by JustWatch. Service buttons open official platforms; title links are provided through TMDB.'));
   }else panel.append(element('p','muted','Regional streaming availability is not available for this title right now.'));
   body.append(panel);
+  const social=await titleSocialPanel({...item,kind:type});if(version!==detailVersion)return;body.append(social);
+  const challenge=actionButton('Discuss a friendly comparison','spark');challenge.addEventListener('click',()=>startChallenge({topic:item.title,context:{item:{...item,kind:type}}}));body.append(challenge);
 }
 document.addEventListener('kaidra:open-content',event=>openContent(event.detail));
 document.addEventListener('kaidra:route-change', event => {
   const route = event.detail;
-  if (!isObjectRoute(route)) { shownPath = null; return; }
+  if (!isObjectRoute(route)||route.view==='battle') { shownPath = null; return; }
   if (shownPath === route.path && !document.getElementById('content-detail-modal').classList.contains('hidden')) return;
   shownPath = route.path;
   let snapshot = snapshots.get(route.path);
@@ -131,5 +144,5 @@ document.addEventListener('kaidra:route-change', event => {
 document.addEventListener('kaidra:modal-close', event => {
   if (event.detail.id !== 'content-detail-modal') return;
   ++detailVersion; shownPath = null;
-  if (isObjectRoute(parseRoute(location.hash))) backRoute('discover');
+  const route=parseRoute(location.hash);if (isObjectRoute(route)&&route.view!=='battle') backRoute('discover');
 });

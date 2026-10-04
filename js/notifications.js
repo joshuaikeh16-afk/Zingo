@@ -2,6 +2,7 @@ import { supabase } from './supabase-client.js';
 import { account } from './session.js';
 import { element, openModal, closeModal, showError, notify, avatar, navigate, viewProfile, emptyState } from './ui.js';
 import { icon } from './icons.js';
+import {goRoute} from './router.js';
 import { openContent } from './content-view.js';
 import { externalLink, feedError } from './content-client.js';
 let userId, channel, generation = 0;
@@ -23,12 +24,13 @@ function render() {
   for (const item of notifications) {
     const card = element('article', `notification-row${item.read_at ? '' : ' unread-alert'}`), copy = element('div', 'notification-copy');
     const matchId = /^match:(\d+):/.exec(item.event_key || '')?.[1];
-    const link = matchId ? element('button', 'notification-title', item.title) : externalLink(item.title, item.url);
-    if (matchId) link.type = 'button';
-    link.addEventListener('click', async () => { if (matchId) { closeModal('alerts-modal'); openContent({ kind: 'match', id: matchId, title: item.title }); } const result = await supabase.from('app_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id).eq('user_id', userId); if (!result.error) refresh(); });
-    copy.append(link, element('span', '', item.body), element('small', '', new Date(item.created_at).toLocaleString())); card.append(icon('ball', 'notification-symbol'), copy); list.append(card);
+    const internal=matchId||item.category&&item.category!=='football';
+    const link = internal ? element('button', 'notification-title', item.title) : externalLink(item.title, item.url);
+    if (internal) link.type = 'button';
+    link.addEventListener('click', async () => { if (matchId) { closeModal('alerts-modal'); openContent({ kind: 'match', id: matchId, title: item.title }); } else if(internal){closeModal('alerts-modal');if(item.payload?.item)openContent(item.payload.item);else if(item.payload?.battle_id)goRoute(`battle/${item.payload.battle_id}`);else goRoute(item.url||'home');} const result = await supabase.from('app_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id).eq('user_id', userId); if (!result.error) refresh(); });
+    copy.append(link, element('span', '', item.body), element('small', '', new Date(item.created_at).toLocaleString())); card.append(icon(({social:'spark',battle:'spark',relationship:'people',friend:'people'})[item.category]||'ball', 'notification-symbol'), copy);const dismiss=element('button','icon-button');dismiss.type='button';dismiss.setAttribute('aria-label','Dismiss notification');dismiss.append(icon('close'));dismiss.addEventListener('click',async()=>{dismiss.disabled=true;const result=await supabase.from('app_notifications').update({dismissed_at:new Date().toISOString(),read_at:item.read_at||new Date().toISOString()}).eq('id',item.id).eq('user_id',userId);if(result.error){notify('Could not dismiss. Retry.');dismiss.disabled=false;}else refresh();});card.append(dismiss);list.append(card);
   }
-  if (!pendingRequests.length && !notifications.length && !unreadMessages) list.append(emptyState('No notifications', 'Friend requests and matchday updates appear here.', 'bell'));
+  if (!pendingRequests.length && !notifications.length && !unreadMessages) list.append(emptyState('No notifications', 'Messages, friend activity and entertainment updates appear here.', 'bell'));
 }
 document.addEventListener('kaidra:unread-data', event => { messageRows = event.detail.rows; unreadMessages = messageRows.filter(row => !row.muted).reduce((sum,row) => sum + row.unreadCount, 0); render(); });
 document.addEventListener('kaidra:friends-data', event => { pendingRequests = event.detail.requests; render(); });
@@ -50,8 +52,8 @@ async function refresh() {
   const request = ++generation;
   try {
     const [latest, unread] = await Promise.all([
-      supabase.from('app_notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('app_notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).is('read_at', null),
+      supabase.from('app_notifications').select('*').eq('user_id', userId).is('dismissed_at',null).order('created_at', { ascending: false }).limit(50),
+      supabase.from('app_notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).is('dismissed_at',null).is('read_at', null),
     ]);
     if (request !== generation) return;
     if (latest.error || unread.error) throw latest.error || unread.error;
@@ -65,7 +67,7 @@ async function showBrowserAlert(item) {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.register('/sw.js');
       const ready = registration.active ? registration : await navigator.serviceWorker.ready;
-      await ready.showNotification(item.title, { body: item.body, tag: item.id, data: { url: '/app.html#home' } });
+      await ready.showNotification(item.title, { body: item.body, tag: item.id, data: { url: `/app.html#${item.payload?.battle_id?`battle/${item.payload.battle_id}`:item.url?.startsWith('inbox/')?item.url:'home'}` } });
     } else {
       const notification = new Notification(item.title, { body: item.body, tag: item.id });
       notification.onclick = () => { window.focus(); notification.close(); openModal('alerts-modal'); };
@@ -108,6 +110,7 @@ document.getElementById('enable-browser-alerts').addEventListener('click', async
   if (error) { showError('alerts-error', 'Alert preferences could not load. Try saving your choices again.'); return; }
   enabled.checked = data?.enabled || false; newsEnabled.checked = data?.news_enabled || false; competition.value = data?.competition || 'ALL';
 })();
+document.addEventListener('kaidra:social-refresh',refresh);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 window.addEventListener('online', () => { if (userId) { connect(); refresh(); } });
 window.addEventListener('pagehide', () => { if (channel) supabase.removeChannel(channel); });

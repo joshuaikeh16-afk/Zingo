@@ -1,5 +1,11 @@
 # Backend requirements for Kaidra
 
+**Permanent Awakening update:** migrations `20261015` and `20261016` are deployed. See [AWAKENING_HANDOFF.md](AWAKENING_HANDOFF.md) for the five permanent classes, server determination, resume, battle-entry gating and private progression. Public profiles no longer expose XP or detailed battle records.
+
+**Current focused update:** migrations `20261013` and `20261014` and the updated content-api are deployed. See [DISCUSSION_CHAT_DISCOVER_HANDOFF.md](DISCUSSION_CHAT_DISCOVER_HANDOFF.md) for current Discussion, challenge, acknowledgement, private typing and Anime contracts. Earlier sections are retained as implementation history.
+
+The frontend now uses `kaidra_discussion_position`, `kaidra_discussion_state`, `kaidra_message_ack` and `kaidra_message_change`; extended `kaidra_chat_state` includes Discussion summaries and recipient delivery rows. Private presence topics are `typing:<conversation_id>:<typing_revision>` with membership/revision authorization. AniList browse/metadata needs no new key; existing TMDB/football secrets remain required. No typing messages are persisted.
+
 The chat repairs 20261003/04/05 were validated against the deployed schema with rollback fixtures and applied transactionally in this session. content-api was deployed, the TMDB secret name was corrected, and live providers responded. Live authenticated REST/WebSocket/private-media checks also passed; their temporary data was removed. The repository still lacks a complete baseline, and migration history was not automatically backfilled. Do not reset production or blindly push every historical migration.
 
 ## Existing frontend contracts
@@ -28,20 +34,9 @@ The applied repair removes obsolete persona additions from the new draft, reject
 
 Operational follow-up: check sustained multi-device performance, email/OAuth delivery, scheduler execution, moderation/rate limits and migration-history reconciliation before further schema deployment. Current live checks do not substitute for those operational tests.
 
-## Battles: required server system
+## Social systems update — 2026-10-04
 
-There is currently no battle table, event stream, state engine, result endpoint or authoritative XP ledger in the inspected project. No invented HP, levels, wins or XP are displayed.
-
-Battle mechanics have not been decided. Do not select Attack/Defend/Special rules, HP, cooldowns or XP formulas on the frontend. Once product rules exist, the server contract needs:
-
-1. A persisted challenge between eligible real conversation members, with explicit accept/decline/cancel/expiry and authorized status transitions.
-2. Server-authoritative actions and results appropriate to the selected mechanic; clients cannot supply outcomes or rewards.
-3. Concurrency/version control and idempotent action IDs so retries cannot consume a turn or award twice.
-4. Authorized event snapshots, spectator/participant permissions, reconnection and history pagination.
-5. An authoritative progression ledger if progression is part of the chosen product.
-6. Tests for outsider access, removals, stale/concurrent actions, duplicate transitions and reward replay.
-
-`js/message-content.js` provides a presentation registration point for structured challenge/result events after those contracts exist. Dedicated profile/activity/notification destinations can consume the same authorized objects. No challenge controls or fabricated scores are exposed today.
+Conversation-linked opinion battles, a server reward ledger, mutually consensual relationships, private social activity preferences and provider-verified match support now have migrations and UI. See [PRODUCT_QUALITY_HANDOFF.md](PRODUCT_QUALITY_HANDOFF.md) for current contracts, migration order, validation, privacy and operational limits. Earlier sections describe the prior implementation and are retained for history.
 
 ## Relationships: required server system
 
@@ -73,7 +68,7 @@ After backend support, add discreet connection information to profile/conversati
 - Browser notifications: explicit user opt-in; delivered while the app is running. Full background web push needs subscriptions, a sending service and service-worker push events; it is not currently implemented.
 - Google login: requires enabled provider credentials and allowed redirects in Supabase. Mock tests cannot verify OAuth consent.
 - Authentication: confirm Site URL, auth/reset/onboarding redirect allowlist, SMTP delivery and password policy against the deployed project.
-- Future presence/typing: needs real authenticated Realtime presence/broadcast channels; none is fabricated today.
+- Presence/typing: private authenticated Realtime presence is deployed; membership changes rotate the topic revision. See the focused handoff for tested authorization and expiry behavior.
 
 ## Live verification still required
 

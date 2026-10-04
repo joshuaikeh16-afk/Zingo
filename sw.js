@@ -11,6 +11,6 @@ self.addEventListener('fetch', event => {
 self.addEventListener('notificationclick', event => {
  event.notification.close();event.waitUntil((async()=>{
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true}),existing=windows.find(client=>new URL(client.url).pathname==='/app.html');
-  const destination='/app.html#home';if(existing){await existing.navigate(destination);return existing.focus();}return self.clients.openWindow(destination);
+  const supplied=event.notification.data?.url;const destination=typeof supplied==='string'&&/^\/app\.html#[a-z0-9/?=&_-]+$/i.test(supplied)?supplied:'/app.html#home';if(existing){await existing.navigate(destination);return existing.focus();}return self.clients.openWindow(destination);
  })());
 });
